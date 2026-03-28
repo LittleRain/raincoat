@@ -1,0 +1,4 @@
+id: circle-daily
+version: circle-daily-v1
+entrypoint: python main.py --input-dir {input_dir} --output-dir {output_dir} --run-id {run_id}
+artifact: report.html

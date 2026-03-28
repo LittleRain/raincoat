@@ -1,0 +1,6 @@
+id: circle-daily
+name: 圈子业务日报
+owner: engineering
+pathPrefix: /reports
+defaultReleaseId: circle-daily-v1
+description: 面向圈子业务的日报场景，支持上传日报文件并产出分析结果。

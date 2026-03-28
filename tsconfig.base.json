@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "baseUrl": ".",
+    "paths": {
+      "@raincoat/shared-types": ["packages/shared-types/src"],
+      "@raincoat/shared-config": ["packages/shared-config/src"],
+      "@raincoat/task-sdk": ["packages/task-sdk/src"],
+      "@raincoat/ui": ["packages/ui/src"]
+    },
+    "strict": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "outDir": "dist"
+  }
+}
