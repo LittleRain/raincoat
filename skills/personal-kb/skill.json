@@ -1,0 +1,11 @@
+{
+  "name": "personal-kb",
+  "title": "Personal KB",
+  "description": "Organize and query a personal knowledge base.",
+  "version": "0.1.0",
+  "status": "draft",
+  "visibility": "incubating",
+  "entry": "SKILL.md",
+  "tags": ["knowledge-base", "notes", "research"],
+  "author": "raincai"
+}

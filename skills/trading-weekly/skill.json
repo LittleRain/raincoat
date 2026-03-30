@@ -1,0 +1,11 @@
+{
+  "name": "trading-weekly",
+  "title": "Trading Weekly",
+  "description": "Generate trading business weekly reports.",
+  "version": "0.1.0",
+  "status": "draft",
+  "visibility": "incubating",
+  "entry": "SKILL.md",
+  "tags": ["reports", "trading", "weekly"],
+  "author": "raincai"
+}
