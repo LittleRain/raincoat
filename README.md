@@ -1,38 +1,38 @@
 # Raincoat
 
-内部工具工作台，采用“一个平台 + 多个内置工具模块”的结构。
+Raincoat is an incubator repository for AI agent skills.
 
-## 当前布局
+## What This Repository Is For
 
-- `apps/web`: 平台前端与工具入口页
-- `apps/api`: 平台 API
-- `apps/worker`: 任务型工具的 worker 骨架
-- `tools/reports`: 周报系统工具资产、脚本、manifest 与样例
-- `packages/*`: 平台共享类型、配置与任务 SDK
-- `infra/*`: Docker、Nginx 与部署脚本
-- `docs/*`: 架构与部署文档
+This repository is used to:
 
-## 第一阶段工具
+- incubate multiple skills in one place
+- keep each skill self-contained enough to become its own repository later
+- provide lightweight templates, conventions, and export tooling
 
-- `reports`
-  - 路径前缀：`/reports`
-  - 初始场景：`trading-weekly`、`circle-daily`
+## Repository Layout
 
-## 常用命令
+- `skills/`: incubating skills and templates
+- `docs/skills/`: conventions, publishing notes, and roadmap
+- `tooling/scripts/`: helper scripts for scaffolding and export
+
+## Current Skills
+
+- `trading-weekly`
+- `personal-kb`
+
+See [skills/README.md](/Users/raincai/Documents/GitHub/raincoat/skills/README.md) for the catalog.
+
+## Common Workflows
 
 ```bash
-npm install
-npm test
-npm run build
+./tooling/scripts/new-skill.sh <skill-name>
+./tooling/scripts/export-skill.sh <skill-name> <destination-dir>
 ```
 
-## 部署思路
+## Design Rules
 
-- 同一台服务器上与 `squirrel` 并存
-- `raincoat` 使用独立目录、独立容器、独立 Nginx location
-- 对外采用同域不同路径
-
-详细说明见：
-
-- `docs/architecture/overview.md`
-- `docs/deploy/topology.md`
+- one directory under `skills/` equals one skill
+- use kebab-case for skill names
+- keep skill logic inside the skill directory whenever possible
+- only extract shared tooling when reuse is clear

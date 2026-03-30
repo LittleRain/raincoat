@@ -1,6 +1,0 @@
-id: trading-weekly
-name: 交易业务周报
-owner: engineering
-pathPrefix: /reports
-defaultReleaseId: trading-weekly-v1
-description: 面向交易业务的周报场景，支持上传业务周报所需文件并产出 HTML 报告。

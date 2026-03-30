@@ -1,0 +1,11 @@
+{
+  "name": "your-skill-name",
+  "title": "Your Skill Name",
+  "description": "Short description of the skill.",
+  "version": "0.1.0",
+  "status": "draft",
+  "visibility": "incubating",
+  "entry": "SKILL.md",
+  "tags": ["template"],
+  "author": "raincai"
+}
