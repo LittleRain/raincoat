@@ -19,6 +19,8 @@ The goals are:
 | --- | --- | --- | --- |
 | `trading-weekly` | draft | Generate trading business weekly reports | incubating |
 | `personal-kb` | draft | Organize and query a personal knowledge base | incubating |
+| `create-report` | draft | Generate validated downstream HTML weekly-report skills | internal |
+| `report-circle-weekly` | draft | Golden-sample downstream skill for circle weekly HTML reports | internal |
 
 ## Directory Layout
 

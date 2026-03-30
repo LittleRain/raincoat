@@ -1,0 +1,11 @@
+{
+  "name": "report-circle-weekly",
+  "title": "Report Circle Weekly",
+  "description": "按照圈子业务周报需求文档，读取指定 Excel 或 CSV 数据并生成周报 HTML。",
+  "version": "0.1.0",
+  "status": "draft",
+  "visibility": "internal",
+  "entry": "SKILL.md",
+  "tags": ["reports", "weekly", "html", "circle-commerce", "excel", "csv"],
+  "author": "raincai"
+}
