@@ -155,7 +155,21 @@ EOF
 cat > "$TARGET_DIR/examples/normalized-spec.md" <<EOF
 # 标准化 Spec 参考
 
+主参考文档：
 $NORMALIZED_SPEC_PATH
+
+默认优先读取：
+- examples/normalized-spec-summary.md
+
+仅在字段口径冲突或合同不一致时，回到主参考文档逐条核对。
+EOF
+
+cat > "$TARGET_DIR/examples/normalized-spec-summary.md" <<EOF
+# 标准化 Spec 摘要
+
+- 在此保留执行所需的最小字段集合
+- 建议控制在 30-80 行，避免重复粘贴完整长 spec
+- 应至少包含：report_goal、time_definition、report_outline、data_contracts、output_contract 的关键摘要
 EOF
 
 cat > "$TARGET_DIR/examples/input_inventory.md" <<EOF

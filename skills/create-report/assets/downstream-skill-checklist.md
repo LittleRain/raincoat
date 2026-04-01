@@ -8,6 +8,7 @@
 - 存在 `assets/report-prompt.md`
 - 存在 `assets/validation-checklist.md`
 - 存在 `examples/normalized-spec.md`
+- 存在 `examples/normalized-spec-summary.md`
 - 存在 `examples/input_inventory.md`
 - 存在 `examples/output-outline.html`
 - 存在 `scripts/run-report.sh`
