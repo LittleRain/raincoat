@@ -21,3 +21,7 @@
     映射出的标准化 spec
 - `examples/circle-weekly-generation-run.md`
   - 从原始需求到下游 skill 产物的完整生成记录
+- `examples/circle-daily-generation-run.md`
+  - 圈子业务日报从原始需求到下游 skill 的生成记录
+- `examples/circle-daily-adjustment-retro.md`
+  - 日报定向调整复盘（经验、坑位、回归策略）

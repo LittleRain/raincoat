@@ -119,6 +119,21 @@
 - 修改内容
 - 回归验证结果
 
+已落地样例：
+
+- [circle-daily-adjustment-retro.md](/Users/raincai/Documents/GitHub/raincoat/docs/skills/report-creator/examples/circle-daily-adjustment-retro.md)
+  - 记录了“结论偏浅 -> 增强证据化结论”、“结构偏差 -> 总览与字段约束补齐”、
+    “运行时报错 -> 标题字段类型防护”三类问题
+
+建议新增固定检查项（来自日报复盘）：
+
+- 结论证据化检查：
+  - 每个核心栏目至少包含 2-3 条带指标证据的结论
+- 运行时鲁棒性检查：
+  - 参与文案拼接的关键字段（如 title/item/source）必须经过空值与类型清洗
+- 双口径场景检查：
+  - 同时存在 PV/UV 指标时，必须显式声明口径并验证未混算
+
 ## 发布门槛
 
 在开放给更多内部团队前，至少满足以下条件：

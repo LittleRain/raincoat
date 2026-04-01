@@ -23,6 +23,8 @@ bash skills/report-circle-daily/scripts/run-report.sh \
 ## 输出
 
 - `report.html`：可直接在浏览器打开的日报
+  - 包含总览、圈子内容分析、漫展双路径对比、项目转化分析
+  - 表格支持点击表头进行排序（交互）
 - `run.log`：执行日志
 
 ## 文件结构
@@ -37,7 +39,8 @@ report-circle-daily/
 │   ├── report-outline.md  # 报告栏目结构
 │   └── validation-checklist.md
 ├── examples/
-│   ├── normalized-spec.md # 标准化 spec
+│   ├── normalized-spec.md # 标准化 spec 索引
+│   ├── normalized-spec-summary.md # 标准化 spec 执行摘要
 │   ├── input_inventory.md # 输入文件清单样例
 │   └── output-outline.html
 └── scripts/
