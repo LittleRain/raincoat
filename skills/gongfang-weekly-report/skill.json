@@ -1,0 +1,11 @@
+{
+  "name": "gongfang-weekly-report",
+  "title": "Gongfang Weekly Report",
+  "description": "Generate an interactive HTML weekly report for Gongfang commerce from a validated spec and declared data contracts.",
+  "version": "0.1.0",
+  "status": "beta",
+  "visibility": "public",
+  "entry": "SKILL.md",
+  "tags": ["reports", "weekly", "html", "commerce", "generated"],
+  "author": "raincai"
+}

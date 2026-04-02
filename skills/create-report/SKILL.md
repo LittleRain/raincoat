@@ -1,6 +1,6 @@
 ---
 name: create-report
-description: 将半结构化业务周报需求转换为标准化 spec，并生成下游 HTML 周报 skill。
+description: 当需要从业务周报需求文档创建、更新或校验一个下游 HTML 周报 skill 时使用。适用于把半结构化周报需求整理成标准化 spec，判断应生成 documentation-only 还是 runnable skill，校验真实样本数据是否足以支撑执行，并输出可复用的 report-domain skill 包。
 ---
 
 # Create Report
@@ -29,12 +29,14 @@ spec，再执行校验，最后生成或更新一个下游 `report-<domain>` ski
 
 1. 读取原始需求并抽取已知业务事实
 2. 只读取 `spec.md` 与 `operating-model.md`，按标准 spec 合同重组需求
-3. 识别缺失字段和阻塞冲突
-4. 若未通过门槛，则输出缺口报告并停止
-5. 若通过门槛，则校验标准化 spec
-6. 优先执行 `scripts/create-report-skill.sh` 生成下游 skill 骨架，再做定向补充
-7. 检查生成后的 skill 包是否具备必需文件和资产
-8. 若首次生成结果不符合预期，输出定向调整建议，而不是建议整体重做
+3. 判断本次目标是 `documentation-only` 还是 `runnable` 下游 skill
+4. 识别缺失字段、缺失样本和阻塞冲突
+5. 若未通过门槛，则输出缺口报告并停止
+6. 若通过门槛，则校验标准化 spec
+7. 优先执行 `scripts/create-report-skill.sh` 生成下游 skill 骨架，再做定向补充
+8. 若目标是 `runnable`，必须补齐真实执行脚本、依赖和最小回归测试
+9. 检查生成后的 skill 包是否具备必需文件、资产和对应级别的验证证据
+10. 若首次生成结果不符合预期，输出定向调整建议，而不是建议整体重做
 
 ## 低 Token 执行模式
 
@@ -54,6 +56,9 @@ spec，再执行校验，最后生成或更新一个下游 `report-<domain>` ski
 - 禁止猜测指标定义、分类口径或图表字段
 - 禁止生成非 HTML 的下游输出合同
 - 栏目与数据映射不完整时，禁止继续
+- 若未提供最小真实样本数据，禁止把下游 skill 标记或表述为 `runnable`
+- 若声明 `runnable`，禁止只生成 placeholder HTML、占位脚本或仅文档型骨架
+- 表格 schema、结论 schema、关键指标的 WoW 展示方式未明确时，禁止擅自发明输出细节
 - 当生成结果偏离预期时，应优先定位偏差层级，再做定向修正
 
 ## 参考资料

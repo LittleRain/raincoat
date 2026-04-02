@@ -1,0 +1,6 @@
+version: 1
+interface:
+  display_name: Create Report
+  short_description: 把周报需求文档转成标准化 spec，并生成或更新下游 HTML 周报 skill。
+  default_prompt: |
+    读取这份周报需求文档，使用 create-report 将需求整理成标准化 spec，判断应该生成 documentation-only 还是 runnable 下游 skill，并输出或更新对应的 HTML 周报 skill 包。
