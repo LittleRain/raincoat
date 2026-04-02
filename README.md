@@ -20,6 +20,8 @@ This repository is used to:
 
 - `trading-weekly`
 - `personal-kb`
+- `create-report`
+- `report-circle-weekly`
 
 See [skills/README.md](/Users/raincai/Documents/GitHub/raincoat/skills/README.md) for the catalog.
 

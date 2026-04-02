@@ -1,0 +1,11 @@
+{
+  "name": "report-circle-daily",
+  "title": "Report Circle Daily",
+  "description": "按照圈子业务日报需求文档，读取指定 CSV/Excel 数据并生成含总览与深度结论的日报 HTML。",
+  "version": "0.2.0",
+  "status": "draft",
+  "visibility": "internal",
+  "entry": "SKILL.md",
+  "tags": ["reports", "daily", "html", "circle", "content"],
+  "author": "raincai"
+}

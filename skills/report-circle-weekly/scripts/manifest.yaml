@@ -1,0 +1,18 @@
+id: report-circle-weekly
+title: Report Circle Weekly
+entry: run-report.sh
+runtime: python
+output:
+  primary: report.html
+  extra:
+    - run.log
+args:
+  - name: input-dir
+    flag: --input-dir
+    required: true
+  - name: output-dir
+    flag: --output-dir
+    required: true
+  - name: run-id
+    flag: --run-id
+    required: false
