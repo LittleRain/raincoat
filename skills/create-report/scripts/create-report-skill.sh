@@ -32,11 +32,12 @@ if [[ "$SKILL_LEVEL" != "documentation-only" && "$SKILL_LEVEL" != "runnable" ]];
 fi
 
 mkdir -p "$TARGET_DIR" "$TARGET_DIR/assets" "$TARGET_DIR/examples" "$TARGET_DIR/scripts"
+mkdir -p "$TARGET_DIR/agents"
 
 cat > "$TARGET_DIR/SKILL.md" <<EOF
 ---
 name: $SKILL_NAME
-description: Generate a validated HTML weekly report for $SKILL_TITLE.
+description: Use when generating or updating the $SKILL_TITLE HTML weekly report from validated report contracts and sample-backed data rules.
 ---
 
 # $SKILL_TITLE
@@ -50,6 +51,7 @@ description: Generate a validated HTML weekly report for $SKILL_TITLE.
 
 - data files declared by the normalized spec
 - see: [examples/input_inventory.md](./examples/input_inventory.md)
+- runtime metadata: [agents/openai.yaml](./agents/openai.yaml)
 
 ## 工作流
 
@@ -75,48 +77,15 @@ description: Generate a validated HTML weekly report for $SKILL_TITLE.
 - [report-outline.md](./assets/report-outline.md)
 EOF
 
-cat > "$TARGET_DIR/README.md" <<EOF
-# $SKILL_TITLE
-
-## 说明
-
-This downstream skill produces an HTML weekly report using a validated spec and
-declared data contracts.
-
-Current level: \`$SKILL_LEVEL\`
-
-## 输入要求
-
-Users must prepare the required input files in a single directory.
-
-- File list and field expectations: \`examples/input_inventory.md\`
-- Output structure and required sections: \`assets/report-outline.md\`
-- HTML contract: \`assets/html-contract.md\`
-
-This package should remain self-contained and must not require external repo
-documents to understand the runtime contract.
-
-## 目录结构
-
-- \`SKILL.md\`: agent-facing report generation workflow
-- \`skill.json\`: metadata
-- \`assets/\`: HTML contract, outline, prompt, validation checklist
-- \`examples/\`: spec and output examples
-- \`scripts/\`: execution packaging area
-EOF
-
-cat > "$TARGET_DIR/skill.json" <<EOF
-{
-  "name": "$SKILL_NAME",
-  "title": "$SKILL_TITLE",
-  "description": "Generate an HTML weekly report for $SKILL_TITLE from a validated spec.",
-  "version": "0.1.0",
-  "status": "draft",
-  "visibility": "internal",
-  "entry": "SKILL.md",
-  "tags": ["reports", "weekly", "html", "generated"],
-  "author": "raincai"
-}
+cat > "$TARGET_DIR/agents/openai.yaml" <<EOF
+version: 1
+interface:
+  display_name: $SKILL_TITLE
+  short_description: Generate the $SKILL_TITLE HTML weekly report from packaged contracts and declared input files.
+  default_prompt: |
+    Generate the $SKILL_TITLE HTML weekly report using the packaged spec summary,
+    input inventory, and output contract. Do not infer undeclared metrics or
+    claim runnable output unless the package includes real execution evidence.
 EOF
 
 cat > "$TARGET_DIR/assets/html-contract.md" <<EOF
@@ -218,15 +187,6 @@ cat > "$TARGET_DIR/examples/output-outline.html" <<EOF
     <main></main>
   </body>
 </html>
-EOF
-
-cat > "$TARGET_DIR/scripts/README.md" <<EOF
-# Scripts
-
-Current level: \`$SKILL_LEVEL\`
-
-- \`documentation-only\`: stubs are allowed, but the package must not be presented as runnable
-- \`runnable\`: replace stubs with a real execution script, dependencies, tests, and sample-backed verification
 EOF
 
 cat > "$TARGET_DIR/scripts/run-report.sh" <<EOF
