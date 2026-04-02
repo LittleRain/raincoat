@@ -74,6 +74,7 @@
 - `skill_title`:
 - `skill_level`: `documentation-only` / `runnable`
 - `required_files`:
+- `required_references`:
 - `required_assets`:
 - `required_examples`:
 - `required_tests`:
