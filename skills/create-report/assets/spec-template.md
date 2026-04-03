@@ -37,6 +37,10 @@
 - `narrative_expectations`:
 - `table_schemas`:
 - `narrative_schema`:
+- `section_data_mapping`:
+  - `primary_contracts`:
+  - `fallback_contracts`:
+  - `merge_or_override_rule`:
 
 ## data_contracts
 
@@ -49,6 +53,8 @@
 - `field_notes`:
 - `supported_sections`:
 - `sample_file_required`:
+- `period_coverage_expectation`:
+- `priority_for_sections`:
 
 ## analysis_rules
 
@@ -56,6 +62,11 @@
 - `allowed_evidence`:
 - `forbidden_inferences`:
 - `metric_calculation_contracts`:
+- `ratio_metric_fallback_rules`:
+  - `metric_name`:
+  - `primary_formula`:
+  - `fallback_formula`:
+  - `fallback_condition`:
 
 ## output_contract
 
@@ -68,6 +79,9 @@
 - `wow_display_rules`:
 - `narrative_direction_rules`:
 - `runtime_logging_rules`:
+- `empty_period_column_policy`:
+  - `hide_when_all_rows_empty`:
+  - `applies_to_tables`:
 
 ## skill_generation_contract
 

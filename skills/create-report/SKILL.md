@@ -57,6 +57,9 @@ description: Use when turning a business weekly-report requirement document into
 - 若未提供最小真实样本数据，禁止把下游 skill 标记或表述为 `runnable`
 - 若声明 `runnable`，禁止只生成 placeholder HTML、占位脚本或仅文档型骨架
 - 表格 schema、结论 schema、关键指标的 WoW 展示方式未明确时，禁止擅自发明输出细节
+- 若同一 section 可由多份数据源支持，未明确主/备数据源优先级时，禁止进入 runnable 生成
+- 比率指标（如 CTR）未声明主口径与缺字段回退口径时，禁止进入 runnable 生成
+- 若 spec 要求隐藏全空周期列，禁止输出仍保留全空周期列的表格
 - 若声明 `runnable`，禁止只在任务结束后一次性输出日志；必须支持执行过程中的实时日志
 - 当生成结果偏离预期时，应优先定位偏差层级，再做定向修正
 

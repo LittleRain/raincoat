@@ -156,24 +156,38 @@ h+=spT(tm,'\u5929\u9a6c\u63a8\u8350\u5546\u54c1\u5361');
 h+='<div class="cd"><div class="cd-t">\u5929\u9a6c\u8d8b\u52bf</div><div class="cc"><canvas id="c4c"></canvas></div></div>';
 h+=spT(fd,'\u5546\u57ce\u9996\u9875feed');
 h+='<div class="cd"><div class="cd-t">Feed\u8d8b\u52bf</div><div class="cc"><canvas id="c4d"></canvas></div></div>';
+function wkIdxByData(data){
+var idx=[];
+for(var i=0;i<W.length;i++){
+var has=false;
+for(var ch in data){if(!data.hasOwnProperty(ch))continue;var v=data[ch];if(v&&v[i]){has=true;break;}}
+if(has)idx.push(i);
+}
+if(!idx.length){for(var i2=0;i2<W.length;i2++)idx.push(i2);}
+return idx;
+}
 function chT(data,ti){var t='<div class="cd"><div class="cd-t">'+ti+'</div><div class="ov"><table><tr><th>\u6e20\u9053</th>';
-var wn=W.length;
-for(var i=0;i<wn;i++)t+='<th>'+W[i]+' PV</th>';t+='<th>WoW</th><th>\u5360\u6bd4</th>';for(var i=0;i<wn;i++)t+='<th>'+W[i]+' GMV</th>';t+='<th>WoW</th>';for(var i=0;i<wn;i++)t+='<th>'+W[i]+' GPM</th>';t+='<th>GPM WoW</th></tr>';
+var wkIdx=wkIdxByData(data),wn=wkIdx.length;
+for(var i=0;i<wn;i++)t+='<th>'+W[wkIdx[i]]+' PV</th>';t+='<th>WoW</th><th>\u5360\u6bd4</th>';for(var i=0;i<wn;i++)t+='<th>'+W[wkIdx[i]]+' GMV</th>';t+='<th>WoW</th>';for(var i=0;i<wn;i++)t+='<th>'+W[wkIdx[i]]+' GPM</th>';t+='<th>GPM WoW</th></tr>';
 for(var ch in data){if(!data.hasOwnProperty(ch))continue;var v=data[ch];t+='<tr><td>'+ch+'</td>';
-for(var i=0;i<v.length;i++)t+='<td>'+(v[i]?F(v[i].PV,'p'):'-')+'</td>';var lw=wn-1,pw2=wn-2;var pc=(v[lw]&&v[pw2])?G(v[lw].PV,v[pw2].PV):{v:'-',c:''};t+='<td>'+T(pc)+'</td><td>'+(v[lw]&&v[lw].share?v[lw].share+'%':'-')+'</td>';
-for(var i=0;i<v.length;i++)t+='<td>'+(v[i]?F(v[i].GMV,'g'):'-')+'</td>';var gc=(v[lw]&&v[pw2])?G(v[lw].GMV,v[pw2].GMV):{v:'-',c:''};t+='<td>'+T(gc)+'</td>';
-for(var i=0;i<v.length;i++)t+='<td>'+(v[i]?v[i].GPM:'-')+'</td>';var gpc=(v[lw]&&v[pw2])?G(v[lw].GPM,v[pw2].GPM):{v:'-',c:''};t+='<td>'+T(gpc)+'</td></tr>';}return t+'</table></div></div>';}
+for(var i=0;i<wn;i++){var wi=wkIdx[i];t+='<td>'+(v[wi]?F(v[wi].PV,'p'):'-')+'</td>';}
+var lw=wkIdx[wn-1],pw2=wn>=2?wkIdx[wn-2]:null;var pc=(pw2!==null&&v[lw]&&v[pw2])?G(v[lw].PV,v[pw2].PV):{v:'-',c:''};t+='<td>'+T(pc)+'</td><td>'+(v[lw]&&v[lw].share?v[lw].share+'%':'-')+'</td>';
+for(var i=0;i<wn;i++){var wi2=wkIdx[i];t+='<td>'+(v[wi2]?F(v[wi2].GMV,'g'):'-')+'</td>';}
+var gc=(pw2!==null&&v[lw]&&v[pw2])?G(v[lw].GMV,v[pw2].GMV):{v:'-',c:''};t+='<td>'+T(gc)+'</td>';
+for(var i=0;i<wn;i++){var wi3=wkIdx[i];t+='<td>'+(v[wi3]?v[wi3].GPM:'-')+'</td>';}
+var gpc=(pw2!==null&&v[lw]&&v[pw2])?G(v[lw].GPM,v[pw2].GPM):{v:'-',c:''};t+='<td>'+T(gpc)+'</td></tr>';}return t+'</table></div></div>';}
 h+=chT(s.cx,'\u5c0f\u5e97\u5206\u6e20\u9053');h+=chT(s.cy,'\u81ea\u8425\u5206\u6e20\u9053');
 // 数据表3: 小店分行业×渠道
 var s4i=s.ind||{};
 for(var ind2 in s4i){if(!s4i.hasOwnProperty(ind2))continue;
 h+='<div class="cd"><div class="cd-t">\u5c0f\u5e97 '+ind2+' \u5206\u6e20\u9053</div><div class="ov"><table><tr><th>\u6e20\u9053</th>';
-var wn2=W.length;for(var i=0;i<wn2;i++)h+='<th>'+W[i]+' PV</th>';h+='<th>WoW</th>';for(var i=0;i<wn2;i++)h+='<th>'+W[i]+' GMV</th>';h+='<th>WoW</th></tr>';
-var id2=s4i[ind2];for(var ch2 in id2){if(!id2.hasOwnProperty(ch2))continue;var v2=id2[ch2];
-h+='<tr><td>'+ch2+'</td>';for(var i=0;i<v2.length;i++)h+='<td>'+(v2[i]?F(v2[i].PV,'p'):'-')+'</td>';
-var lw2=wn2-1,pw3=wn2-2;var pc2=(v2[lw2]&&v2[pw3])?G(v2[lw2].PV,v2[pw3].PV):{v:'-',c:''};h+='<td>'+T(pc2)+'</td>';
-for(var i=0;i<v2.length;i++)h+='<td>'+(v2[i]?F(v2[i].GMV,'g'):'-')+'</td>';
-var gc2=(v2[lw2]&&v2[pw3])?G(v2[lw2].GMV,v2[pw3].GMV):{v:'-',c:''};h+='<td>'+T(gc2)+'</td></tr>';}
+var id2=s4i[ind2],wkIdx2=wkIdxByData(id2),wn2=wkIdx2.length;
+for(var i=0;i<wn2;i++)h+='<th>'+W[wkIdx2[i]]+' PV</th>';h+='<th>WoW</th>';for(var i=0;i<wn2;i++)h+='<th>'+W[wkIdx2[i]]+' GMV</th>';h+='<th>WoW</th></tr>';
+for(var ch2 in id2){if(!id2.hasOwnProperty(ch2))continue;var v2=id2[ch2];
+h+='<tr><td>'+ch2+'</td>';for(var i=0;i<wn2;i++){var wi4=wkIdx2[i];h+='<td>'+(v2[wi4]?F(v2[wi4].PV,'p'):'-')+'</td>';}
+var lw2=wkIdx2[wn2-1],pw3=wn2>=2?wkIdx2[wn2-2]:null;var pc2=(pw3!==null&&v2[lw2]&&v2[pw3])?G(v2[lw2].PV,v2[pw3].PV):{v:'-',c:''};h+='<td>'+T(pc2)+'</td>';
+for(var i=0;i<wn2;i++){var wi5=wkIdx2[i];h+='<td>'+(v2[wi5]?F(v2[wi5].GMV,'g'):'-')+'</td>';}
+var gc2=(pw3!==null&&v2[lw2]&&v2[pw3])?G(v2[lw2].GMV,v2[pw3].GMV):{v:'-',c:''};h+='<td>'+T(gc2)+'</td></tr>';}
 h+='</table></div></div>';}
 // S4 小店流量归因: 渠道→经营类目拆解
 var L=W.length-1,P=W.length-2;

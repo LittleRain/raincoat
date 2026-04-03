@@ -88,6 +88,12 @@ Each section must contain:
 - `required_outputs`
 - `narrative_expectations`
 
+Recommended additional fields for runnable reliability:
+
+- `section_data_mapping` (primary/fallback contracts and precedence)
+- `table_schemas`
+- `narrative_schema`
+
 If a section needs charts or tables, they must be declared in
 `required_views`.
 
@@ -111,6 +117,8 @@ Optional fields:
 - `join_keys`
 - `known_quality_risks`
 - `attachment_dependencies`
+- `period_coverage_expectation`
+- `priority_for_sections`
 
 ### `analysis_rules`
 
@@ -127,6 +135,11 @@ Optional fields:
 - `ranking_rules`
 - `threshold_rules`
 - `fallback_behavior`
+- `ratio_metric_fallback_rules`
+
+If ratio metrics are used, define both primary and fallback formulas explicitly.
+Example: `CTR = click_pv / exposure_pv`; fallback `CTR ~= detail_pv / exposure_pv`
+when `click_pv` is unavailable.
 
 ### `output_contract`
 
@@ -139,6 +152,13 @@ Required fields:
 - `section_order`
 - `required_blocks`
 - `citation_rules`
+
+Recommended additional fields for table stability:
+
+- `table_column_rules`
+- `wow_display_rules`
+- `narrative_direction_rules`
+- `empty_period_column_policy` (hide period columns that are empty for all rows)
 
 Defaults:
 

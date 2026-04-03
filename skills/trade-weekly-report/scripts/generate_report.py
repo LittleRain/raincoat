@@ -16,6 +16,8 @@
     ⑤ 商品x流量渠道x商家x经营类目x商品类目*.xlsx → S4爆品归因
     ⑥ 商品x体裁x商家x经营类目x商品类目*.xlsx     → S5爆品归因
     ⑦ 头部UPlist.xlsx                   → 加林行业识别（一般不更新）
+    ⑧ 天马推荐商品卡*.xlsx               → S4天马专项(可选，优先用于图表6/表7)
+    ⑨ 商城首页feed*.xlsx / 分商城首页feed*.xlsx → S4Feed专项(可选，优先用于图表8/表9)
 
 输出:  交易业务周报_W{周号}.html
 """
@@ -245,6 +247,8 @@ def load_all(dd):
         '商品流量':  find('*商品*流量*商家*', dd),
         '商品体裁':  find('*商品*体裁*商家*', dd),
         'UP':      find('*UPlist*', dd) or find('*uplist*', dd) or find('*UP*list*', dd) or find('头部UP*', dd),
+        '天马专项':  find('*天马推荐商品卡*', dd),
+        'Feed专项': find('*商城首页feed*', dd) or find('*分商城首页feed*', dd),
     }
     expected_patterns = {
         '整体': '*整体数据*',
@@ -254,6 +258,8 @@ def load_all(dd):
         '商品流量': '*商品*流量*商家*',
         '商品体裁': '*商品*体裁*商家*',
         'UP': '*UP*list* / 头部UP*',
+        '天马专项': '*天马推荐商品卡*',
+        'Feed专项': '*商城首页feed* / *分商城首页feed*',
     }
 
     log("INFO", "文件扫描完成", input_dir=dd)
@@ -291,6 +297,8 @@ def load_all(dd):
                 log_df_contract(k, dfs[k], ['周五-周四周 ', '业务线二级', '资源位二级入口', '商家ID', '商品曝光PV', '支付订单数', 'GMV（不减退款）'])
             elif k == '体裁':
                 log_df_contract(k, dfs[k], ['周五-周四周 ', '业务线二级', '内容类型', '商家ID', '商品曝光PV', '支付订单数', 'GMV（不减退款）'])
+            elif k in ('天马专项', 'Feed专项'):
+                log_df_contract(k, dfs[k], ['周五-周四周 ', '业务线二级', '资源位二级入口', '商品曝光PV', '支付订单数', 'GMV（不减退款）'])
             else:
                 log("INFO", f"{k}读取完成", rows=len(dfs[k]), cols=len(dfs[k].columns), sample_cols=format_cols(dfs[k].columns))
         else:
@@ -320,6 +328,8 @@ COL_MAP = {
     '周五-周四周 ': '周', '周五-周四周': '周',
     '支付订单金额(元)': 'GMV', '商品GPM': 'GPM_raw',
     '商详-支付转化率-UV': '商详转化率', '商详UV': '商详PV',
+    '点击pv': '商品点击PV', '点击PV': '商品点击PV',
+    '商品点击pv': '商品点击PV', '商品点击Pv': '商品点击PV',
 }
 
 def norm(df):
@@ -396,11 +406,21 @@ def agg(df):
     gmv = df['GMV'].sum() if 'GMV' in df.columns else 0
     o = df['支付订单数'].sum() if '支付订单数' in df.columns else 0
     b = df['支付订单买家数'].sum() if '支付订单买家数' in df.columns else 0
+    # CTR优先级：商品点击PV > CTR列(加权) > 商详PV近似点击
+    ctr = R(ck / pv * 100) if pv and ck else 0
+    if pv and ctr == 0 and 'CTR' in df.columns:
+        ctr_vals = pd.to_numeric(df['CTR'], errors='coerce').fillna(0)
+        # 兼容 0~1 或 0~100 两种CTR口径
+        if ctr_vals.max() <= 1:
+            ctr_vals = ctr_vals * 100
+        ctr = R((ctr_vals * df['商品曝光PV']).sum() / pv)
+    if pv and ctr == 0 and sx > 0:
+        ctr = R(sx / pv * 100)
     return {
         'GMV': R(gmv), 'b': int(b), 'o': int(o), 'PV': int(pv),
         'GPM': R(gmv / pv * 1000) if pv else 0,
         'cv': R(o / pv * 100) if pv else 0,
-        'CTR': R(ck / pv * 100) if pv else 0,
+        'CTR': ctr,
         'scv': R(o / sx * 100) if sx else 0,
     }
 
@@ -436,11 +456,13 @@ def process(dfs):
     df_type = norm(dfs['体裁'])
     df_gprod = norm(dfs['商品流量'])
     df_tprod = norm(dfs['商品体裁'])
+    df_tm_special = norm(dfs['天马专项'])
+    df_fd_special = norm(dfs['Feed专项'])
     up_ids = dfs['up_ids']
 
     # 数据诊断
     print(f"\n  📋 数据诊断:")
-    for name, df_chk in [('整体', df_main), ('行业', df_ind), ('流量', df_flow), ('体裁', df_type)]:
+    for name, df_chk in [('整体', df_main), ('行业', df_ind), ('流量', df_flow), ('体裁', df_type), ('天马专项', df_tm_special), ('Feed专项', df_fd_special)]:
         if len(df_chk) == 0:
             print(f"    {name}: ⚠ 空数据")
             continue
@@ -853,15 +875,23 @@ def process(dfs):
     s4_y = [agg(df_main[(df_main['周']==w)&(df_main['业务线二级']=='自营')]) for w in wks]
     s4_xr = [R(s4_x[i]['PV']/s4_t[i]['PV']*100) if s4_t[i]['PV'] else 0 for i in range(len(wks))]
 
-    def s4_special(ch):
+    def s4_special(ch, df_special=None):
         """天马/Feed专项: 输出整体+小店维度全量指标"""
         r = []
         for w in wks:
-            da = df_flow[df_flow['周']==w] if len(df_flow)>0 else pd.DataFrame()
-            dc = da[da['资源位二级入口']==ch] if len(da)>0 and '资源位二级入口' in da.columns else pd.DataFrame()
+            if df_special is not None and len(df_special) > 0:
+                da = df_special[df_special['周'] == w]
+            else:
+                da = df_flow[df_flow['周'] == w] if len(df_flow) > 0 else pd.DataFrame()
+            if len(da) > 0 and '资源位二级入口' in da.columns:
+                dc = da[da['资源位二级入口'] == ch]
+            else:
+                dc = da
             dx = dc[dc['业务线二级']=='小店'] if len(dc)>0 else pd.DataFrame()
             dy = dc[dc['业务线二级']=='自营'] if len(dc)>0 else pd.DataFrame()
-            tp2 = da['商品曝光PV'].sum() if len(da)>0 else 0
+            tp2 = df_main[df_main['周'] == w]['商品曝光PV'].sum() if len(df_main) > 0 else 0
+            if tp2 == 0:
+                tp2 = da['商品曝光PV'].sum() if len(da) > 0 else 0
             a_all = agg(dc); a_xd = agg(dx)
             cp = dc['商品曝光PV'].sum() if len(dc)>0 else 0
             xp = dx['商品曝光PV'].sum() if len(dx)>0 else 0
@@ -876,8 +906,8 @@ def process(dfs):
             r.append(a_all)
         return r
 
-    s4_tm = s4_special('天马推荐商品卡')
-    s4_fd = s4_special('商城首页feed')
+    s4_tm = s4_special('天马推荐商品卡', df_tm_special)
+    s4_fd = s4_special('商城首页feed', df_fd_special)
 
     def s4_channels(biz=None):
         """分渠道明细含渠道占比"""

@@ -64,6 +64,7 @@ For `runnable` downstream skills, also block when:
 - samples are missing required execution fields
 - samples do not cover at least two comparable periods
 - ratio metrics do not declare whether to use raw values or recomputation
+- section-level dataset precedence is undefined when multiple contracts support the same section
 
 ## Allowed Inference Scope
 
@@ -80,6 +81,7 @@ Not allowed:
 - invent chart types not implied by the requirement or template
 - promote optional data into required data without evidence
 - infer KPI formulas from field names alone
+- silently switch data sources when primary contracts are missing period coverage
 
 ## Output Rules
 
@@ -100,6 +102,7 @@ If a section includes tables or structured conclusions, the spec must define:
 - which columns require WoW display
 - which fields must explicitly say up / down / flat
 - which sections use charts, tables, or both
+- whether all-empty period columns should be hidden
 
 Section titles alone are not enough to justify a `runnable` output.
 
@@ -185,6 +188,7 @@ For `runnable` outputs, verify more than file existence:
 - key sections required by the spec exist
 - required charts or equivalent structures exist
 - required tables match the declared schema
+- all-empty period columns are hidden when the spec requires this behavior
 - required direction words appear in conclusions when the spec demands them
 - runtime logs include file-read status and key processing checkpoints
 - runtime logs are emitted during execution instead of post-run dump only

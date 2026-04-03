@@ -6,3 +6,8 @@ dist
 coverage
 .env
 .env.*
+
+# trade-weekly-report local runtime artifacts
+skills/trade-weekly-report/input/
+skills/trade-weekly-report/output/
+skills/trade-weekly-report/scripts/__pycache__/
