@@ -130,6 +130,9 @@ Rules:
 - include charts, tables, and conclusion blocks where required
 - block unsupported analysis instead of guessing
 - follow declared table schemas and WoW rules exactly when present
+- if a section has multiple contracts, obey the declared primary/fallback precedence
+- for ratio metrics, use declared primary formula and fallback formula only
+- hide period columns that are empty for all rows when spec requires that behavior
 - emit runtime logs for file discovery, file read status, and key processing checkpoints
 - stream logs during execution (avoid end-of-run dump only)
 - do not claim runnable output unless real execution and verification exist
@@ -143,6 +146,9 @@ cat > "$TARGET_DIR/assets/validation-checklist.md" <<EOF
 - required sections are present
 - output format is HTML
 - skill level is declared
+- section-level data-source precedence is declared when multiple contracts exist
+- ratio metric fallback rules are declared when required fields may be missing
+- empty-period-column behavior is declared for table-heavy sections
 - runnable skills require sample-backed execution evidence
 - runnable skills must include real-time process logs with INFO/WARN/ERROR semantics
 EOF
