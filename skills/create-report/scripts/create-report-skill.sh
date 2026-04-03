@@ -130,6 +130,8 @@ Rules:
 - include charts, tables, and conclusion blocks where required
 - block unsupported analysis instead of guessing
 - follow declared table schemas and WoW rules exactly when present
+- emit runtime logs for file discovery, file read status, and key processing checkpoints
+- stream logs during execution (avoid end-of-run dump only)
 - do not claim runnable output unless real execution and verification exist
 EOF
 
@@ -142,6 +144,7 @@ cat > "$TARGET_DIR/assets/validation-checklist.md" <<EOF
 - output format is HTML
 - skill level is declared
 - runnable skills require sample-backed execution evidence
+- runnable skills must include real-time process logs with INFO/WARN/ERROR semantics
 EOF
 
 cat > "$TARGET_DIR/examples/normalized-spec.md" <<EOF

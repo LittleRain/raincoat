@@ -103,6 +103,31 @@ If a section includes tables or structured conclusions, the spec must define:
 
 Section titles alone are not enough to justify a `runnable` output.
 
+## Execution Logging Rules
+
+For `runnable` downstream skills, runtime logging is part of the execution
+contract, not an optional enhancement.
+
+Required logging categories:
+
+- runtime context: run id, input dir, output path, start/end time
+- file discovery: pattern, matched file, required vs optional status
+- file read/contract check: row count, key-column presence, mapping summary
+- key processing checkpoints: week detection, classification coverage, section build progress
+- output verification: generated artifact path and basic size/count summary
+
+Required behavior:
+
+- logs must appear during processing, not only after completion
+- logs should support at least `INFO/WARN/ERROR`
+- when stdout is piped, scripts should still flush logs progressively
+
+Failure logs must include:
+
+- failed stage
+- direct cause
+- minimal remediation hint
+
 ## Downstream Skill Levels
 
 ### `documentation-only`
@@ -161,3 +186,5 @@ For `runnable` outputs, verify more than file existence:
 - required charts or equivalent structures exist
 - required tables match the declared schema
 - required direction words appear in conclusions when the spec demands them
+- runtime logs include file-read status and key processing checkpoints
+- runtime logs are emitted during execution instead of post-run dump only

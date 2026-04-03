@@ -67,6 +67,7 @@
 - `table_column_rules`:
 - `wow_display_rules`:
 - `narrative_direction_rules`:
+- `runtime_logging_rules`:
 
 ## skill_generation_contract
 
@@ -86,3 +87,4 @@
 - `generation_readiness_checks`:
 - `html_output_checks`:
 - `runnable_readiness_checks`:
+- `runtime_log_checks`:
