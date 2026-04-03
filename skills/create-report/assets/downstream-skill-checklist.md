@@ -31,6 +31,9 @@
 - `scripts/run-report.sh` 实际调用真实渲染逻辑，而不是直接写 placeholder HTML
 - 至少存在 1 个最小回归测试脚本
 - 已用真实样本执行一次生成
+- 执行日志包含文件匹配、读取状态、关键处理阶段摘要
+- 日志在执行过程中实时输出，而不是仅结束后一次性输出
+- 日志至少包含 `INFO` / `WARN` / `ERROR` 语义层级
 - 生成出的 HTML 包含 spec 要求的关键图表 / 表格 / 结论区
 - 若 spec 声明表格 schema，则输出列名与 schema 一致
 - 若 spec 声明 narrative schema，则结论文本符合 schema

@@ -13,6 +13,8 @@
 - 若 spec 已声明表格 schema，必须严格按 schema 输出，不能临时改列
 - 若 spec 已声明某些字段要展示 WoW，必须逐列展示
 - 若 spec 已声明 narrative schema，必须显式写出上涨 / 下跌 / 持平，不能只写“变化”
+- 若 spec 已声明 runtime logging rules，必须输出文件匹配、读取状态、关键处理阶段日志
+- 日志必须随处理过程实时输出，不能只在任务完成后一次性打印
 - 若当前 skill 为 `documentation-only`，不得把占位输出表述成可运行结果
 
 ## 输出
