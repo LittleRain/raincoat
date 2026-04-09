@@ -18,7 +18,9 @@
 
 import argparse
 import glob
+import html
 import os
+import re
 import time
 from datetime import date, datetime, timedelta
 
@@ -102,10 +104,10 @@ def parse_datetime_col(series):
 
 def build_opus_link(content_id):
     if pd.isna(content_id):
-        return '-'
+        return ''
     text = str(content_id).strip()
-    if not text:
-        return '-'
+    if not text or text == '0' or text.lower() == 'nan':
+        return ''
     return f'https://www.bilibili.com/opus/{text}'
 
 
@@ -116,7 +118,15 @@ def html_table(df):
     headers = ''.join(f'<th>{c}</th>' for c in df.columns)
     rows = ''
     for _, row in df.iterrows():
-        cells = ''.join(f'<td>{v}</td>' for v in row)
+        cell_html = []
+        for v in row:
+            text = '' if pd.isna(v) else str(v)
+            if text.startswith('http://') or text.startswith('https://'):
+                safe = html.escape(text, quote=True)
+                cell_html.append(f'<td><a href="{safe}" target="_blank" rel="noopener noreferrer">打开</a></td>')
+            else:
+                cell_html.append(f'<td>{text}</td>')
+        cells = ''.join(cell_html)
         rows += f'<tr>{cells}</tr>'
 
     return f'<table class="sortable"><thead><tr>{headers}</tr></thead><tbody>{rows}</tbody></table>'
@@ -246,7 +256,7 @@ def aggregate_feed_metrics(feed_df):
 
     if 'interact' in feed_df.columns and feed_df['interact'].notna().any():
         interact = to_num(feed_df['interact']).fillna(0).sum()
-        interact_rate = safe_div(interact, click)
+        interact_rate = safe_div(interact, exposure)
     else:
         interact_rate = pd.NA
 
@@ -254,6 +264,7 @@ def aggregate_feed_metrics(feed_df):
         'exposure': exposure,
         'click': click,
         'ctr': ctr,
+        'interact': interact if 'interact' in locals() else 0,
         'interact_rate': interact_rate,
         'content_count': content_count,
     }
@@ -267,7 +278,7 @@ def build_feed_top_table(feed_df, exposure_label='曝光PV', click_label='点击
 
     show = pd.DataFrame()
     show['标题'] = top['title'].fillna('-')
-    show['副标题'] = top['subtitle'].fillna('-')
+    show['描述'] = top['subtitle'].fillna('-')
     show['发布时间'] = top['pubtime'].fillna('-')
     show[exposure_label] = top['exposure'].apply(fmt_num)
     show[click_label] = top['click'].apply(fmt_num)
@@ -280,17 +291,59 @@ def build_feed_top_table(feed_df, exposure_label='曝光PV', click_label='点击
     return html_table(show)
 
 
-def feed_feature_insights(feed_df, scene_label):
+def infer_scene_label(title, subtitle):
+    text = f'{title} {subtitle}'.lower()
+    rules = [
+        ('报名招募', r'报名|自由行|申请中|申请'),
+        ('返图晒图', r'返图|场照|cos|repo'),
+        ('攻略信息', r'攻略|时间|地点|交通|票务|嘉宾|流程'),
+        ('社交组队', r'找搭子|有没有|求|一起'),
+        ('情绪表达', r'好好玩|值得|坑|无语|惊现'),
+    ]
+    for label, pattern in rules:
+        if re.search(pattern, text):
+            return label
+    return ''
+
+
+def top_keywords(feed_slice):
+    words = {}
+    for _, row in feed_slice.iterrows():
+        text = f"{row.get('title', '')} {row.get('subtitle', '')}"
+        for token in re.findall(r'[A-Za-z0-9\u4e00-\u9fff]{2,8}', text):
+            token_low = token.lower()
+            if token_low in {'nan', 'br', 'http', 'https', 'www'}:
+                continue
+            if token in {'这个', '我们', '大家', '一起', '就是', '可以', '没有', '内容', '分享图片'}:
+                continue
+            words[token] = words.get(token, 0) + 1
+    if not words:
+        return '无明显高频词'
+    return '、'.join([k for k, _ in sorted(words.items(), key=lambda x: x[1], reverse=True)[:4]])
+
+
+def build_text_summary(texts):
+    if not texts:
+        return ''
+    tokens = {}
+    for text in texts:
+        for token in re.findall(r'[A-Za-z0-9\u4e00-\u9fff]{2,8}', str(text)):
+            token_low = token.lower()
+            if token_low in {'nan', 'br', 'http', 'https', 'www'}:
+                continue
+            if token in {'这个', '我们', '大家', '一起', '就是', '可以', '没有', '内容', '分享图片'}:
+                continue
+            tokens[token] = tokens.get(token, 0) + 1
+    if not tokens:
+        return ''
+    return '、'.join([k for k, _ in sorted(tokens.items(), key=lambda x: x[1], reverse=True)[:4]])
+
+
+def feed_feature_insights(feed_df):
     if feed_df.empty:
         return ['缺少可分析数据。']
 
-    m = aggregate_feed_metrics(feed_df)
-    insights = [
-        f'{scene_label}整体曝光 {fmt_num(m["exposure"])}、点击 {fmt_num(m["click"])}、加权 CTR {fmt_pct(m["ctr"])}。',
-    ]
-
-    if pd.notna(m['interact_rate']):
-        insights.append(f'互动率（互动数/点击）为 {fmt_pct(m["interact_rate"])}，说明点击后参与度处于可观察水平。')
+    insights = []
 
     type_grp = (
         feed_df.groupby('content_type', dropna=False)
@@ -301,10 +354,9 @@ def feed_feature_insights(feed_df, scene_label):
         type_grp['ctr'] = type_grp.apply(lambda r: safe_div(r['click'], r['exposure']), axis=1)
         top_exp_type = type_grp.sort_values('exposure', ascending=False).iloc[0]
         top_ctr_type = type_grp[type_grp['exposure'] > 0].sort_values('ctr', ascending=False).iloc[0]
-        exp_share = safe_div(top_exp_type['exposure'], m['exposure'])
         insights.append(
-            f'内容类型上，「{top_exp_type["content_type"]}」曝光占比最高（{fmt_pct(exp_share)}），'
-            f'而「{top_ctr_type["content_type"]}」CTR 更高（{fmt_pct(top_ctr_type["ctr"])}）。'
+            f'内容类型上，「{top_exp_type["content_type"]}」是头部曝光主力，'
+            f'「{top_ctr_type["content_type"]}」点击效率更高（CTR {fmt_pct(top_ctr_type["ctr"])}）。'
         )
 
     source_grp = (
@@ -315,24 +367,26 @@ def feed_feature_insights(feed_df, scene_label):
     if not source_grp.empty:
         source_grp['ctr'] = source_grp.apply(lambda r: safe_div(r['click'], r['exposure']), axis=1)
         best_src = source_grp[source_grp['exposure'] > 0].sort_values('ctr', ascending=False).iloc[0]
-        insights.append(f'发布来源上，「{best_src["source"]}」CTR 领先（{fmt_pct(best_src["ctr"])}），可作为后续内容供给策略的优先来源。')
+        insights.append(f'发布来源上，「{best_src["source"]}」点击效率更高（CTR {fmt_pct(best_src["ctr"])}）。')
 
-    baseline_ctr = m['ctr'] if pd.notna(m['ctr']) else 0
-    high_eff = feed_df[(feed_df['ctr'] >= baseline_ctr) & (feed_df['exposure'] >= feed_df['exposure'].median())]
-    if not high_eff.empty:
-        top_titles = (
-            high_eff.sort_values('ctr', ascending=False)
-            .head(3)['title']
-            .dropna()
-            .astype(str)
-            .str.strip()
-            .tolist()
-        )
-        top_titles = [t for t in top_titles if t and t.lower() != 'nan']
-        if top_titles:
-            insights.append('高效率内容（CTR 高于整体且曝光不低）主要集中在：' + '、'.join(top_titles) + '。')
-        else:
-            insights.append('高效率内容（CTR 高于整体且曝光不低）存在，但标题字段缺失较多。')
+    top10 = feed_df.sort_values('exposure', ascending=False).head(10).copy()
+    top10['scene'] = top10.apply(lambda r: infer_scene_label(r.get('title', ''), r.get('subtitle', '')), axis=1)
+    high = top10.sort_values(['ctr', 'click'], ascending=False).head(3)
+    low = top10.sort_values(['ctr', 'click'], ascending=[True, True]).head(3)
+    high_scene = high[high['scene'] != '']['scene'].mode()
+    low_scene = low[low['scene'] != '']['scene'].mode()
+    high_scene_label = high_scene.iloc[0] if not high_scene.empty else ''
+    low_scene_label = low_scene.iloc[0] if not low_scene.empty else ''
+    if high_scene_label:
+        insights.append(f'Top10 高表现内容更偏「{high_scene_label}」场景，常见关键词：{top_keywords(high)}。')
+    else:
+        insights.append(f'Top10 高表现内容暂未形成稳定场景分类，常见关键词：{top_keywords(high)}。')
+    if low_scene_label:
+        insights.append(f'Top10 低表现内容更偏「{low_scene_label}」场景，常见关键词：{top_keywords(low)}。')
+    else:
+        insights.append(f'Top10 低表现内容暂未形成稳定场景分类，常见关键词：{top_keywords(low)}。')
+    if high_scene_label and low_scene_label and high_scene_label != low_scene_label:
+        insights.append(f'同样在头部曝光池里，「{high_scene_label}」类内容更容易获得点击，「{low_scene_label}」类内容相对偏弱。')
 
     return insights
 
@@ -355,7 +409,7 @@ def analyze_circle_feed(raw_df, circle_name):
 
     table_html = '<h3>Top10 内容（按曝光 PV 降序）</h3>' + build_feed_top_table(feed)
 
-    insights = feed_feature_insights(feed, f'{circle_name}（主动访问场景）')
+    insights = feed_feature_insights(feed)
     insight_html = '<div class="insight"><h3>结论（含数据依据）</h3><ul>' + ''.join(f'<li>{x}</li>' for x in insights) + '</ul></div>'
 
     return stat_html + table_html + insight_html
@@ -380,7 +434,8 @@ def build_overview(dfs):
             '用户场景': scene,
             f'曝光{exposure_label}': fmt_num(m['exposure']),
             f'点击{click_label}': fmt_num(m['click']),
-            'CTR': fmt_pct(m['ctr']),
+            'PV CTR': fmt_pct(m['ctr']),
+            'PV互动数': fmt_num(m['interact']),
             '互动率': fmt_pct(m['interact_rate']) if pd.notna(m['interact_rate']) else '-',
             '_ctr_num': m['ctr'],
             '_name': name,
@@ -391,21 +446,18 @@ def build_overview(dfs):
     add_row('模型圈', 'T3 主动访问', moxing)
     add_row('漫展圈（T3）', 'T3 主动访问', manzhan_t3)
     add_row('漫展圈（票务商详）', '票务商详进入讨论区', manzhan_ticket, exposure_label='UV', click_label='UV')
-
     table_df = pd.DataFrame(rows)
-    show_df = table_df[['圈子/路径', '用户场景', '曝光PV', '点击PV', 'CTR', '互动率']].copy()
 
-    # UV 路径的数据列回填到 PV 列位置，便于一个总览表展示
-    if '曝光PV' in show_df.columns:
-        show_df['曝光PV'] = show_df['曝光PV'].replace('-', pd.NA)
-    if '点击PV' in show_df.columns:
-        show_df['点击PV'] = show_df['点击PV'].replace('-', pd.NA)
+    for column in ['曝光PV', '点击PV', '曝光UV', '点击UV', 'PV CTR', 'PV互动数', '互动率']:
+        if column not in table_df.columns:
+            table_df[column] = '-'
 
-    uv_mask = table_df['圈子/路径'] == '漫展圈（票务商详）'
-    show_df.loc[uv_mask, '曝光PV'] = table_df.loc[uv_mask, '曝光UV'].values
-    show_df.loc[uv_mask, '点击PV'] = table_df.loc[uv_mask, '点击UV'].values
-
-    show_df = show_df.rename(columns={'曝光PV': '曝光（PV/UV）', '点击PV': '点击（PV/UV）'})
+    show_df = table_df[['圈子/路径', '用户场景', '曝光PV', '点击PV', 'PV CTR', 'PV互动数', '互动率']].copy()
+    ticket_mask = table_df['圈子/路径'] == '漫展圈（票务商详）'
+    show_df.loc[ticket_mask, '曝光PV'] = table_df.loc[ticket_mask, '曝光UV'].values
+    show_df.loc[ticket_mask, '点击PV'] = table_df.loc[ticket_mask, '点击UV'].values
+    show_df.loc[ticket_mask, 'PV互动数'] = '-'
+    show_df.loc[ticket_mask, '互动率'] = '-'
 
     insights = []
     valid_ctr = table_df.dropna(subset=['_ctr_num'])
@@ -415,16 +467,6 @@ def build_overview(dfs):
         insights.append(f'整体 CTR 最高的是「{best["_name"]}」({fmt_pct(best["_ctr_num"])}，场景：{best["_scene"]})。')
         insights.append(f'整体 CTR 最低的是「{worst["_name"]}」({fmt_pct(worst["_ctr_num"])})，需要优先优化内容匹配或入口承接。')
 
-    t3 = aggregate_feed_metrics(manzhan_t3)
-    ticket = aggregate_feed_metrics(manzhan_ticket)
-    if pd.notna(t3['ctr']) and pd.notna(ticket['ctr']):
-        delta = ticket['ctr'] - t3['ctr']
-        direction = '高于' if delta >= 0 else '低于'
-        insights.append(
-            f'漫展圈票务商详路径 CTR {fmt_pct(ticket["ctr"])}，{direction} T3 路径 {fmt_pct(t3["ctr"])} '
-            f'（差值 {fmt_pct(abs(delta))}），说明不同场景下用户意图强度存在显著差异。'
-        )
-
     active = pd.DataFrame([
         {'name': '绘画圈', 'ir': aggregate_feed_metrics(huihua)['interact_rate']},
         {'name': '模型圈', 'ir': aggregate_feed_metrics(moxing)['interact_rate']},
@@ -432,7 +474,7 @@ def build_overview(dfs):
     ]).dropna(subset=['ir'])
     if not active.empty:
         best_ir = active.sort_values('ir', ascending=False).iloc[0]
-        insights.append(f'主动访问场景下，互动率最高的是「{best_ir["name"]}」({fmt_pct(best_ir["ir"])})，可优先复用其内容结构。')
+        insights.append(f'主动访问场景下，互动率最高的是「{best_ir["name"]}」({fmt_pct(best_ir["ir"])}）。')
 
     return (
         '<h3>圈子整体表现总览</h3>'
@@ -455,50 +497,54 @@ def analyze_manzhan_content(df_t3_raw, df_ticket_raw):
     if t3.empty:
         body += '<p class="warn">⚠ 漫展圈 T3 路径数据未找到或缺列</p>'
     else:
-        m = aggregate_feed_metrics(t3)
         body += (
             '<h3>T3 路径 Top10（按曝光 PV 降序）</h3>'
-            + f'<p class="note">曝光 {fmt_num(m["exposure"])}，点击 {fmt_num(m["click"])}，加权 CTR {fmt_pct(m["ctr"])}。</p>'
             + build_feed_top_table(t3, exposure_label='曝光PV', click_label='点击PV', ctr_label='PV CTR', include_interact=True)
         )
 
     if ticket.empty:
         body += '<p class="warn">⚠ 漫展圈票务商详路径数据未找到或缺列</p>'
     else:
-        m = aggregate_feed_metrics(ticket)
         body += (
             '<h3>票务商详路径 Top10（按曝光 UV 降序）</h3>'
-            + f'<p class="note">曝光 {fmt_num(m["exposure"])}，点击 {fmt_num(m["click"])}，加权 CTR {fmt_pct(m["ctr"])}。</p>'
             + build_feed_top_table(ticket, exposure_label='曝光UV', click_label='点击UV', ctr_label='UV CTR', include_interact=False)
         )
 
     insights = []
     if not t3.empty and not ticket.empty:
-        t3_ctr = aggregate_feed_metrics(t3)['ctr']
-        tk_ctr = aggregate_feed_metrics(ticket)['ctr']
-        if pd.notna(t3_ctr) and pd.notna(tk_ctr):
-            delta = tk_ctr - t3_ctr
-            word = '更高' if delta >= 0 else '更低'
-            insights.append(f'票务商详路径 CTR（{fmt_pct(tk_ctr)}）相对 T3（{fmt_pct(t3_ctr)}）{word}，体现用户意图更明确。')
-
-        t3_top_type = t3['content_type'].fillna('-').value_counts()
-        tk_top_type = ticket['content_type'].fillna('-').value_counts()
-        if not t3_top_type.empty:
-            insights.append(f'T3 路径主导内容类型为「{t3_top_type.index[0]}」({t3_top_type.iloc[0]} 条)。')
-        if not tk_top_type.empty:
-            insights.append(f'票务商详路径主导分区/类型为「{tk_top_type.index[0]}」({tk_top_type.iloc[0]} 条)。')
-
         t3_top = t3.sort_values('exposure', ascending=False).head(10)
         tk_top = ticket.sort_values('exposure', ascending=False).head(10)
-        t3_focus = safe_div(t3_top.head(3)['exposure'].sum(), t3_top['exposure'].sum())
-        tk_focus = safe_div(tk_top.head(3)['exposure'].sum(), tk_top['exposure'].sum())
-        insights.append(f'Top10 内 Top3 曝光集中度：T3 {fmt_pct(t3_focus)}，票务商详 {fmt_pct(tk_focus)}。')
+        t3_top = t3_top.copy()
+        tk_top = tk_top.copy()
+        t3_top['scene'] = t3_top.apply(lambda r: infer_scene_label(r.get('title', ''), r.get('subtitle', '')), axis=1)
+        tk_top['scene'] = tk_top.apply(lambda r: infer_scene_label(r.get('title', ''), r.get('subtitle', '')), axis=1)
+        t3_high = t3_top.sort_values(['ctr', 'click'], ascending=False).head(3)
+        t3_low = t3_top.sort_values(['ctr', 'click'], ascending=[True, True]).head(3)
+        tk_high = tk_top.sort_values(['ctr', 'click'], ascending=False).head(3)
+        tk_low = tk_top.sort_values(['ctr', 'click'], ascending=[True, True]).head(3)
 
-        overlap = set(t3_top['item_name'].dropna()) & set(tk_top['item_name'].dropna())
-        if overlap:
-            insights.append('两条路径共同高关注项目：' + '、'.join(list(overlap)[:5]) + '。')
+        t3_high_scene = t3_high[t3_high['scene'] != '']['scene'].mode()
+        t3_low_scene = t3_low[t3_low['scene'] != '']['scene'].mode()
+        tk_high_scene = tk_high[tk_high['scene'] != '']['scene'].mode()
+        tk_low_scene = tk_low[tk_low['scene'] != '']['scene'].mode()
+        if not t3_high_scene.empty or not t3_low_scene.empty:
+            insights.append(
+                f'T3 头部内容中，表现更好的项目/文本特征偏「{t3_high_scene.iloc[0] if not t3_high_scene.empty else "未形成稳定分类"}」，'
+                f'表现偏弱的更常见「{t3_low_scene.iloc[0] if not t3_low_scene.empty else "未形成稳定分类"}」。'
+            )
         else:
-            insights.append('两条路径高关注项目重叠较少，建议按场景拆分内容运营策略。')
+            insights.append('T3 头部内容暂未形成稳定场景分类，建议继续按具体标题与项目语义观察。')
+        if not tk_high_scene.empty or not tk_low_scene.empty:
+            insights.append(
+                f'票务商详头部内容中，表现更好的项目/文本特征偏「{tk_high_scene.iloc[0] if not tk_high_scene.empty else "未形成稳定分类"}」，'
+                f'表现偏弱的更常见「{tk_low_scene.iloc[0] if not tk_low_scene.empty else "未形成稳定分类"}」。'
+            )
+        else:
+            insights.append('票务商详头部内容暂未形成稳定场景分类，建议继续按具体标题与项目语义观察。')
+        insights.append(
+            f'两渠道文本语境差异明显：T3 高频词偏「{top_keywords(t3_top)}」，票务商详偏「{top_keywords(tk_top)}」，'
+            '说明前者更泛兴趣，后者更项目导向。'
+        )
     else:
         insights.append('双路径数据不完整，暂无法输出稳定差异结论。')
 
@@ -525,7 +571,76 @@ def _reason_by_funnel(row, expo_mean, click_mean):
     return '曝光和点击承接都偏弱，建议同步优化入口素材与讨论区内容供给。'
 
 
-def analyze_manzhan_conversion(raw_df, report_day):
+def build_ticket_project_context(ticket_raw):
+    ticket = standardize_feed(ticket_raw, mode='uv')
+    if ticket.empty:
+        return {}
+    working = ticket.copy()
+    working['item_name'] = working['item_name'].fillna('-').astype(str).str.strip()
+    working = working[(working['item_name'] != '') & (working['item_name'] != '-')]
+    if working.empty:
+        return {}
+    grouped = (
+        working.groupby('item_name', dropna=False)
+        .agg(expose=('exposure', 'sum'), click=('click', 'sum'))
+        .reset_index()
+    )
+    context = {}
+    for _, row in grouped.iterrows():
+        item_name = row['item_name']
+        item_rows = working[working['item_name'] == item_name].copy()
+        item_rows = item_rows.sort_values(['click', 'exposure'], ascending=False).head(5)
+        sample_texts = []
+        for _, item_row in item_rows.iterrows():
+            title = str(item_row.get('title', '')).strip()
+            subtitle = str(item_row.get('subtitle', '')).strip()
+            sample_texts.append(title if title and title != '-' else subtitle)
+        context[row['item_name']] = {
+            'expose': float(row['expose']),
+            'click': float(row['click']),
+            'ctr': safe_div(row['click'], row['expose']),
+            'content_count': int(len(working[working['item_name'] == item_name])),
+            'keywords': build_text_summary(sample_texts),
+            'sample_texts': sample_texts,
+        }
+    return context
+
+
+def get_ticket_meta(ticket_context, item_name):
+    key = str(item_name).strip()
+    if not key:
+        return {}
+    return ticket_context.get(key, {})
+
+
+def build_conversion_project_insight(row, ticket_meta, expo_mean, click_mean, item_name, mode):
+    base_reason = _reason_by_funnel(row, expo_mean, click_mean)
+    if ticket_meta:
+        ticket_ctr = ticket_meta.get('ctr', pd.NA)
+        content_count = ticket_meta.get('content_count', 0)
+        keywords = ticket_meta.get('keywords', '')
+        if mode == 'best':
+            tail = (
+                f' 票务商详侧可匹配到 {content_count} 条同项目内容，CTR {fmt_pct(ticket_ctr)}'
+                + (f'，高频文案集中在「{keywords}」' if keywords else '')
+                + '，说明商详阶段的内容主题与后续讨论区点击方向基本一致。'
+            )
+        else:
+            tail = (
+                f' 票务商详侧可匹配到 {content_count} 条同项目内容，CTR {fmt_pct(ticket_ctr)}'
+                + (f'，文案主要是「{keywords}」' if keywords else '')
+            )
+            if pd.notna(ticket_ctr) and ticket_ctr <= 0.05:
+                tail += '，商详阶段内容吸引力本身就偏弱。'
+            else:
+                tail += '，商详阶段不算弱，问题更像出在讨论区承接内容。'
+        return f'{"转化最佳项目" if mode == "best" else "转化偏弱项目"}「{item_name}」UV CTR {fmt_pct(row["uv_ctr_num"])}，{base_reason}{tail}'
+    if mode == 'best':
+        return f'转化最佳项目「{item_name}」UV CTR {fmt_pct(row["uv_ctr_num"])}，{base_reason} 但票务商详表里没有匹配到足够的同项目内容，暂时只能确认讨论区端承接较强。'
+    return f'转化偏弱项目「{item_name}」UV CTR {fmt_pct(row["uv_ctr_num"])}，{base_reason} 票务商详表里没有匹配到同项目内容，当前更像项目侧缺少有效内容供给。'
+
+
+def analyze_manzhan_conversion(raw_df, ticket_raw, report_day):
     if raw_df.empty:
         return '<p class="warn">⚠ 漫展项目转化数据未找到或为空</p>'
 
@@ -550,10 +665,10 @@ def analyze_manzhan_conversion(raw_df, report_day):
 
     df['expo_rate'] = df.apply(lambda r: safe_div(r[expo_col], r[browse_col]), axis=1)
     df['click_rate'] = df.apply(lambda r: safe_div(r[click_col], r[expo_col]), axis=1)
-    if ctr_col:
-        df['uv_ctr_num'] = df[ctr_col]
-    else:
-        df['uv_ctr_num'] = df.apply(lambda r: safe_div(r[click_col], r[browse_col]), axis=1)
+    # uv_ctr 统一按 讨论区点击UV / 讨论区曝光UV 计算，避免源表口径异常（如全 0）。
+    df['uv_ctr_num'] = df.apply(lambda r: safe_div(r[click_col], r[expo_col]), axis=1)
+
+    ticket_context = build_ticket_project_context(ticket_raw)
 
     top = df.sort_values(browse_col, ascending=False).head(10).copy()
 
@@ -567,6 +682,8 @@ def analyze_manzhan_conversion(raw_df, report_day):
     show['曝光承接率'] = top['expo_rate'].apply(fmt_pct)
     show['点击承接率'] = top['click_rate'].apply(fmt_pct)
     show['UV CTR'] = top['uv_ctr_num'].apply(fmt_pct)
+    # 票务商详CTR口径：讨论区点击UV / 商详浏览UV
+    show['票务商详CTR'] = top.apply(lambda r: fmt_pct(safe_div(r[click_col], r[browse_col])), axis=1)
 
     insights = []
     valid = top.dropna(subset=['uv_ctr_num'])
@@ -578,14 +695,39 @@ def analyze_manzhan_conversion(raw_df, report_day):
         click_mean = valid['click_rate'].mean()
 
         insights.append(
-            f'转化最佳项目「{best[item_col]}」UV CTR {fmt_pct(best["uv_ctr_num"])}，'
-            f'{_reason_by_funnel(best, expo_mean, click_mean)}'
+            build_conversion_project_insight(
+                best,
+                get_ticket_meta(ticket_context, best[item_col]),
+                expo_mean,
+                click_mean,
+                best[item_col],
+                'best',
+            )
         )
         if best[item_col] != worst[item_col]:
             insights.append(
-                f'转化偏弱项目「{worst[item_col]}」UV CTR {fmt_pct(worst["uv_ctr_num"])}，'
-                f'{_reason_by_funnel(worst, expo_mean, click_mean)}'
+                build_conversion_project_insight(
+                    worst,
+                    get_ticket_meta(ticket_context, worst[item_col]),
+                    expo_mean,
+                    click_mean,
+                    worst[item_col],
+                    'weak',
+                )
             )
+
+        zero_expose_projects = top[top[expo_col] <= 0]
+        if not zero_expose_projects.empty:
+            sample = zero_expose_projects.iloc[0]
+            sample_ticket = get_ticket_meta(ticket_context, sample[item_col]) if item_col else {}
+            if sample_ticket:
+                insights.append(
+                    f'像「{sample[item_col]}」这类讨论区曝光为 0 的项目，在票务商详侧仍有 {sample_ticket.get("content_count", 0)} 条关联内容、CTR {fmt_pct(sample_ticket.get("ctr", pd.NA))}，说明用户在商详页有一定浏览，但内容没有顺利承接到讨论区。'
+                )
+            else:
+                insights.append(
+                    f'像「{sample[item_col]}」这类讨论区曝光为 0 的项目，票务商详表里也几乎没有匹配到同项目内容，问题更偏向项目内容供给缺失，而不只是转化链路损耗。'
+                )
 
     if start_col:
         start_dt = pd.to_datetime(top[start_col], errors='coerce')
@@ -817,7 +959,7 @@ def main():
     print('  → S5 漫展项目转化分析')
     sections.append(section(
         'manzhan-conversion', '⑤ 漫展圈：项目转化分析',
-        analyze_manzhan_conversion(dfs['漫展转化'], report_day)
+        analyze_manzhan_conversion(dfs['漫展转化'], dfs['漫展票务feed'], report_day)
     ))
 
     html = build_html(sections, report_date)
