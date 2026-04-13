@@ -61,6 +61,7 @@ description: Use when turning a business weekly-report requirement document into
 - 比率指标（如 CTR）未声明主口径与缺字段回退口径时，禁止进入 runnable 生成
 - 若 spec 要求隐藏全空周期列，禁止输出仍保留全空周期列的表格
 - 若声明 `runnable`，禁止只在任务结束后一次性输出日志；必须支持执行过程中的实时日志
+- 若声明 `runnable` 且含图表，禁止依赖外部 CDN 才能渲染；`file://` 直接打开必须可见图表
 - 当生成结果偏离预期时，应优先定位偏差层级，再做定向修正
 
 ## 参考资料

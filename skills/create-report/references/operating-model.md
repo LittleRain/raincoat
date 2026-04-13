@@ -95,6 +95,7 @@ The minimal HTML contract must include:
 - chart and table regions where required
 - section-level conclusions
 - source-data or citation notes when needed
+- runtime dependency policy that works under `file://` without required external CDN
 
 If a section includes tables or structured conclusions, the spec must define:
 
@@ -176,6 +177,8 @@ If a downstream skill is intended for independent publication, it must also:
 - avoid references to upstream repo-only documents
 - embed the input contract within the package
 - avoid caches, local artifacts, and temporary files
+- ensure chart rendering works when opening HTML directly via `file://`
+- avoid required external CDN script dependencies; use local bundled assets or inline runtime
 
 If those checks fail, treat the package as repo-local only.
 
