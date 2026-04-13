@@ -79,6 +79,10 @@
 - `wow_display_rules`:
 - `narrative_direction_rules`:
 - `runtime_logging_rules`:
+- `runtime_dependency_policy`:
+  - `mode`: `self-contained-or-local`
+  - `allow_external_cdn`: `false`
+  - `file_protocol_must_render`: `true`
 - `empty_period_column_policy`:
   - `hide_when_all_rows_empty`:
   - `applies_to_tables`:

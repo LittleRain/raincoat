@@ -67,6 +67,8 @@ description: Use when generating or updating the $SKILL_TITLE HTML weekly report
 - do not change the validated section order
 - do not infer undeclared metric logic
 - do not change the output format away from HTML
+- do not require external CDN/network to render charts in delivered HTML
+- ensure chart rendering works when opening output via \`file://\`
 - do not explain changes without data evidence declared by the normalized spec
 - do not present documentation-only output as runnable output
 
@@ -84,8 +86,10 @@ interface:
   short_description: Generate the $SKILL_TITLE HTML weekly report from packaged contracts and declared input files.
   default_prompt: |
     Generate the $SKILL_TITLE HTML weekly report using the packaged spec summary,
-    input inventory, and output contract. Do not infer undeclared metrics or
-    claim runnable output unless the package includes real execution evidence.
+    input inventory, and output contract. Ensure chart rendering works when
+    opening via file:// and avoid required external CDN dependencies. Do not
+    infer undeclared metrics or claim runnable output unless the package
+    includes real execution evidence.
 EOF
 
 cat > "$TARGET_DIR/assets/html-contract.md" <<EOF
@@ -97,6 +101,9 @@ cat > "$TARGET_DIR/assets/html-contract.md" <<EOF
 - charts and tables declared by the normalized spec
 - conclusion blocks
 - source-data notes
+- no mandatory external CDN dependency for chart rendering
+- if charts are required, use local bundled assets or inline runtime
+- opening report.html via \`file://\` must still render charts
 - if table schema is declared, output columns must match the spec
 - if narrative schema is declared, direction words must match the spec
 EOF
@@ -133,6 +140,8 @@ Rules:
 - if a section has multiple contracts, obey the declared primary/fallback precedence
 - for ratio metrics, use declared primary formula and fallback formula only
 - hide period columns that are empty for all rows when spec requires that behavior
+- charts must render under \`file://\`; do not rely on external CDN script loading
+- use local relative-path assets or inline script for chart runtime dependencies
 - emit runtime logs for file discovery, file read status, and key processing checkpoints
 - stream logs during execution (avoid end-of-run dump only)
 - do not claim runnable output unless real execution and verification exist
@@ -149,6 +158,8 @@ cat > "$TARGET_DIR/assets/validation-checklist.md" <<EOF
 - section-level data-source precedence is declared when multiple contracts exist
 - ratio metric fallback rules are declared when required fields may be missing
 - empty-period-column behavior is declared for table-heavy sections
+- chart runtime dependency policy is declared (no required external CDN)
+- output HTML is verified under \`file://\` for chart visibility
 - runnable skills require sample-backed execution evidence
 - runnable skills must include real-time process logs with INFO/WARN/ERROR semantics
 EOF
