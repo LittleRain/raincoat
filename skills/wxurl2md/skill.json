@@ -1,0 +1,11 @@
+{
+  "name": "wxurl2md",
+  "title": "WeCom Doc Archiver",
+  "description": "Capture WeCom docs with logged-in Chrome runtime data and export markdown optimized for AI ingestion.",
+  "version": "0.1.0",
+  "status": "draft",
+  "visibility": "internal",
+  "entry": "SKILL.md",
+  "tags": ["wecom", "docs", "markdown", "capture", "ai"],
+  "author": "raincai"
+}
