@@ -11,3 +11,6 @@ coverage
 skills/trade-weekly-report/input/
 skills/trade-weekly-report/output/
 skills/trade-weekly-report/scripts/__pycache__/
+
+# all skill local input artifacts
+skills/**/input/

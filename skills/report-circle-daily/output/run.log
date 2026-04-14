@@ -1,0 +1,26 @@
+run_id=test_input_run_2026-04-09_v8
+input_dir=/Users/raincai/Documents/GitHub/raincoat/skills/report-circle-daily/test_input
+output_html=/Users/raincai/Documents/GitHub/raincoat/skills/report-circle-daily/output/report.html
+====================================================
+  圈子业务日报生成器 v0.2.0
+====================================================
+
+📅 报告日期：昨日（2026-04-08）
+
+📂 加载数据...
+
+  绘画圈feed     : ✓ download_拉取绘画圈feed流明细数据_913821392.csv
+  模型圈feed     : ✓ download_拉取模型圈feed流明细数据_913821378.csv
+  漫展圈T3       : ✓ download_拉取漫展圈feed流明细数据_T3入口_913821361.csv
+  漫展转化        : ✓ download_拉取漫展项目的转化行为数据_913821381.csv
+  漫展票务feed    : ✓ download_拉取漫展圈feed流明细数据_票务商详_913821365.csv
+
+📊 生成报告...
+  → S1 圈子总览
+  → S2 绘画圈内容分析
+  → S3 模型圈内容分析
+  → S4 漫展圈双路径内容分析
+  → S5 漫展项目转化分析
+
+✅ 报告已生成: /Users/raincai/Documents/GitHub/raincoat/skills/report-circle-daily/output/report.html
+   文件大小: 25.7 KB

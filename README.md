@@ -38,6 +38,8 @@ See [skills/README.md](/Users/raincai/Documents/GitHub/raincoat/skills/README.md
 ```bash
 ./tooling/scripts/new-skill.sh <skill-name>
 ./tooling/scripts/export-skill.sh <skill-name> <destination-dir>
+python3 tools/wecom_archive.py --draft /path/to/wecom_doc_decoded_draft.md --structured /path/to/wecom_doc_structured_tables.md --out-dir /tmp
+node tools/wecom_capture_opendoc.js --url "https://doc.weixin.qq.com/doc/w3_xxx?scode=xxx" --out-dir /tmp
 ```
 
 ### Design Rules
@@ -81,6 +83,8 @@ Raincoat 是一个用于孵化 AI Agent Skills 的仓库。
 ```bash
 ./tooling/scripts/new-skill.sh <skill-name>
 ./tooling/scripts/export-skill.sh <skill-name> <destination-dir>
+python3 tools/wecom_archive.py --draft /path/to/wecom_doc_decoded_draft.md --structured /path/to/wecom_doc_structured_tables.md --out-dir /tmp
+node tools/wecom_capture_opendoc.js --url "https://doc.weixin.qq.com/doc/w3_xxx?scode=xxx" --out-dir /tmp
 ```
 
 ### 设计规则
