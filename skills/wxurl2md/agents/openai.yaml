@@ -1,0 +1,7 @@
+interface:
+  display_name: "wxurl2md"
+  short_description: "Convert WeCom doc URLs into AI-ready markdown"
+  default_prompt: "Use $wxurl2md to convert this WeCom doc URL into local markdown and return the output file paths."
+
+policy:
+  allow_implicit_invocation: true

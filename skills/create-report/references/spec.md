@@ -159,10 +159,13 @@ Recommended additional fields for table stability:
 - `wow_display_rules`
 - `narrative_direction_rules`
 - `empty_period_column_policy` (hide period columns that are empty for all rows)
+- `runtime_dependency_policy` (must support `file://` open; no external CDN required)
 
 Defaults:
 
 - `format` must be `html`
+- `runtime_dependency_policy` should default to `self-contained-or-local`:
+  no mandatory external network dependency for chart rendering
 
 ### `skill_generation_contract`
 
