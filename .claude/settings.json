@@ -1,8 +1,14 @@
 {
   "permissions": {
     "allow": [
+<<<<<<< Updated upstream
       "Bash(python3 -c ':*)",
       "Bash(python3 scripts/generate_report.py --input-dir input --output output/report.html --run-id fix-pct-tooltip)"
+=======
+      "Bash(git fetch:*)",
+      "Bash(git reset:*)",
+      "Bash(git worktree:*)"
+>>>>>>> Stashed changes
     ]
   }
 }
