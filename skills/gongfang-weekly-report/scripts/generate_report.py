@@ -356,7 +356,7 @@ def _bar_line_dual_axis(
         f"<text x='{width-pad-48}' y='{22}' font-size='11' fill='{line_color}' font-weight='600'>{html.escape(line_label)}</text>"
         f"</svg>"
         f"<div class='chart-tooltip' "
-        f"data-left='{html.escape(bar_label)}' data-right='{html.escape(line_label)}'></div>"
+        f"data-left='{html.escape(bar_label)}' data-right='{html.escape(line_label)}' data-right-fmt='pct'></div>"
         f"</figure>"
     )
 
@@ -447,7 +447,7 @@ def build_dual_axis_chart(
         f"<text x='{width-pad-48}' y='{22}' font-size='11' fill='{right_color}' font-weight='600'>{html.escape(right_label)}</text>"
         f"</svg>"
         f"<div class='chart-tooltip' "
-        f"data-left='{html.escape(left_label)}' data-right='{html.escape(right_label)}'></div>"
+        f"data-left='{html.escape(left_label)}' data-right='{html.escape(right_label)}' data-right-fmt='num'></div>"
         f"</figure>"
     )
 
@@ -1673,6 +1673,7 @@ def build_report(
       document.querySelectorAll('.chart-tooltip').forEach(function(tt) {
         var leftLbl = tt.getAttribute('data-left') || 'GMV';
         var rightLbl = tt.getAttribute('data-right') || '占比';
+        var rightFmt = tt.getAttribute('data-right-fmt') || 'num';
         var container = tt.closest('figure');
         if (!container) return;
 
@@ -1681,11 +1682,12 @@ def build_report(
             var label = circle.getAttribute('data-label') || '';
             var lv = parseFloat(circle.getAttribute('data-lv')) || 0;
             var rv = parseFloat(circle.getAttribute('data-rv')) || 0;
+            var rightVal = rightFmt === 'pct' ? fmtPct(rv) : fmtNum(rv);
 
             tt.innerHTML =
               '<div class="tt-label">' + label + '</div>' +
               '<div class="tt-row"><span class="tt-lbl">' + leftLbl + '</span><span class="tt-val" style="color:#f97316">' + fmtNum(lv) + '</span></div>' +
-              '<div class="tt-row"><span class="tt-lbl">' + rightLbl + '</span><span class="tt-val" style="color:#14b8a6">' + fmtNum(rv) + '</span></div>';
+              '<div class="tt-row"><span class="tt-lbl">' + rightLbl + '</span><span class="tt-val" style="color:#14b8a6">' + rightVal + '</span></div>';
             tt.classList.add('visible');
           });
           circle.addEventListener('mouseleave', function() {
