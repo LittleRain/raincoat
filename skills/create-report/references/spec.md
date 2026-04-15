@@ -160,12 +160,14 @@ Recommended additional fields for table stability:
 - `narrative_direction_rules`
 - `empty_period_column_policy` (hide period columns that are empty for all rows)
 - `runtime_dependency_policy` (must support `file://` open; no external CDN required)
+- `axis_origin_policy` (numeric axes must start at zero; truncation is forbidden)
 
 Defaults:
 
 - `format` must be `html`
 - `runtime_dependency_policy` should default to `self-contained-or-local`:
   no mandatory external network dependency for chart rendering
+- `axis_origin_policy` defaults to `start-at-zero`: all chart axes using numeric values must begin at zero; mid-axis truncation is prohibited
 
 ### `skill_generation_contract`
 

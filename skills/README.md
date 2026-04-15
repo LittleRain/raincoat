@@ -29,6 +29,7 @@ Goals:
 | `trade-weekly-report` | beta | Generate trading business weekly HTML reports | incubating |
 | `create-report` | draft | Generate validated downstream HTML weekly-report skills | internal |
 | `report-circle-weekly` | draft | Golden-sample downstream skill for circle weekly HTML reports | internal |
+| `wxurl2md` | draft | Archive WeCom docs from logged-in Chrome into AI-ready markdown | internal |
 
 ### Directory Layout
 
@@ -79,6 +80,7 @@ Raincoat 是 AI Agent Skills 的孵化仓库。
 | `trade-weekly-report` | beta | 生成交易业务周报 HTML | incubating |
 | `create-report` | draft | 生成经过校验的下游 HTML 周报 skill | internal |
 | `report-circle-weekly` | draft | 圈子周报 HTML 的黄金样例下游 skill | internal |
+| `wxurl2md` | draft | 从登录态 Chrome 抓取企微文档并导出 AI 可用 Markdown | internal |
 
 ### 目录结构
 

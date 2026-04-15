@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -c ':*)",
+      "Bash(python3 scripts/generate_report.py --input-dir input --output output/report.html --run-id fix-pct-tooltip)"
+    ]
+  }
+}
