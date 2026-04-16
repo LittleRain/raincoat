@@ -1,12 +1,22 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+"""
+Gongfang Weekly Report Generator
+
+Reads 6 Excel/CSV data files and generates an interactive HTML weekly report
+using the create-report design system:
+  - base-report.css (Linear dark + Stripe data precision)
+  - Chart.js 4.x inline (no CDN)
+  - chart-defaults.js (chartPresets / REPORT_FORMAT / REPORT_WOW)
+"""
 
 import argparse
 import glob
 import html
+import json
 import math
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import pandas as pd
 
@@ -26,6 +36,14 @@ FILE_PATTERNS = {
     "seller": ["商家销售明细*.csv", "商家销售明细*.xlsx", "商家销售明细*.xls"],
     "resource_entry": ["资源位二级入口数据*.csv", "资源位二级入口数据*.xlsx", "资源位二级入口数据*.xls"],
 }
+
+# ── Chart ID counter ───────────────────────────────────────────────────────────
+_chart_id_counter = 0
+
+def next_chart_id() -> str:
+    global _chart_id_counter
+    _chart_id_counter += 1
+    return f"c{_chart_id_counter}"
 
 
 def parse_args():
@@ -181,7 +199,7 @@ def wow_cell(current: float, previous: float, formatter) -> str:
     """Return HTML 'formatted_value (wow_delta)' with color-coded delta."""
     delta = pct_change(current, previous)
     cls = "up-text" if delta >= 0 else "down-text"
-    return f"{formatter(current)} <span class='cell-wow {cls}'>({fmt_delta(delta)})</span>"
+    return f"{formatter(current)} <span class='{cls}'>({fmt_delta(delta)})</span>"
 
 
 def movement_text(metric: str, current: float, previous: float, digits: int = 2) -> str:
@@ -197,270 +215,137 @@ def movement_text(metric: str, current: float, previous: float, digits: int = 2)
     return f"{metric}{direction} {fmt_num(abs(delta), digits)}"
 
 
-# ── Chart builders ─────────────────────────────────────────────────────────────
+# ── Chart builders (Chart.js canvas-based) ──────────────────────────────────────
 
-def build_bar_chart(labels: list[str], values: list[float], title: str, color: str) -> str:
+def _js_array(values: list) -> str:
+    """Convert Python list to JS array literal. Handles numpy int64/float64."""
+    def _convert(v):
+        if isinstance(v, float):
+            return round(v, 4)
+        try:
+            # Handle numpy int64, float64, etc.
+            return round(float(v), 4)
+        except (TypeError, ValueError):
+            return v
+    return json.dumps([_convert(v) for v in values])
+
+
+def build_bar_chart(
+    labels: list[str],
+    values: list[float],
+    title: str,
+    chart_inits: list[str],
+    y_format: str = "num",
+) -> str:
+    """Emit a Chart.js bar chart canvas and collect init JS."""
     if not values:
-        return ""
-    width = 520
-    height = 240
-    pad = 32
-    inner_h = height - pad * 2
-    inner_w = width - pad * 2
-    # axis always starts at 0
-    max_value = max(values) or 1
-    bar_w = inner_w / max(len(values), 1) * 0.6
-    gap = inner_w / max(len(values), 1)
-    bars = []
-    for idx, value in enumerate(values):
-        x = pad + idx * gap + (gap - bar_w) / 2
-        h = inner_h * (value / max_value)
-        y = height - pad - h
-        label = html.escape(labels[idx])
-        bars.append(
-            f"<rect x='{x:.1f}' y='{y:.1f}' width='{bar_w:.1f}' height='{h:.1f}' rx='6' fill='{color}' opacity='0.9'></rect>"
-            f"<text x='{x + bar_w / 2:.1f}' y='{height - 8}' text-anchor='middle' font-size='12' fill='#6b7a99'>{label}</text>"
-            f"<text x='{x + bar_w / 2:.1f}' y='{max(y - 6, 14):.1f}' text-anchor='middle' font-size='12' fill='#e8ecf4' font-weight='600'>{fmt_num(value)}</text>"
-        )
+        return '<div class="chart-empty">暂无数据</div>'
+    cid = next_chart_id()
+    chart_inits.append(
+        f"reportChart('{cid}', chartPresets.bar({_js_array(labels)}, "
+        f"[{{label: '{title}', data: {_js_array(values)}}}], "
+        f"{{yFormat: '{y_format}'}}));"
+    )
     return (
-        f"<figure class='chart'><figcaption>{html.escape(title)}</figcaption>"
-        f"<svg viewBox='0 0 {width} {height}' role='img' aria-label='{html.escape(title)}' style='display:block;width:100%;height:auto;'>"
-        f"<line x1='{pad}' y1='{height-pad}' x2='{width-pad}' y2='{height-pad}' stroke='#2a3149' stroke-width='1.5'/>"
-        f"{''.join(bars)}</svg></figure>"
+        f'<div class="chart-container">'
+        f'<figcaption>{html.escape(title)}</figcaption>'
+        f'<div class="chart-area"><canvas id="{cid}"></canvas></div>'
+        f'</div>'
     )
 
 
-def build_line_chart(labels: list[str], values: list[float], title: str, color: str, percent: bool = False) -> str:
+def build_line_chart(
+    labels: list[str],
+    values: list[float],
+    title: str,
+    chart_inits: list[str],
+    y_format: str = "num",
+) -> str:
+    """Emit a Chart.js line chart canvas and collect init JS."""
     if not values:
-        return ""
-    width = 520
-    height = 240
-    pad = 32
-    inner_h = height - pad * 2
-    inner_w = width - pad * 2
-    # axis always starts at 0
-    min_value = 0
-    max_value = max(values) or 1
-    span = max_value - min_value
-    points = []
-    dots = []
-    for idx, value in enumerate(values):
-        x = pad + inner_w * (idx / max(len(values) - 1, 1))
-        y = height - pad - inner_h * ((value - min_value) / span if span else 0.5)
-        points.append(f"{x:.1f},{y:.1f}")
-        label = fmt_pct(value) if percent else fmt_num(value, 1)
-        dots.append(
-            f"<circle cx='{x:.1f}' cy='{y:.1f}' r='4.5' fill='{color}'></circle>"
-            f"<text x='{x:.1f}' y='{max(y - 8, 14):.1f}' text-anchor='middle' font-size='12' fill='#e8ecf4' font-weight='600'>{label}</text>"
-            f"<text x='{x:.1f}' y='{height - 8}' text-anchor='middle' font-size='12' fill='#6b7a99'>{html.escape(labels[idx])}</text>"
-        )
+        return '<div class="chart-empty">暂无数据</div>'
+    cid = next_chart_id()
+    chart_inits.append(
+        f"reportChart('{cid}', chartPresets.line({_js_array(labels)}, "
+        f"[{{label: '{title}', data: {_js_array(values)}}}], "
+        f"{{yFormat: '{y_format}'}}));"
+    )
     return (
-        f"<figure class='chart'><figcaption>{html.escape(title)}</figcaption>"
-        f"<svg viewBox='0 0 {width} {height}' role='img' aria-label='{html.escape(title)}' style='display:block;width:100%;height:auto;'>"
-        f"<line x1='{pad}' y1='{height-pad}' x2='{width-pad}' y2='{height-pad}' stroke='#2a3149' stroke-width='1.5'/>"
-        f"<polyline fill='none' stroke='{color}' stroke-width='3' stroke-linecap='round' stroke-linejoin='round' points='{' '.join(points)}'></polyline>"
-        f"{''.join(dots)}</svg></figure>"
+        f'<div class="chart-container">'
+        f'<figcaption>{html.escape(title)}</figcaption>'
+        f'<div class="chart-area"><canvas id="{cid}"></canvas></div>'
+        f'</div>'
     )
 
 
-def _bar_line_dual_axis(
+def build_combo_chart(
     labels: list[str],
     bar_values: list[float],
     line_values: list[float],
     title: str,
     bar_label: str,
     line_label: str,
-    bar_color: str = "#c2410c",
-    line_color: str = "#0f766e",
+    chart_inits: list[str],
+    y_format: str = "pv",
+    y1_format: str = "pct",
 ) -> str:
-    """Bar+Line dual-axis chart: bars for absolute values, line for percentage share.
-    Left axis: absolute value. Right axis: percentage (0-1).
-    Bar fills from bottom (y=bottom) upward; line shares same 0-1 percentage space."""
+    """Emit a Chart.js combo (bar+line dual-axis) chart canvas."""
     if not labels:
-        return ""
-    width = 520
-    height = 240
-    pad = 32
-    inner_h = height - pad * 2
-    inner_w = width - pad * 2
-    bottom_y = height - pad  # SVG y of the bottom baseline
-
-    max_bar = max(bar_values) or 1
-    max_line = max(line_values) or 1
-    n = len(labels)
-
-    # Build bar rects and line points
-    bar_rects = []
-    line_points = []
-    hit_circles = []
-
-    for idx in range(n):
-        x = pad + inner_w * (idx / max(n - 1, 1))
-
-        # Bar: from bottom baseline upward
-        bar_h = inner_h * (bar_values[idx] / max_bar)
-        bar_rects.append(
-            f"<rect x='{x-18:.1f}' y='{bottom_y - bar_h:.1f}' "
-            f"width='36' height='{bar_h:.1f}' rx='4' fill='{bar_color}' opacity='0.85'/>"
-        )
-        bar_rects.append(
-            f"<text x='{x:.1f}' y='{bottom_y - bar_h - 6:.1f}' "
-            f"text-anchor='middle' font-size='11' fill='{bar_color}' font-weight='600'>"
-            f"{fmt_num(bar_values[idx])}</text>"
-        )
-
-        # Line: same 0-at-bottom convention as bar
-        line_y = bottom_y - inner_h * (line_values[idx] / max_line)
-        line_points.append(f"{x:.1f},{line_y:.1f}")
-
-        # Hit area
-        hit_circles.append(
-            f"<circle class='hit' data-label='{html.escape(labels[idx])}' "
-            f"data-lv='{bar_values[idx]}' data-rv='{line_values[idx]}' "
-            f"cx='{x:.1f}' cy='{line_y:.1f}' r='14' fill='transparent' cursor='pointer'/>"
-        )
-
-    # Left axis (bar / absolute value): ticks at 0, 25%, 50%, 75%, 100%
-    left_axis = []
-    left_axis.append(f"<line x1='{pad}' y1='{pad}' x2='{pad}' y2='{bottom_y}' stroke='{bar_color}' stroke-width='1.5' opacity='0.5'/>")
-    for i in range(5):
-        frac = i / 4
-        tick_y = bottom_y - frac * inner_h
-        val = frac * max_bar
-        left_axis.append(f"<line x1='{pad-4}' y1='{tick_y:.1f}' x2='{pad}' y2='{tick_y:.1f}' stroke='{bar_color}' stroke-width='1' opacity='0.5'/>")
-        left_axis.append(f"<text x='{pad-8}' y='{tick_y+4:.1f}' text-anchor='end' font-size='10' fill='{bar_color}' opacity='0.8'>{fmt_num(val, 0)}</text>")
-
-    # Right axis (line / percentage): ticks at 0%, 25%, 50%, 75%, 100%
-    right_axis = []
-    right_axis.append(f"<line x1='{width-pad}' y1='{pad}' x2='{width-pad}' y2='{bottom_y}' stroke='{line_color}' stroke-width='1.5' opacity='0.5'/>")
-    for i in range(5):
-        frac = i / 4
-        tick_y = bottom_y - frac * inner_h
-        val = frac * max_line
-        right_axis.append(f"<line x1='{width-pad}' y1='{tick_y:.1f}' x2='{width-pad+4}' y2='{tick_y:.1f}' stroke='{line_color}' stroke-width='1' opacity='0.5'/>")
-        right_axis.append(f"<text x='{width-pad+8}' y='{tick_y+4:.1f}' text-anchor='start' font-size='10' fill='{line_color}' opacity='0.8'>{fmt_pct(val)}</text>")
-
+        return '<div class="chart-empty">暂无数据</div>'
+    cid = next_chart_id()
+    chart_inits.append(
+        f"reportChart('{cid}', chartPresets.combo({_js_array(labels)}, ["
+        f"{{label: '{html.escape(bar_label)}', data: {_js_array(bar_values)}, yAxisID: 'y'}}, "
+        f"{{type: 'line', label: '{html.escape(line_label)}', data: {_js_array(line_values)}, yAxisID: 'y1'}}"
+        f"], {{yFormat: '{y_format}', y1Format: '{y1_format}'}}));"
+    )
     return (
-        f"<figure class='chart' style='position:relative'>"
-        f"<figcaption>{html.escape(title)}</figcaption>"
-        f"<svg viewBox='0 0 {width} {height}' role='img' aria-label='{html.escape(title)}' style='display:block;width:100%;height:auto;'>"
-        f"<line x1='{pad}' y1='{bottom_y}' x2='{width-pad}' y2='{bottom_y}' stroke='#2a3149' stroke-width='1.5'/>"
-        f"{''.join(left_axis)}"
-        f"{''.join(right_axis)}"
-        f"{''.join(bar_rects)}"
-        f"<polyline fill='none' stroke='{line_color}' stroke-width='3' stroke-linecap='round' stroke-linejoin='round' points='{' '.join(line_points)}'/>"
-        f"{''.join(hit_circles)}"
-        f"<rect x='{pad+4}' y='{14}' width='8' height='8' rx='2' fill='{bar_color}' opacity='0.9'/>"
-        f"<text x='{pad+16}' y='{22}' font-size='11' fill='{bar_color}' font-weight='600'>{html.escape(bar_label)}</text>"
-        f"<rect x='{width-pad-60}' y='{14}' width='8' height='8' rx='2' fill='{line_color}' opacity='0.9'/>"
-        f"<text x='{width-pad-48}' y='{22}' font-size='11' fill='{line_color}' font-weight='600'>{html.escape(line_label)}</text>"
-        f"</svg>"
-        f"<div class='chart-tooltip' "
-        f"data-left='{html.escape(bar_label)}' data-right='{html.escape(line_label)}' data-right-fmt='pct'></div>"
-        f"</figure>"
+        f'<div class="chart-container">'
+        f'<figcaption>{html.escape(title)}</figcaption>'
+        f'<div class="chart-area"><canvas id="{cid}"></canvas></div>'
+        f'</div>'
     )
 
 
-def build_dual_axis_chart(
+def build_dual_line_chart(
     labels: list[str],
     left_values: list[float],
     right_values: list[float],
     title: str,
     left_label: str,
     right_label: str,
-    left_color: str = "#c2410c",
-    right_color: str = "#0f766e",
+    chart_inits: list[str],
+    y_format: str = "num",
 ) -> str:
+    """Emit a Chart.js line chart with two series."""
     if not labels:
-        return ""
-    width = 520
-    height = 240
-    pad = 32
-    inner_h = height - pad * 2
-    inner_w = width - pad * 2
-    bottom_y = height - pad
-
-    max_left = max(left_values) or 1
-    max_right = max(right_values) or 1
-    n = len(labels)
-
-    left_points = []
-    right_points = []
-    all_dots = []
-    hit_circles = []
-    axis_parts = []
-
-    # Left axis: from bottom_y upward
-    axis_parts.append(f"<line x1='{pad}' y1='{pad}' x2='{pad}' y2='{bottom_y}' stroke='{left_color}' stroke-width='1.5' opacity='0.5'/>")
-    for i in range(5):
-        frac = i / 4
-        tick_y = bottom_y - frac * inner_h
-        val = frac * max_left
-        axis_parts.append(f"<line x1='{pad-4}' y1='{tick_y:.1f}' x2='{pad}' y2='{tick_y:.1f}' stroke='{left_color}' stroke-width='1' opacity='0.5'/>")
-        axis_parts.append(f"<text x='{pad-8}' y='{tick_y+4:.1f}' text-anchor='end' font-size='10' fill='{left_color}' opacity='0.8'>{fmt_num(val, 0)}</text>")
-
-    # Right axis
-    axis_parts.append(f"<line x1='{width-pad}' y1='{pad}' x2='{width-pad}' y2='{bottom_y}' stroke='{right_color}' stroke-width='1.5' opacity='0.5'/>")
-    for i in range(5):
-        frac = i / 4
-        tick_y = bottom_y - frac * inner_h
-        val = frac * max_right
-        axis_parts.append(f"<line x1='{width-pad}' y1='{tick_y:.1f}' x2='{width-pad+4}' y2='{tick_y:.1f}' stroke='{right_color}' stroke-width='1' opacity='0.5'/>")
-        axis_parts.append(f"<text x='{width-pad+8}' y='{tick_y+4:.1f}' text-anchor='start' font-size='10' fill='{right_color}' opacity='0.8'>{fmt_num(val, 0)}</text>")
-
-    for idx in range(n):
-        x = pad + inner_w * (idx / max(n - 1, 1))
-
-        ly = inner_h * (left_values[idx] / max_left)
-        left_points.append(f"{x:.1f},{bottom_y - ly:.1f}")
-
-        ry = inner_h * (right_values[idx] / max_right)
-        right_points.append(f"{x:.1f},{bottom_y - ry:.1f}")
-
-        hit_circles.append(
-            f"<circle class='hit' data-label='{html.escape(labels[idx])}' "
-            f"data-lv='{left_values[idx]}' data-rv='{right_values[idx]}' "
-            f"cx='{x:.1f}' cy='{bottom_y - ly:.1f}' r='14' fill='transparent' cursor='pointer'/>"
-        )
-
-        all_dots.append(
-            f"<circle cx='{x:.1f}' cy='{bottom_y - ly:.1f}' r='4.5' fill='{left_color}'></circle>"
-            f"<circle cx='{x:.1f}' cy='{bottom_y - ry:.1f}' r='4.5' fill='{right_color}'></circle>"
-        )
-        all_dots.append(
-            f"<text x='{x:.1f}' y='{height - 8}' text-anchor='middle' font-size='12' fill='#6b7a99'>{html.escape(labels[idx])}</text>"
-        )
-
+        return '<div class="chart-empty">暂无数据</div>'
+    cid = next_chart_id()
+    chart_inits.append(
+        f"reportChart('{cid}', chartPresets.line({_js_array(labels)}, ["
+        f"{{label: '{html.escape(left_label)}', data: {_js_array(left_values)}}}, "
+        f"{{label: '{html.escape(right_label)}', data: {_js_array(right_values)}}}"
+        f"], {{yFormat: '{y_format}'}}));"
+    )
     return (
-        f"<figure class='chart' style='position:relative'>"
-        f"<figcaption>{html.escape(title)}</figcaption>"
-        f"<svg viewBox='0 0 {width} {height}' role='img' aria-label='{html.escape(title)}' style='display:block;width:100%;height:auto;'>"
-        f"<line x1='{pad}' y1='{height-pad}' x2='{width-pad}' y2='{height-pad}' stroke='#2a3149' stroke-width='1.5'/>"
-        f"{''.join(axis_parts)}"
-        f"<polyline fill='none' stroke='{left_color}' stroke-width='3' stroke-linecap='round' stroke-linejoin='round' points='{' '.join(left_points)}'></polyline>"
-        f"<polyline fill='none' stroke='{right_color}' stroke-width='3' stroke-linecap='round' stroke-linejoin='round' points='{' '.join(right_points)}'></polyline>"
-        f"{''.join(all_dots)}"
-        f"{''.join(hit_circles)}"
-        f"<rect x='{pad+4}' y='{14}' width='8' height='8' rx='2' fill='{left_color}' opacity='0.9'/>"
-        f"<text x='{pad+16}' y='{22}' font-size='11' fill='{left_color}' font-weight='600'>{html.escape(left_label)}</text>"
-        f"<rect x='{width-pad-60}' y='{14}' width='8' height='8' rx='2' fill='{right_color}' opacity='0.9'/>"
-        f"<text x='{width-pad-48}' y='{22}' font-size='11' fill='{right_color}' font-weight='600'>{html.escape(right_label)}</text>"
-        f"</svg>"
-        f"<div class='chart-tooltip' "
-        f"data-left='{html.escape(left_label)}' data-right='{html.escape(right_label)}' data-right-fmt='num'></div>"
-        f"</figure>"
+        f'<div class="chart-container">'
+        f'<figcaption>{html.escape(title)}</figcaption>'
+        f'<div class="chart-area"><canvas id="{cid}"></canvas></div>'
+        f'</div>'
     )
 
 
-def summary_card(title: str, current: float, previous: float, formatter, color_cls="orange") -> str:
+def summary_card(title: str, current: float, previous: float, formatter, color_cls="") -> str:
+    """Build a metric card using design system classes."""
     delta = pct_change(current, previous)
     trend_cls = "up" if delta >= 0 else "down"
+    card_cls = f" {color_cls}" if color_cls else ""
     return (
-        f"<article class='metric-card {color_cls}'>"
-        f"<p class='metric-label'>{html.escape(title)}</p>"
-        f"<p class='metric-value'>{formatter(current)}</p>"
-        f"<p class='metric-sub'>上周 {formatter(previous)}"
-        f"<span class='delta {trend_cls}'>{fmt_delta(delta)}</span></p></article>"
+        f'<div class="metric-card{card_cls}">'
+        f'<p class="metric-label">{html.escape(title)}</p>'
+        f'<p class="metric-value">{formatter(current)}</p>'
+        f'<p class="metric-sub">上周 {formatter(previous)}'
+        f'<span class="delta {trend_cls}">{fmt_delta(delta)}</span></p></div>'
     )
 
 
@@ -471,13 +356,6 @@ def narrative_list(items: list[str], empty_text: str) -> str:
 
 
 # ── Table builders ─────────────────────────────────────────────────────────────
-
-def _th_sort_key(col: str) -> int:
-    """Return sort priority: 0=name, 1+=metric order."""
-    if "名称" in col or "店铺" in col or "渠道" in col or "入口" in col:
-        return 0
-    return 1
-
 
 def build_shop_table(
     seller_df: pd.DataFrame,
@@ -522,23 +400,23 @@ def build_shop_table(
         rows.append(
             "<tr>"
             f"<td>{html.escape(str(row['店铺名称']))}</td>"
-            f"<td>{wow_cell(row['GMV_curr'], row['GMV_prev'], lambda v: fmt_num(v, 2))}</td>"
-            f"<td>{fmt_pct(row['GMV占比'])}</td>"
-            f"<td>{wow_cell(row['买家数_curr'], row['买家数_prev'], lambda v: fmt_num(v))}</td>"
-            f"<td>{wow_cell(row['转化率_curr'], row['转化率_prev'], fmt_pct)}</td>"
-            f"<td>{wow_cell(row['曝光PV_curr'], row['曝光PV_prev'], lambda v: fmt_num(v))}</td>"
+            f"<td class='num'>{wow_cell(row['GMV_curr'], row['GMV_prev'], lambda v: fmt_num(v, 2))}</td>"
+            f"<td class='num'>{fmt_pct(row['GMV占比'])}</td>"
+            f"<td class='num'>{wow_cell(row['买家数_curr'], row['买家数_prev'], lambda v: fmt_num(v))}</td>"
+            f"<td class='num'>{wow_cell(row['转化率_curr'], row['转化率_prev'], fmt_pct)}</td>"
+            f"<td class='num'>{wow_cell(row['曝光PV_curr'], row['曝光PV_prev'], lambda v: fmt_num(v))}</td>"
             "</tr>"
         )
 
     thead = (
         "<thead><tr>"
-        "<th>店铺名称</th><th>GMV（本周/上周环比）</th><th>GMV占行业整体占比</th>"
-        "<th>买家数（本周/上周环比）</th><th>下单转化率（本周/上周环比）</th>"
-        "<th>商品曝光PV（本周/上周环比）</th>"
+        "<th>店铺名称</th><th class='num'>GMV（本周/上周环比）</th><th class='num'>GMV占行业整体占比</th>"
+        "<th class='num'>买家数（本周/上周环比）</th><th class='num'>下单转化率（本周/上周环比）</th>"
+        "<th class='num'>商品曝光PV（本周/上周环比）</th>"
         "</tr></thead>"
     )
     return (
-        f"<div class='table-wrap'><table>{thead}<tbody>{''.join(rows) or '<tr><td colspan="6">暂无数据</td></tr>'}</tbody></table></div>"
+        f"<div class='table-wrap'><table>{thead}<tbody>{''.join(rows) or '<tr><td colspan=\"6\">暂无数据</td></tr>'}</tbody></table></div>"
     )
 
 
@@ -585,22 +463,22 @@ def build_product_table(
         rows.append(
             "<tr>"
             f"<td>{html.escape(str(row['商品名称']))}</td>"
-            f"<td>{wow_cell(row['GMV_curr'], row['GMV_prev'], lambda v: fmt_num(v, 2))}</td>"
-            f"<td>{wow_cell(row['买家数_curr'], row['买家数_prev'], lambda v: fmt_num(v))}</td>"
-            f"<td>{wow_cell(row['转化率_curr'], row['转化率_prev'], fmt_pct)}</td>"
-            f"<td>{wow_cell(row['曝光PV_curr'], row['曝光PV_prev'], lambda v: fmt_num(v))}</td>"
+            f"<td class='num'>{wow_cell(row['GMV_curr'], row['GMV_prev'], lambda v: fmt_num(v, 2))}</td>"
+            f"<td class='num'>{wow_cell(row['买家数_curr'], row['买家数_prev'], lambda v: fmt_num(v))}</td>"
+            f"<td class='num'>{wow_cell(row['转化率_curr'], row['转化率_prev'], fmt_pct)}</td>"
+            f"<td class='num'>{wow_cell(row['曝光PV_curr'], row['曝光PV_prev'], lambda v: fmt_num(v))}</td>"
             "</tr>"
         )
 
     thead = (
         "<thead><tr>"
-        "<th>商品名称</th><th>GMV（本周/上周环比）</th>"
-        "<th>买家数（本周/上周环比）</th><th>下单转化率（本周/上周环比）</th>"
-        "<th>商品曝光PV（本周/上周环比）</th>"
+        "<th>商品名称</th><th class='num'>GMV（本周/上周环比）</th>"
+        "<th class='num'>买家数（本周/上周环比）</th><th class='num'>下单转化率（本周/上周环比）</th>"
+        "<th class='num'>商品曝光PV（本周/上周环比）</th>"
         "</tr></thead>"
     )
     return (
-        f"<div class='table-wrap'><table>{thead}<tbody>{''.join(rows) or '<tr><td colspan="5">暂无数据</td></tr>'}</tbody></table></div>"
+        f"<div class='table-wrap'><table>{thead}<tbody>{''.join(rows) or '<tr><td colspan=\"5\">暂无数据</td></tr>'}</tbody></table></div>"
     )
 
 
@@ -644,7 +522,6 @@ def build_channel_table(
         curr_pv = pv_vals[-1] if pv_vals else 0
         gmv_share = curr_gmv / total_curr_gmv if total_curr_gmv else 0
         pv_share = curr_pv / total_curr_pv if total_curr_pv else 0
-        avg_ctr = sum(ctr_vals) / len([c for c in ctr_vals if c > 0]) if any(c > 0 for c in ctr_vals) else 0
 
         gmv_4w = " / ".join(fmt_num(v, 0) for v in gmv_vals)
         pv_4w = " / ".join(fmt_num(v, 0) for v in pv_vals)
@@ -653,33 +530,22 @@ def build_channel_table(
         rows.append(
             "<tr>"
             f"<td>{html.escape(str(ch))}</td>"
-            f"<td>{gmv_4w}</td>"
-            f"<td>{fmt_pct(gmv_share)}</td>"
-            f"<td>{pv_4w}</td>"
-            f"<td>{fmt_pct(pv_share)}</td>"
-            f"<td>{ctr_4w}</td>"
+            f"<td class='num'>{gmv_4w}</td>"
+            f"<td class='num'>{fmt_pct(gmv_share)}</td>"
+            f"<td class='num'>{pv_4w}</td>"
+            f"<td class='num'>{fmt_pct(pv_share)}</td>"
+            f"<td class='num'>{ctr_4w}</td>"
             "</tr>"
         )
 
     thead = (
         "<thead><tr>"
-        "<th>内容渠道</th>"
-        f"<th colspan='{len(lookback_weeks)}'>GMV（{len(lookback_weeks)}周）</th>"
-        "<th>GMV占整体占比（本周）</th>"
-        f"<th colspan='{len(lookback_weeks)}'>商品曝光PV（{len(lookback_weeks)}周）</th>"
-        "<th>曝光PV占整体占比（本周）</th>"
-        f"<th colspan='{len(lookback_weeks)}'>PVCTR（{len(lookback_weeks)}周）</th>"
-        "</tr></thead>"
-    )
-    # Simplified: show as single combined cells
-    thead_simple = (
-        "<thead><tr>"
-        "<th>内容渠道</th><th>GMV（4周）</th><th>GMV占整体占比（本周）</th>"
-        "<th>商品曝光PV（4周）</th><th>曝光PV占整体占比（本周）</th><th>PVCTR（4周）</th>"
+        "<th>内容渠道</th><th class='num'>GMV（4周）</th><th class='num'>GMV占整体占比（本周）</th>"
+        "<th class='num'>商品曝光PV（4周）</th><th class='num'>曝光PV占整体占比（本周）</th><th class='num'>PVCTR（4周）</th>"
         "</tr></thead>"
     )
     return (
-        f"<div class='table-wrap'><table>{thead_simple}<tbody>{''.join(rows) or '<tr><td colspan="6">暂无数据</td></tr>'}</tbody></table></div>"
+        f"<div class='table-wrap'><table>{thead}<tbody>{''.join(rows) or '<tr><td colspan=\"6\">暂无数据</td></tr>'}</tbody></table></div>"
     )
 
 
@@ -734,23 +600,35 @@ def build_resource_table(
         rows.append(
             "<tr>"
             f"<td>{html.escape(str(entry))}</td>"
-            f"<td>{gmv_4w}</td>"
-            f"<td>{fmt_pct(gmv_share)}</td>"
-            f"<td>{pv_4w}</td>"
-            f"<td>{fmt_pct(pv_share)}</td>"
-            f"<td>{ctr_4w}</td>"
+            f"<td class='num'>{gmv_4w}</td>"
+            f"<td class='num'>{fmt_pct(gmv_share)}</td>"
+            f"<td class='num'>{pv_4w}</td>"
+            f"<td class='num'>{fmt_pct(pv_share)}</td>"
+            f"<td class='num'>{ctr_4w}</td>"
             "</tr>"
         )
 
     thead = (
         "<thead><tr>"
-        "<th>资源位二级入口</th><th>GMV（4周）</th><th>GMV占整体占比（本周）</th>"
-        "<th>商品曝光PV（4周）</th><th>曝光PV占整体占比（本周）</th><th>PVCTR（4周）</th>"
+        "<th>资源位二级入口</th><th class='num'>GMV（4周）</th><th class='num'>GMV占整体占比（本周）</th>"
+        "<th class='num'>商品曝光PV（4周）</th><th class='num'>曝光PV占整体占比（本周）</th><th class='num'>PVCTR（4周）</th>"
         "</tr></thead>"
     )
     return (
-        f"<div class='table-wrap'><table>{thead}<tbody>{''.join(rows) or '<tr><td colspan="6">暂无数据</td></tr>'}</tbody></table></div>"
+        f"<div class='table-wrap'><table>{thead}<tbody>{''.join(rows) or '<tr><td colspan=\"6\">暂无数据</td></tr>'}</tbody></table></div>"
     )
+
+
+# ── Asset loader ───────────────────────────────────────────────────────────────
+
+def _load_asset(filename: str) -> str:
+    """Load a text asset from the skill's assets/ dir."""
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    asset_path = os.path.join(script_dir, "..", "assets", filename)
+    if not os.path.exists(asset_path):
+        raise FileNotFoundError(f"Required asset not found: {asset_path}")
+    with open(asset_path, "r", encoding="utf-8") as f:
+        return f.read()
 
 
 # ── Main report builder ─────────────────────────────────────────────────────────
@@ -770,6 +648,9 @@ def build_report(
     resource_df: pd.DataFrame,
     run_id: str,
 ) -> RenderBundle:
+    # Collect chart initialization JS calls
+    chart_inits: list[str] = []
+
     overall_weekly = weekly_rollup(overall_df, ["周"]).sort_values("周")
     if len(overall_weekly) < 2:
         raise ValueError("整体数据不足，至少需要两个周周期")
@@ -780,7 +661,7 @@ def build_report(
     focus_channel_weekly = weekly_rollup(focus_industry(channel_df), ["focus_industry", "内容类型", "周"])
     focus_resource_weekly = weekly_rollup_resource(prepare_resource(resource_df), ["focus_industry", "内容类型", "资源位二级入口", "周"])
 
-    # ── Section ①: Core data trend ───────────────────────────────────────────
+    # ── Section 1: Core data trend ───────────────────────────────────────────
     overall_pv = overall_weekly["曝光PV"].tolist()
     gmv_list = overall_weekly["GMV"].tolist()
     buyers_list = overall_weekly["支付订单买家数"].tolist()
@@ -794,7 +675,7 @@ def build_report(
         f"下单转化率本周 {fmt_pct(current_week['转化率'])}，较上周 {fmt_delta(pct_change(current_week['转化率'], previous_week['转化率']))}。",
     ]
 
-    #波动超5%的指标
+    # 波动超5%的指标
     volatility_narratives = []
     for metric, label in [
         ("GMV", current_week["GMV"]),
@@ -808,7 +689,13 @@ def build_report(
         if abs(delta) > 0.05:
             volatility_narratives.append(f"{metric} 环比波动 {fmt_delta(delta)}，超过5%阈值。")
 
-    # ── Section ②: GMV 拆解 ───────────────────────────────────────────────────
+    # Build Section 1 charts
+    s1_gmv_chart = build_bar_chart(labels, gmv_list, "GMV 周趋势", chart_inits, y_format="gmv")
+    s1_buyers_chart = build_bar_chart(labels, buyers_list, "买家数 周趋势", chart_inits, y_format="num")
+    s1_conv_chart = build_line_chart(labels, conversions_list, "下单转化率 周趋势", chart_inits, y_format="pct")
+    s1_pv_chart = build_line_chart(labels, overall_pv, "商品曝光PV 周趋势", chart_inits, y_format="pv")
+
+    # ── Section 2: GMV 拆解 ───────────────────────────────────────────────────
     industry_blocks = []
     industry_narratives = []
 
@@ -843,20 +730,7 @@ def build_report(
             if abs(delta) > 0.05:
                 metric_changes.append(f"{metric} 环比 {fmt_delta(delta)}")
 
-        # industry line charts data (4 weeks, 2 industries)
-        ind_gmv = [
-            focus_industry_weekly[
-                (focus_industry_weekly["focus_industry"] == fn)
-                & (focus_industry_weekly["周"] == w)
-            ]["GMV"].iloc[0]
-            if not focus_industry_weekly[
-                (focus_industry_weekly["focus_industry"] == fn)
-                & (focus_industry_weekly["周"] == w)
-            ].empty else 0
-            for fn in ["绘画+绘画周边", "VUP周边"]
-            for w in [lookback_4w[-1]]
-        ]
-        # Actually per-industry for chart: need 4 values per industry
+        # industry 4-week data
         ind_gmv_4w = {}
         ind_buyers_4w = {}
         ind_conv_4w = {}
@@ -977,60 +851,68 @@ def build_report(
                     f"{movement_text('商详UV', row['curr_uv'], row['prev_uv'], 0)}。"
                 )
 
-        # Section ② industry block
+        # Build industry charts (4-week trend lines)
+        ind_gmv_chart = build_line_chart(chart_labels_4w, ind_gmv_4w.get(focus_name, []), f"GMV 过去4周", chart_inits, y_format="gmv")
+        ind_buyers_chart = build_line_chart(chart_labels_4w, ind_buyers_4w.get(focus_name, []), f"买家数 过去4周", chart_inits, y_format="num")
+        ind_conv_chart = build_line_chart(chart_labels_4w, ind_conv_4w.get(focus_name, []), f"下单转化率 过去4周", chart_inits, y_format="pct")
+        ind_pv_chart = build_line_chart(chart_labels_4w, ind_pv_4w.get(focus_name, []), f"商品曝光PV 过去4周", chart_inits, y_format="pv")
+
+        # Section 2 industry block (using breakdown-block from design system)
         industry_blocks.append(
             f"""
-            <section class="industry-block" id="{html.escape(focus_name.replace('+', '-'))}">
-              <div class="industry-head">
-                <h3>{html.escape(focus_name)}</h3>
-                <p>本周 GMV {fmt_num(curr_row['GMV'], 2)}，较上周 {fmt_delta(pct_change(curr_row['GMV'], prev_row['GMV']))}。</p>
+            <div class="breakdown-block" id="{html.escape(focus_name.replace('+', '-'))}">
+              <div class="breakdown-head">
+                <div>
+                  <h3>{html.escape(focus_name)} <span>GMV {fmt_num(curr_row['GMV'], 2)}</span></h3>
+                  <p>本周较上周 {fmt_delta(pct_change(curr_row['GMV'], prev_row['GMV']))}</p>
+                </div>
               </div>
-              <div class="metric-grid small">
+              <div class="metric-grid">
                 {summary_card("GMV", curr_row["GMV"], prev_row["GMV"], lambda v: fmt_num(v, 2))}
-                {summary_card("买家数", curr_row["支付订单买家数"], prev_row["支付订单买家数"], lambda v: fmt_num(v))}
-                {summary_card("下单转化率", curr_row["转化率"], prev_row["转化率"], fmt_pct)}
-                {summary_card("商品曝光PV", curr_row["曝光PV"], prev_row["曝光PV"], lambda v: fmt_num(v))}
+                {summary_card("买家数", curr_row["支付订单买家数"], prev_row["支付订单买家数"], lambda v: fmt_num(v), "green")}
+                {summary_card("下单转化率", curr_row["转化率"], prev_row["转化率"], fmt_pct, "amber")}
+                {summary_card("商品曝光PV", curr_row["曝光PV"], prev_row["曝光PV"], lambda v: fmt_num(v), "blue")}
               </div>
 
-              <div class="chart-grid">
-                {build_line_chart(chart_labels_4w, ind_gmv_4w.get(focus_name, []), f"GMV 过去4周", "#c2410c")}
-                {build_line_chart(chart_labels_4w, ind_buyers_4w.get(focus_name, []), f"买家数 过去4周", "#0f766e")}
-                {build_line_chart(chart_labels_4w, ind_conv_4w.get(focus_name, []), f"下单转化率 过去4周", "#7c3aed", percent=True)}
-                {build_line_chart(chart_labels_4w, ind_pv_4w.get(focus_name, []), f"商品曝光PV 过去4周", "#b45309")}
+              <div class="grid-2" style="margin-top: var(--sp-7);">
+                {ind_gmv_chart}
+                {ind_buyers_chart}
+                {ind_conv_chart}
+                {ind_pv_chart}
               </div>
 
-              <article class="panel">
-                <h4>重点商家 TOP5（表格1/3）</h4>
+              <div class="panel">
+                <h4>重点商家 TOP5</h4>
                 {shop_table}
-              </article>
+              </div>
 
-              <article class="panel">
-                <h4>重点商品 TOP10（表格2/4）</h4>
+              <div class="panel">
+                <h4>重点商品 TOP10</h4>
                 {product_table}
-              </article>
+              </div>
 
-              <div class="analysis-grid">
-                <article class="panel">
+              <div class="grid-2" style="margin-top: var(--sp-7);">
+                <div class="panel">
                   <h4>指标波动</h4>
                   <ul>{narrative_list(metric_changes, "本周重点指标环比变化未超过5%。")}</ul>
-                </article>
-                <article class="panel">
+                </div>
+                <div class="panel">
                   <h4>渠道占比变化</h4>
                   <ul>{narrative_list(share_changes, "本周未观察到占比变化超过5%的内容渠道。")}</ul>
-                </article>
+                </div>
               </div>
-              <article class="panel">
+              <div class="conclusion">
                 <h4>商品归因结论</h4>
                 <ul>{narrative_list(goods_changes, "本周未识别到明显的重点商品变化。")}</ul>
-              </article>
-            </section>
+              </div>
+            </div>
             """
         )
         industry_narratives.append(
             f"{focus_name}：{'；'.join(metric_changes[:2] + share_changes[:1]) or '本周整体表现平稳。'}"
         )
 
-    # ── Section ③: 流量 拆解 ────────────────────────────────────────────────
+    # ── Section 3: 流量 拆解 ────────────────────────────────────────────────
     flow_blocks = []
     for focus_name in ["绘画+绘画周边", "VUP周边"]:
         ch_data = focus_channel_weekly[focus_channel_weekly["focus_industry"] == focus_name].copy()
@@ -1059,18 +941,18 @@ def build_report(
         top4_entries = curr_re_data.nlargest(4, "GMV")["资源位二级入口"].tolist()
 
         # Build per-channel 4w data dicts
-        def _ch_series(ch, field):
+        def _ch_series(ch, field_name):
             ch_subset = ch_data[ch_data["内容类型"] == ch]
             return [
-                ch_subset[ch_subset["周"] == w][field].iloc[0]
+                ch_subset[ch_subset["周"] == w][field_name].iloc[0]
                 if not ch_subset[ch_subset["周"] == w].empty else 0
                 for w in lookback_4w
             ]
 
-        def _re_series(entry, field):
+        def _re_series(entry, field_name):
             re_subset = re_data[re_data["资源位二级入口"] == entry]
             return [
-                re_subset[re_subset["周"] == w][field].iloc[0]
+                re_subset[re_subset["周"] == w][field_name].iloc[0]
                 if not re_subset[re_subset["周"] == w].empty else 0
                 for w in lookback_4w
             ]
@@ -1111,592 +993,114 @@ def build_report(
                         + (f"，主因：{'、'.join(reasons)}" if reasons else "，需进一步分析")
                     )
 
-        # Build GMV bar+line charts for top-2 channels
-        gmv_charts = []
+        # Build combo charts for top-2 channels
+        ch_gmv_charts = []
+        ch_pv_charts = []
         for ch in top2_channels:
             gmv_vals = _ch_series(ch, "GMV")
-            share_vals = _ch_series(ch, "gmv_share")
-            gmv_charts.append(
-                _bar_line_dual_axis(
-                    chart_labels_4w, gmv_vals, share_vals,
-                    f"{ch} 渠道 GMV + 占比",
-                    "GMV", "GMV占比", "#c2410c", "#0f766e"
+            gmv_share_vals = _ch_series(ch, "gmv_share")
+            ch_gmv_charts.append(
+                build_combo_chart(
+                    chart_labels_4w, gmv_vals, gmv_share_vals,
+                    f"{ch} 渠道 GMV + 占比", "GMV", "GMV占比",
+                    chart_inits, y_format="gmv", y1_format="pct"
                 )
             )
-
-        # Build PV bar+line charts for top-2 channels
-        pv_charts = []
-        for ch in top2_channels:
             pv_vals = _ch_series(ch, "曝光PV")
-            share_vals = _ch_series(ch, "pv_share")
-            pv_charts.append(
-                _bar_line_dual_axis(
-                    chart_labels_4w, pv_vals, share_vals,
-                    f"{ch} 渠道 曝光PV + 占比",
-                    "曝光PV", "曝光PV占比", "#b45309", "#7c3aed"
+            pv_share_vals = _ch_series(ch, "pv_share")
+            ch_pv_charts.append(
+                build_combo_chart(
+                    chart_labels_4w, pv_vals, pv_share_vals,
+                    f"{ch} 渠道 曝光PV + 占比", "曝光PV", "曝光PV占比",
+                    chart_inits, y_format="pv", y1_format="pct"
                 )
             )
 
-        # Build GMV bar+line charts for top-4 resource entries
+        # Build combo charts for top-4 resource entries
         re_gmv_charts = []
-        for entry in top4_entries:
-            gmv_vals = _re_series(entry, "GMV")
-            share_vals = _re_series(entry, "gmv_share")
-            re_gmv_charts.append(
-                _bar_line_dual_axis(
-                    chart_labels_4w, gmv_vals, share_vals,
-                    f"{entry} GMV + 占比",
-                    "GMV", "GMV占比", "#c2410c", "#0f766e"
-                )
-            )
-
-        # Build PV bar+line charts for top-4 resource entries
         re_pv_charts = []
         for entry in top4_entries:
+            gmv_vals = _re_series(entry, "GMV")
+            gmv_share_vals = _re_series(entry, "gmv_share")
+            re_gmv_charts.append(
+                build_combo_chart(
+                    chart_labels_4w, gmv_vals, gmv_share_vals,
+                    f"{entry} GMV + 占比", "GMV", "GMV占比",
+                    chart_inits, y_format="gmv", y1_format="pct"
+                )
+            )
             pv_vals = _re_series(entry, "曝光PV")
-            share_vals = _re_series(entry, "pv_share")
+            pv_share_vals = _re_series(entry, "pv_share")
             re_pv_charts.append(
-                _bar_line_dual_axis(
-                    chart_labels_4w, pv_vals, share_vals,
-                    f"{entry} 曝光PV + 占比",
-                    "曝光PV", "曝光PV占比", "#b45309", "#7c3aed"
+                build_combo_chart(
+                    chart_labels_4w, pv_vals, pv_share_vals,
+                    f"{entry} 曝光PV + 占比", "曝光PV", "曝光PV占比",
+                    chart_inits, y_format="pv", y1_format="pct"
                 )
             )
 
         flow_blocks.append(
             f"""
-            <section class="flow-block" id="{html.escape('flow-' + focus_name.replace('+', '-'))}">
-              <div class="industry-head">
-                <h3>{html.escape(focus_name)} 流量拆解</h3>
+            <div class="breakdown-block" id="{html.escape('flow-' + focus_name.replace('+', '-'))}">
+              <div class="breakdown-head">
+                <div>
+                  <h3>{html.escape(focus_name)} 流量拆解</h3>
+                </div>
               </div>
 
-              <article class="panel">
+              <div class="panel">
                 <h4>内容渠道 GMV + 占比 趋势（Top2，过去4周）</h4>
-                <div class="chart-grid">
-                  {''.join(gmv_charts) or '<p class="chart-empty">暂无数据</p>'}
+                <div class="grid-2" style="margin-top: var(--sp-7);">
+                  {''.join(ch_gmv_charts) or '<div class="chart-empty">暂无数据</div>'}
                 </div>
-              </article>
+              </div>
 
-              <article class="panel">
+              <div class="panel">
                 <h4>内容渠道 曝光PV + 占比 趋势（Top2，过去4周）</h4>
-                <div class="chart-grid">
-                  {''.join(pv_charts) or '<p class="chart-empty">暂无数据</p>'}
+                <div class="grid-2" style="margin-top: var(--sp-7);">
+                  {''.join(ch_pv_charts) or '<div class="chart-empty">暂无数据</div>'}
                 </div>
-              </article>
+              </div>
 
-              <article class="panel">
-                <h4>内容渠道详情（表格）</h4>
+              <div class="panel">
+                <h4>内容渠道详情</h4>
                 {channel_table}
-              </article>
+              </div>
 
-              <article class="panel">
+              <div class="panel">
                 <h4>资源位二级入口 GMV + 占比 趋势（Top4，过去4周）</h4>
-                <div class="chart-grid">
-                  {''.join(re_gmv_charts) or '<p class="chart-empty">暂无资源位数据</p>'}
+                <div class="grid-2" style="margin-top: var(--sp-7);">
+                  {''.join(re_gmv_charts) or '<div class="chart-empty">暂无资源位数据</div>'}
                 </div>
-              </article>
+              </div>
 
-              <article class="panel">
+              <div class="panel">
                 <h4>资源位二级入口 曝光PV + 占比 趋势（Top4，过去4周）</h4>
-                <div class="chart-grid">
-                  {''.join(re_pv_charts) or '<p class="chart-empty">暂无资源位数据</p>'}
+                <div class="grid-2" style="margin-top: var(--sp-7);">
+                  {''.join(re_pv_charts) or '<div class="chart-empty">暂无资源位数据</div>'}
                 </div>
-              </article>
+              </div>
 
-              <article class="panel">
-                <h4>资源位二级入口详情（表格）</h4>
+              <div class="panel">
+                <h4>资源位二级入口详情</h4>
                 {resource_table}
-              </article>
+              </div>
 
-              <article class="panel">
+              <div class="conclusion">
                 <h4>流量归因结论</h4>
                 <ul>{narrative_list(channel_attribution, '本周流量侧未观察到导致GMV波动的明显渠道变化。')}</ul>
-              </article>
-            </section>
+              </div>
+            </div>
             """)
 
-    # ── HTML Styles ────────────────────────────────────────────────────────────
-    styles = """
-    :root {
-      --bg: #0f1117;
-      --surface: #161b27;
-      --card: #1c2235;
-      --card-hover: #232a40;
-      --border: #2a3149;
-      --ink: #e8ecf4;
-      --muted: #6b7a99;
-      --accent-orange: #f97316;
-      --accent-teal: #14b8a6;
-      --accent-purple: #a78bfa;
-      --accent-amber: #fbbf24;
-      --up: #34d399;
-      --down: #f87171;
-      --shadow: 0 4px 24px rgba(0,0,0,0.4);
-      --shadow-lg: 0 8px 40px rgba(0,0,0,0.5);
-    }
-    * { box-sizing: border-box; }
-    html { scroll-behavior: smooth; }
-    body {
-      margin: 0;
-      font-family: "PingFang SC", "Noto Sans SC", -apple-system, sans-serif;
-      color: var(--ink);
-      background: var(--bg);
-      min-height: 100vh;
-    }
-    a { color: inherit; text-decoration: none; }
-    .page { max-width: 1280px; margin: 0 auto; padding: 40px 24px 80px; }
+    # ── Load design system assets ──────────────────────────────────────────────
+    css_content = _load_asset("base-report.css")
+    chartjs_content = _load_asset("chart.umd.min.js")
+    chart_defaults_content = _load_asset("chart-defaults.js")
 
-    /* ── Hero ── */
-    .hero {
-      background: linear-gradient(135deg, #1c2235 0%, #161b27 50%, #1a1f2e 100%);
-      border: 1px solid var(--border);
-      border-radius: 24px;
-      padding: 36px 40px 32px;
-      box-shadow: var(--shadow-lg);
-      position: relative;
-      overflow: hidden;
-    }
-    .hero::before {
-      content: '';
-      position: absolute;
-      top: -60px; right: -60px;
-      width: 240px; height: 240px;
-      background: radial-gradient(circle, rgba(249,115,22,0.15) 0%, transparent 70%);
-      pointer-events: none;
-    }
-    .hero::after {
-      content: '';
-      position: absolute;
-      bottom: -80px; left: 60px;
-      width: 300px; height: 300px;
-      background: radial-gradient(circle, rgba(20,184,166,0.10) 0%, transparent 70%);
-      pointer-events: none;
-    }
-    .hero-eyebrow {
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      color: var(--accent-orange);
-      margin-bottom: 10px;
-    }
-    .hero h1 {
-      margin: 0 0 8px;
-      font-size: 32px;
-      font-weight: 800;
-      background: linear-gradient(90deg, #fff 30%, rgba(255,255,255,0.6) 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      line-height: 1.2;
-    }
-    .hero-desc {
-      margin: 8px 0 0;
-      color: var(--muted);
-      font-size: 14px;
-      max-width: 560px;
-    }
-    .hero-meta {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      margin-top: 24px;
-    }
-    .hero-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 14px;
-      background: rgba(255,255,255,0.05);
-      border: 1px solid rgba(255,255,255,0.10);
-      border-radius: 999px;
-      font-size: 13px;
-      font-weight: 500;
-      color: var(--ink);
-    }
-    .hero-badge strong { color: var(--accent-orange); font-weight: 700; }
-
-    /* ── Nav ── */
-    .nav {
-      position: sticky;
-      top: 0;
-      z-index: 100;
-      margin: 24px 0 32px;
-      padding: 10px 16px;
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      background: rgba(22,27,39,0.85);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-    }
-    .nav a {
-      padding: 8px 16px;
-      border-radius: 10px;
-      font-size: 13px;
-      font-weight: 500;
-      color: var(--muted);
-      transition: all 0.15s ease;
-    }
-    .nav a:hover { background: var(--card); color: var(--ink); }
-    .nav a.active { background: var(--card); color: var(--ink); box-shadow: 0 0 0 1px var(--border); }
-
-    /* ── Section ── */
-    .section { margin-top: 36px; }
-    .section-head {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-end;
-      gap: 16px;
-      margin-bottom: 20px;
-      padding-bottom: 16px;
-      border-bottom: 1px solid var(--border);
-    }
-    .section-head h2 {
-      margin: 0;
-      font-size: 22px;
-      font-weight: 700;
-      color: var(--ink);
-      letter-spacing: -0.3px;
-    }
-    .section-head-desc {
-      margin: 4px 0 0;
-      color: var(--muted);
-      font-size: 13px;
-      max-width: 520px;
-    }
-    .section-num {
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 1.5px;
-      color: var(--accent-orange);
-      text-transform: uppercase;
-    }
-
-    /* ── Metric Cards ── */
-    .metric-grid {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 14px;
-    }
-    .metric-card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 18px;
-      padding: 20px 20px 18px;
-      box-shadow: var(--shadow);
-      transition: transform 0.15s ease, box-shadow 0.15s ease;
-      position: relative;
-      overflow: hidden;
-    }
-    .metric-card::before {
-      content: '';
-      position: absolute;
-      top: 0; left: 0; right: 0;
-      height: 3px;
-      border-radius: 18px 18px 0 0;
-    }
-    .metric-card.orange::before { background: var(--accent-orange); }
-    .metric-card.teal::before { background: var(--accent-teal); }
-    .metric-card.purple::before { background: var(--accent-purple); }
-    .metric-card.amber::before { background: var(--accent-amber); }
-    .metric-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
-    .metric-label {
-      margin: 0;
-      color: var(--muted);
-      font-size: 12px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-    }
-    .metric-value {
-      margin: 10px 0 6px;
-      font-size: 28px;
-      font-weight: 800;
-      color: var(--ink);
-      letter-spacing: -0.5px;
-      line-height: 1;
-    }
-    .metric-sub {
-      margin: 0;
-      font-size: 12px;
-      color: var(--muted);
-    }
-    .delta {
-      margin-left: 6px;
-      font-weight: 700;
-      font-size: 12px;
-    }
-    .delta.up { color: var(--up); }
-    .delta.down { color: var(--down); }
-    .delta.neutral { color: var(--muted); }
-
-    /* ── Chart Grid ── */
-    .chart-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 16px;
-      margin-top: 16px;
-    }
-    .chart-grid.three-col {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
-    .analysis-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 16px;
-      margin-top: 16px;
-    }
-
-    /* ── Chart ── */
-    .chart {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 18px;
-      padding: 20px;
-      box-shadow: var(--shadow);
-    }
-    .chart figcaption {
-      font-weight: 700;
-      font-size: 14px;
-      color: var(--ink);
-      margin-bottom: 14px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .chart figcaption::before {
-      content: '';
-      display: inline-block;
-      width: 8px;
-      height: 8px;
-      border-radius: 3px;
-    }
-    .chart.orange figcaption::before { background: var(--accent-orange); }
-    .chart.teal figcaption::before { background: var(--accent-teal); }
-    .chart.purple figcaption::before { background: var(--accent-purple); }
-    .chart.amber figcaption::before { background: var(--accent-amber); }
-    .chart-empty {
-      color: var(--muted);
-      font-size: 13px;
-      padding: 40px 16px;
-      text-align: center;
-      background: var(--card);
-      border: 1px dashed var(--border);
-      border-radius: 18px;
-    }
-    .table-empty {
-      color: var(--muted);
-      font-size: 13px;
-      padding: 32px 16px;
-      text-align: center;
-    }
-
-    /* ── Panel ── */
-    .panel {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 18px;
-      padding: 22px 24px;
-      box-shadow: var(--shadow);
-      margin-top: 16px;
-    }
-    .panel h4 {
-      margin: 0 0 14px;
-      font-size: 15px;
-      font-weight: 700;
-      color: var(--ink);
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .panel h4::before {
-      content: '';
-      display: inline-block;
-      width: 4px;
-      height: 16px;
-      border-radius: 2px;
-      background: var(--accent-orange);
-    }
-    .panel ul {
-      margin: 0;
-      padding-left: 20px;
-      line-height: 2;
-      color: var(--ink);
-      font-size: 13.5px;
-    }
-    .panel li { margin-bottom: 4px; }
-
-    /* ── Industry / Flow Blocks ── */
-    .industry-block, .flow-block {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 20px;
-      padding: 24px;
-      margin-top: 20px;
-      box-shadow: var(--shadow);
-    }
-    .industry-head, .flow-head {
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      gap: 16px;
-      margin-bottom: 20px;
-      padding-bottom: 14px;
-      border-bottom: 1px solid var(--border);
-    }
-    .industry-head h3, .flow-head h3 {
-      margin: 0;
-      font-size: 18px;
-      font-weight: 700;
-    }
-    .industry-head h3 span, .flow-head h3 span {
-      font-size: 12px;
-      font-weight: 500;
-      color: var(--muted);
-      margin-left: 8px;
-    }
-    .industry-head p, .flow-head p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
-    .block-badge {
-      display: inline-flex;
-      padding: 4px 10px;
-      border-radius: 6px;
-      font-size: 11px;
-      font-weight: 600;
-    }
-    .block-badge.up { background: rgba(52,211,153,0.12); color: var(--up); }
-    .block-badge.down { background: rgba(248,113,113,0.12); color: var(--down); }
-
-    /* ── Table ── */
-    .table-wrap {
-      overflow-x: auto;
-      border-radius: 12px;
-      border: 1px solid var(--border);
-      margin-top: 14px;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 13px;
-    }
-    thead { background: rgba(255,255,255,0.03); }
-    th {
-      padding: 11px 14px;
-      text-align: left;
-      font-weight: 600;
-      font-size: 11.5px;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.6px;
-      border-bottom: 1px solid var(--border);
-      white-space: nowrap;
-    }
-    td {
-      padding: 11px 14px;
-      border-bottom: 1px solid rgba(42,49,73,0.6);
-      color: var(--ink);
-      white-space: nowrap;
-    }
-    tr:last-child td { border-bottom: none; }
-    tr:hover td { background: rgba(255,255,255,0.02); }
-    .td-mono {
-      font-family: "SF Mono", "Fira Code", monospace;
-      font-size: 12.5px;
-    }
-    .cell-wow { font-size: 11.5px; }
-    .up-text { color: var(--up); font-weight: 600; }
-    .down-text { color: var(--down); font-weight: 600; }
-
-    /* ── Chart Tooltip ── */
-    .chart-tooltip {
-      position: absolute;
-      top: 36px;
-      right: 16px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 10px 14px;
-      font-size: 12px;
-      color: var(--ink);
-      pointer-events: none;
-      opacity: 0;
-      transition: opacity 0.15s ease;
-      z-index: 10;
-      min-width: 140px;
-      box-shadow: var(--shadow-lg);
-    }
-    .chart-tooltip.visible { opacity: 1; }
-    .chart-tooltip .tt-label { color: var(--muted); font-size: 11px; margin-bottom: 6px; font-weight: 600; }
-    .chart-tooltip .tt-row { display: flex; justify-content: space-between; gap: 12px; margin: 3px 0; }
-    .chart-tooltip .tt-lbl { color: var(--muted); font-size: 11.5px; }
-    .chart-tooltip .tt-val { font-weight: 700; font-size: 12.5px; font-family: "SF Mono", "Fira Code", monospace; }
-
-    /* ── Footnote ── */
-    .footnote {
-      margin-top: 32px;
-      padding: 20px 24px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      color: var(--muted);
-      font-size: 12.5px;
-      line-height: 1.8;
-    }
-    .footnote strong { color: var(--ink); }
-
-    /* ── Responsive ── */
-    @media (max-width: 900px) {
-      .metric-grid, .chart-grid, .analysis-grid, .chart-grid.three-col {
-        grid-template-columns: 1fr;
-      }
-      .section-head, .industry-head, .flow-head {
-        flex-direction: column;
-        align-items: flex-start;
-      }
-      .hero { padding: 28px 24px 24px; }
-      .hero h1 { font-size: 26px; }
-    }
-    @media (max-width: 600px) {
-      .page { padding: 20px 16px 60px; }
-      .metric-grid { grid-template-columns: repeat(2, 1fr); }
-    }
-    """
-
-    JS_TOOLTIP = """
-    <script>
+    # ── Nav scroll highlight JS ────────────────────────────────────────────────
+    nav_js = """
     (function() {
-      /* Chart tooltip hover */
-      function fmtNum(v) { return v >= 1e6 ? (v/1e6).toFixed(1)+'M' : v >= 1000 ? (v/1000).toFixed(1)+'K' : v.toLocaleString('zh-CN',{maximumFractionDigits:0}); }
-      function fmtPct(v) { return (v*100).toFixed(1)+'%'; }
-
-      document.querySelectorAll('.chart-tooltip').forEach(function(tt) {
-        var leftLbl = tt.getAttribute('data-left') || 'GMV';
-        var rightLbl = tt.getAttribute('data-right') || '占比';
-        var rightFmt = tt.getAttribute('data-right-fmt') || 'num';
-        var container = tt.closest('figure');
-        if (!container) return;
-
-        container.querySelectorAll('.hit').forEach(function(circle) {
-          circle.addEventListener('mouseenter', function() {
-            var label = circle.getAttribute('data-label') || '';
-            var lv = parseFloat(circle.getAttribute('data-lv')) || 0;
-            var rv = parseFloat(circle.getAttribute('data-rv')) || 0;
-            var rightVal = rightFmt === 'pct' ? fmtPct(rv) : fmtNum(rv);
-
-            tt.innerHTML =
-              '<div class="tt-label">' + label + '</div>' +
-              '<div class="tt-row"><span class="tt-lbl">' + leftLbl + '</span><span class="tt-val" style="color:#f97316">' + fmtNum(lv) + '</span></div>' +
-              '<div class="tt-row"><span class="tt-lbl">' + rightLbl + '</span><span class="tt-val" style="color:#14b8a6">' + rightVal + '</span></div>';
-            tt.classList.add('visible');
-          });
-          circle.addEventListener('mouseleave', function() {
-            tt.classList.remove('visible');
-          });
-        });
-      });
-
-      /* Nav active link highlight */
       var sections = document.querySelectorAll('section[id]');
       var navLinks = document.querySelectorAll('.nav a');
       window.addEventListener('scroll', function() {
@@ -1710,16 +1114,21 @@ def build_report(
         });
       });
     })();
-    </script>
     """
 
+    # ── Chart init JS ──────────────────────────────────────────────────────────
+    chart_init_js = "\n".join(chart_inits)
+
+    # ── Assemble HTML ──────────────────────────────────────────────────────────
     html_out = f"""<!DOCTYPE html>
 <html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>工房业务交易双周报</title>
-    <style>{styles}</style>
+    <style>
+{css_content}
+    </style>
   </head>
   <body>
     <div class="page">
@@ -1735,96 +1144,116 @@ def build_report(
       </header>
 
       <nav class="nav">
-        <a href="#core-data-trend">核心数据趋势</a>
-        <a href="#gmv-breakdown">GMV 拆解</a>
-        <a href="#flow-breakdown">流量 拆解</a>
-        <a href="#data-notes">数据说明</a>
+        <a href="#s1" class="active">核心数据趋势</a>
+        <a href="#s2">GMV 拆解</a>
+        <a href="#s3">流量拆解</a>
+        <a href="#s4">数据说明</a>
       </nav>
 
-      <!-- Section ①: 核心数据趋势 -->
-      <section id="core-data-trend" class="section">
+      <!-- Section 1: 核心数据趋势 -->
+      <section id="s1" class="section">
         <div class="section-head">
           <div>
-            <div class="section-num">01 / 核心数据趋势</div>
+            <span class="section-num">SECTION 01</span>
             <h2>核心数据趋势</h2>
-            <p class="section-head-desc">看清工房交易规模与效率的周变化，重点关注 GMV、买家数、下单转化率和商品曝光PV。</p>
+            <p class="section-desc">看清工房交易规模与效率的周变化，重点关注 GMV、买家数、下单转化率和商品曝光PV。</p>
           </div>
         </div>
         <div class="metric-grid">
-          {summary_card("GMV", current_week["GMV"], previous_week["GMV"], lambda v: fmt_num(v, 2), "orange")}
-          {summary_card("买家数", current_week["支付订单买家数"], previous_week["支付订单买家数"], lambda v: fmt_num(v), "teal")}
-          {summary_card("下单转化率", current_week["转化率"], previous_week["转化率"], fmt_pct, "purple")}
-          {summary_card("商品曝光PV", current_week["曝光PV"], previous_week["曝光PV"], lambda v: fmt_num(v), "amber")}
+          {summary_card("GMV", current_week["GMV"], previous_week["GMV"], lambda v: fmt_num(v, 2))}
+          {summary_card("买家数", current_week["支付订单买家数"], previous_week["支付订单买家数"], lambda v: fmt_num(v), "green")}
+          {summary_card("下单转化率", current_week["转化率"], previous_week["转化率"], fmt_pct, "amber")}
+          {summary_card("商品曝光PV", current_week["曝光PV"], previous_week["曝光PV"], lambda v: fmt_num(v), "blue")}
         </div>
-        <div class="chart-grid">
-          {build_bar_chart(labels, gmv_list, "GMV 周趋势", "#c2410c")}
-          {build_bar_chart(labels, buyers_list, "买家数 周趋势", "#0f766e")}
-          {build_line_chart(labels, conversions_list, "下单转化率 周趋势", "#7c3aed", percent=True)}
-          {build_line_chart(labels, overall_pv, "商品曝光PV 周趋势", "#b45309")}
+        <div class="grid-2" style="margin-top: var(--sp-7);">
+          {s1_gmv_chart}
+          {s1_buyers_chart}
+          {s1_conv_chart}
+          {s1_pv_chart}
         </div>
-        <article class="panel" style="margin-top:16px;">
+        <div class="conclusion" style="margin-top: var(--sp-7);">
           <h4>本周结论</h4>
           <ul>{narrative_list(overall_narratives, "暂无可输出结论。")}</ul>
-        </article>
-        <article class="panel" style="margin-top:16px;">
+        </div>
+        <div class="conclusion">
           <h4>波动超过5%的指标</h4>
           <ul>{narrative_list(volatility_narratives, "本周重点指标环比变化未超过5%。")}</ul>
-        </article>
+        </div>
       </section>
 
-      <!-- Section ②: GMV 拆解 -->
-      <section id="gmv-breakdown" class="section">
+      <!-- Section 2: GMV 拆解 -->
+      <section id="s2" class="section">
         <div class="section-head">
           <div>
-            <div class="section-num">02 / GMV 拆解</div>
+            <span class="section-num">SECTION 02</span>
             <h2>GMV 拆解</h2>
-            <p class="section-head-desc">了解每个行业的交易规模变化趋势，得出 GMV 波动的原因分析。</p>
+            <p class="section-desc">了解每个行业的交易规模变化趋势，得出 GMV 波动的原因分析。</p>
           </div>
         </div>
-        <article class="panel">
+        <div class="conclusion">
           <h4>行业汇总摘要</h4>
           <ul>{narrative_list(industry_narratives, "当前未形成重点行业摘要。")}</ul>
-        </article>
+        </div>
         {''.join(industry_blocks)}
       </section>
 
-      <!-- Section ③: 流量 拆解 -->
-      <section id="flow-breakdown" class="section">
+      <!-- Section 3: 流量 拆解 -->
+      <section id="s3" class="section">
         <div class="section-head">
           <div>
-            <div class="section-num">03 / 流量 拆解</div>
-            <h2>流量 拆解</h2>
-            <p class="section-head-desc">了解每个行业的流量渠道转化趋势，得出流量波动的原因分析。</p>
+            <span class="section-num">SECTION 03</span>
+            <h2>流量拆解</h2>
+            <p class="section-desc">了解每个行业的流量渠道转化趋势，得出流量波动的原因分析。</p>
           </div>
         </div>
         {''.join(flow_blocks)}
       </section>
 
-      <!-- Data notes -->
-      <section id="data-notes" class="section">
+      <!-- Section 4: 数据说明 -->
+      <section id="s4" class="section">
         <div class="section-head">
           <div>
-            <div class="section-num">04 / 数据说明</div>
+            <span class="section-num">SECTION 04</span>
             <h2>数据说明</h2>
-            <p class="section-head-desc">所有结论仅基于已声明的数据合同与字段，不补充额外因果推断。</p>
           </div>
         </div>
-        <article class="panel">
+        <div class="panel">
           <ul>
             <li>所有源文件每行已代表一个完整周（周数在"周五-周四周"列），无需再按日聚合。</li>
             <li>绘画+绘画周边为合并行业口径，VUP周边单独分析。</li>
             <li>下单转化率使用周内支付订单数 / 商详UV 聚合口径计算。</li>
-            <li>商品曝光PV/GPM 使用周内 GMV / 商品曝光PV × 1000 聚合口径计算。</li>
+            <li>商品曝光PV/GPM 使用周内 GMV / 商品曝光PV x 1000 聚合口径计算。</li>
             <li>PVCTR 使用周内 商详UV / 商品曝光PV 计算。</li>
             <li>商品归因仅引用行业商品明细数据中当前周与上周的 GMV、买家数、商详UV 变化。</li>
             <li>仅解释指标环比波动超过5%的行业指标和占比变化超过5%的渠道。</li>
-            <li>所有图表坐标轴从0开始，不使用截断坐标轴。</li>
           </ul>
-        </article>
-        <div class="footnote">生成时间取自本地执行环境。当前版本已输出真实聚合结果、SVG 图表和行业分析，不再是占位 HTML。</div>
+        </div>
+        <div class="footnote">
+          <strong>数据说明</strong><br/>
+          生成时间取自本地执行环境。所有图表使用 Chart.js 4.x 内联渲染，支持 file:// 直接打开。
+        </div>
       </section>
     </div>
-    {JS_TOOLTIP}
+
+    <!-- Chart.js 4.x (inline, not CDN) -->
+    <script>
+{chartjs_content}
+    </script>
+
+    <!-- chart-defaults.js (inline) -->
+    <script>
+{chart_defaults_content}
+    </script>
+
+    <!-- Chart initialization -->
+    <script>
+{chart_init_js}
+    </script>
+
+    <!-- Nav scroll highlight -->
+    <script>
+{nav_js}
+    </script>
   </body>
 </html>
 """
@@ -1835,27 +1264,44 @@ def build_report(
         f"overall_weeks={len(overall_weekly)}",
         f"industry_blocks={len(industry_blocks)}",
         f"flow_blocks={len(flow_blocks)}",
+        f"chart_count={_chart_id_counter}",
+        f"css_size={len(css_content)} bytes",
+        f"chartjs_size={len(chartjs_content)} bytes",
     ]
     return RenderBundle(html=html_out, log_lines=logs)
 
 
 def main():
     args = parse_args()
+    print(f"INFO: input_dir={args.input_dir}")
+    print(f"INFO: output={args.output}")
+
     files = {key: find_latest(args.input_dir, patterns) for key, patterns in FILE_PATTERNS.items()}
+    for key, path in files.items():
+        print(f"INFO: matched {key} → {os.path.basename(path)}")
+
     overall_df = prepare_weekly(read_table(files["overall"]))
     industry_df = prepare_weekly(read_table(files["industry"]))
     channel_df = prepare_weekly(read_table(files["channel"]))
     goods_df = prepare_goods(read_table(files["goods"]))
     seller_df = prepare_seller(read_table(files["seller"]))
     resource_df = prepare_resource(read_table(files["resource_entry"]))
+
+    print(f"INFO: overall rows={len(overall_df)}, industry rows={len(industry_df)}")
+    print(f"INFO: channel rows={len(channel_df)}, goods rows={len(goods_df)}")
+    print(f"INFO: seller rows={len(seller_df)}, resource rows={len(resource_df)}")
+
     bundle = build_report(
         overall_df, industry_df, channel_df, goods_df, seller_df, resource_df, args.run_id
     )
+
+    os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
     with open(args.output, "w", encoding="utf-8") as f:
         f.write(bundle.html)
-    print(f"generated_html={args.output}")
+    print(f"INFO: generated_html={args.output}")
+    print(f"INFO: html_size={len(bundle.html)} bytes")
     for line in bundle.log_lines:
-        print(line)
+        print(f"INFO: {line}")
 
 
 if __name__ == "__main__":

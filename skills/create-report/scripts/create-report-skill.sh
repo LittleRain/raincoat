@@ -95,15 +95,33 @@ EOF
 cat > "$TARGET_DIR/assets/html-contract.md" <<EOF
 # HTML 合同
 
-- title block
-- period block
-- stable section order
+## 结构合同
+- title block (使用 .hero 组件)
+- period block (使用 .hero-meta + .hero-badge)
+- stable section order (使用 .section + .section-head)
 - charts and tables declared by the normalized spec
-- conclusion blocks
-- source-data notes
-- no mandatory external CDN dependency for chart rendering
-- if charts are required, use local bundled assets or inline runtime
+- conclusion blocks (使用 .conclusion 组件)
+- source-data notes (使用 .footnote 组件)
+- anchor navigation (使用 .nav 组件，滚动+锚点模式)
+
+## 样式合同
+- 必须内联 base-report.css (位于本 skill 的 assets/base-report.css)
+- 必须使用 base-report.css 中定义的 CSS class，禁止另起炉灶写内联样式
+- 数值列必须使用 font-feature-settings: "tnum" (已内置于 table 和 .metric-value)
+- 环比变化使用 .tag-up / .tag-down / .delta.up / .delta.down
+- 指标卡使用 .metric-card，通过 .green/.red/.amber/.blue 指定顶部色条
+- 图表容器使用 .chart-container + .chart-area
+- 布局网格使用 .grid-2 / .grid-3 / .grid-4
+
+## 图表合同
+- Chart.js 4.x 必须内联（不依赖外部 CDN）
+- 必须在 Chart.js 之后内联 chart-defaults.js (位于本 skill 的 assets/chart-defaults.js)
+- 使用 chartPresets.line / .bar / .doughnut / .combo 创建图表
+- 使用 REPORT_FORMAT.gmv / .pv / .pct / .num 格式化数值
+- 使用 REPORT_WOW(current, previous) 计算环比
 - opening report.html via \`file://\` must still render charts
+
+## 数据合同
 - if table schema is declared, output columns must match the spec
 - if narrative schema is declared, direction words must match the spec
 EOF
@@ -130,7 +148,42 @@ cat > "$TARGET_DIR/assets/report-prompt.md" <<EOF
 Generate the HTML weekly report from the normalized spec and declared data
 contracts only.
 
-Rules:
+## 样式规则
+
+- 必须在 <style> 中内联 assets/base-report.css 的完整内容
+- 使用 base-report.css 中定义的标准 CSS class 构建页面
+- 禁止另起炉灶写自定义样式；如需扩展，在 base-report.css class 之后追加
+- 可用的布局组件：
+  - .hero / .hero-eyebrow / .hero-meta / .hero-badge — 报告头
+  - .nav / .nav a — 锚点导航
+  - .section / .section-head / .section-num — 栏目
+  - .metric-grid / .metric-card — 指标卡（.green/.red/.amber/.blue 控色）
+  - .grid-2 / .grid-3 / .grid-4 — 网格布局
+  - .card / .card-title — 通用卡片
+  - .panel — 内容面板
+  - .chart-container / .chart-area — 图表容器
+  - .table-wrap / table — 数据表格
+  - .conclusion / .hl — 结论框
+  - .breakdown-block / .breakdown-head — 拆解模块
+  - .footnote — 数据说明
+  - .tag-up / .tag-down / .delta.up / .delta.down — 环比标记
+
+## 图表规则
+
+- Chart.js 4.x 必须内联到 HTML 中（禁止外部 CDN）
+- chart-defaults.js 必须在 Chart.js 之后内联
+- 使用标准 API 创建图表：
+  - reportChart(canvasId, config) — 挂载图表
+  - chartPresets.line(labels, datasets, opts) — 折线图
+  - chartPresets.bar(labels, datasets, opts) — 柱状图
+  - chartPresets.doughnut(labels, data, opts) — 环形图
+  - chartPresets.combo(labels, datasets, opts) — 组合图（双Y轴）
+  - REPORT_FORMAT.gmv/pv/pct/num — 数值格式化
+  - REPORT_WOW(cur, prev) — 环比计算
+  - reportHTML.metricCard(label, value, wow, color) — 指标卡 HTML
+  - reportHTML.wowTag(wow) — 环比标签 HTML
+
+## 数据规则
 
 - use only metrics and fields declared in the normalized spec
 - keep the validated section order
@@ -140,8 +193,6 @@ Rules:
 - if a section has multiple contracts, obey the declared primary/fallback precedence
 - for ratio metrics, use declared primary formula and fallback formula only
 - hide period columns that are empty for all rows when spec requires that behavior
-- charts must render under \`file://\`; do not rely on external CDN script loading
-- use local relative-path assets or inline script for chart runtime dependencies
 - emit runtime logs for file discovery, file read status, and key processing checkpoints
 - stream logs during execution (avoid end-of-run dump only)
 - do not claim runnable output unless real execution and verification exist
@@ -150,6 +201,7 @@ EOF
 cat > "$TARGET_DIR/assets/validation-checklist.md" <<EOF
 # 校验清单
 
+## Spec 完整性
 - normalized spec exists
 - required data contracts are mapped
 - required sections are present
@@ -158,8 +210,24 @@ cat > "$TARGET_DIR/assets/validation-checklist.md" <<EOF
 - section-level data-source precedence is declared when multiple contracts exist
 - ratio metric fallback rules are declared when required fields may be missing
 - empty-period-column behavior is declared for table-heavy sections
-- chart runtime dependency policy is declared (no required external CDN)
+
+## 样式合规
+- base-report.css 已完整内联到 <style>
+- 使用 base-report.css 定义的标准 class，未自行发明替代样式
+- 数值列使用 tnum（表格已自动启用）
+- 指标卡使用 .metric-card 组件
+- 图表容器使用 .chart-container + .chart-area
+- 结论框使用 .conclusion 组件
+- 导航使用 .nav 锚点模式
+
+## 图表合规
+- Chart.js 源码已内联（非 CDN 引用）
+- chart-defaults.js 已在 Chart.js 之后内联
+- 使用 chartPresets / reportChart API 创建图表
 - output HTML is verified under \`file://\` for chart visibility
+- 图表配色使用 REPORT_PALETTE
+
+## 运行时合规（仅 runnable）
 - runnable skills require sample-backed execution evidence
 - runnable skills must include real-time process logs with INFO/WARN/ERROR semantics
 EOF
@@ -195,16 +263,100 @@ EOF
 
 cat > "$TARGET_DIR/examples/output-outline.html" <<EOF
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>$SKILL_TITLE</title>
+    <style>
+    /* ── Inline base-report.css here ──
+       Source: assets/base-report.css (included in this skill package)
+       Copy the FULL content of that file into this <style> block.
+       Do NOT use <link> — reports must be self-contained. */
+    </style>
   </head>
   <body>
-    <header>
-      <h1>$SKILL_TITLE</h1>
-    </header>
-    <main></main>
+    <div class="page">
+
+      <!-- Hero / Report Header -->
+      <header class="hero">
+        <div class="hero-eyebrow">$SKILL_TITLE</div>
+        <h1>数据概览</h1>
+        <p class="hero-desc"><!-- 报告摘要描述 --></p>
+        <div class="hero-meta">
+          <span class="hero-badge"><strong>W##</strong> 本周</span>
+          <span class="hero-badge">W## 上周</span>
+        </div>
+      </header>
+
+      <!-- Sticky Nav -->
+      <nav class="nav">
+        <!-- 按 spec 声明的栏目生成锚点链接 -->
+        <a href="#s1" class="active">核心数据趋势</a>
+        <a href="#s2">栏目二</a>
+        <a href="#s3">栏目三</a>
+      </nav>
+
+      <!-- Section 1 -->
+      <section class="section" id="s1">
+        <div class="section-head">
+          <div>
+            <span class="section-num">SECTION 01</span>
+            <h2>核心数据趋势</h2>
+          </div>
+        </div>
+
+        <!-- Metric Cards -->
+        <div class="metric-grid">
+          <!-- 按 spec 声明的核心指标生成 .metric-card -->
+        </div>
+
+        <!-- Charts -->
+        <div class="grid-2" style="margin-top: var(--sp-7);">
+          <div class="chart-container">
+            <figcaption>图表标题</figcaption>
+            <div class="chart-area"><canvas id="c1"></canvas></div>
+          </div>
+        </div>
+
+        <!-- Conclusion -->
+        <div class="conclusion">
+          <h4>结论</h4>
+          <ul>
+            <li><span class="hl">指标名:</span> 数据摘要</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- Additional sections follow same pattern -->
+
+      <!-- Footnote -->
+      <div class="footnote">
+        <strong>数据说明</strong><br/>
+        <!-- 数据口径、来源、统计周期等说明 -->
+      </div>
+
+    </div>
+
+    <!-- Chart.js (inline, not CDN) -->
+    <script>
+    /* ── Inline Chart.js 4.x minified source here ──
+       Download from: https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js
+       Paste the full minified content. */
+    </script>
+
+    <!-- Chart defaults (inline) -->
+    <script>
+    /* ── Inline chart-defaults.js here ──
+       Source: assets/chart-defaults.js (included in this skill package)
+       Copy the FULL content of that file. */
+    </script>
+
+    <!-- Report data & chart initialization -->
+    <script>
+    // var D = { ... }; // Python generate_report.py injects data here
+    // Use: reportChart('c1', chartPresets.line(labels, datasets, { yFormat: 'gmv' }));
+    </script>
   </body>
 </html>
 EOF
@@ -224,5 +376,29 @@ chmod +x "$TARGET_DIR/scripts/run-report.sh"
 cat > "$TARGET_DIR/scripts/requirements.txt" <<EOF
 # Replace with real runtime dependencies when the skill moves to runnable.
 EOF
+
+# ── Copy shared design-system assets into downstream skill ──
+# These are referenced by html-contract.md and report-prompt.md.
+# Downstream skills need local copies to be self-contained.
+SHARED_ASSETS_DIR="$SKILLS_DIR/create-report/assets"
+
+if [[ -f "$SHARED_ASSETS_DIR/base-report.css" ]]; then
+  cp "$SHARED_ASSETS_DIR/base-report.css" "$TARGET_DIR/assets/base-report.css"
+  echo "  Copied base-report.css → $TARGET_DIR/assets/"
+else
+  echo "  WARNING: base-report.css not found at $SHARED_ASSETS_DIR" >&2
+fi
+
+if [[ -f "$SHARED_ASSETS_DIR/chart-defaults.js" ]]; then
+  cp "$SHARED_ASSETS_DIR/chart-defaults.js" "$TARGET_DIR/assets/chart-defaults.js"
+  echo "  Copied chart-defaults.js → $TARGET_DIR/assets/"
+else
+  echo "  WARNING: chart-defaults.js not found at $SHARED_ASSETS_DIR" >&2
+fi
+
+if [[ -f "$SHARED_ASSETS_DIR/DESIGN.md" ]]; then
+  cp "$SHARED_ASSETS_DIR/DESIGN.md" "$TARGET_DIR/assets/DESIGN.md"
+  echo "  Copied DESIGN.md → $TARGET_DIR/assets/"
+fi
 
 echo "Created or updated report skill: $SKILL_NAME"

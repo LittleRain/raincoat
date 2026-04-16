@@ -1,21 +1,463 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-  <head>
-    <meta charset="utf-8" />
-    <title>Gongfang Weekly Report</title>
-  </head>
-  <body>
-    <header>
-      <h1>Gongfang Weekly Report</h1>
-      <p>工房业务交易双周报</p>
-    </header>
-    <nav>
-      <a href="#core-data-trend">核心数据趋势</a>
-      <a href="#industry-breakdown">by 行业拆解</a>
-    </nav>
-    <main>
-      <section id="core-data-trend"></section>
-      <section id="industry-breakdown"></section>
-    </main>
-  </body>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>工房业务交易双周周报</title>
+  <style>
+    /* ══ Inline base-report.css here (full content) ══ */
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ══ Hero ══ -->
+  <header class="hero">
+    <p class="hero-eyebrow">工房交易</p>
+    <h1>业务交易双周周报</h1>
+    <p class="hero-desc">工房交易核心数据、行业拆解与流量渠道分析</p>
+    <div class="hero-meta">
+      <span class="hero-badge">📅 本周 <strong>第N周</strong> (M月D日~M月D日)</span>
+      <span class="hero-badge">📊 对比 <strong>第N-1周</strong></span>
+      <span class="hero-badge">🔄 生成时间 <strong>YYYY-MM-DD</strong></span>
+    </div>
+  </header>
+
+  <!-- ══ Nav ══ -->
+  <nav class="nav">
+    <a href="#s1" class="active">核心数据趋势</a>
+    <a href="#s2">GMV 拆解</a>
+    <a href="#s3">流量拆解</a>
+  </nav>
+
+  <!-- ══════════════════════════════════════
+       S1: 核心数据趋势
+       ══════════════════════════════════════ -->
+  <section class="section" id="s1">
+    <div class="section-head">
+      <div>
+        <p class="section-num">Section 01</p>
+        <h2>核心数据趋势</h2>
+        <p class="section-desc">看清交易规模的周度变化</p>
+      </div>
+    </div>
+
+    <!-- 指标卡 -->
+    <div class="metric-grid">
+      <div class="metric-card">
+        <p class="metric-label">GMV</p>
+        <p class="metric-value">¥0.0万</p>
+        <p class="metric-sub"><span class="delta up">+0.0%</span></p>
+      </div>
+      <div class="metric-card green">
+        <p class="metric-label">买家数</p>
+        <p class="metric-value">0</p>
+        <p class="metric-sub"><span class="delta down">-0.0%</span></p>
+      </div>
+      <div class="metric-card amber">
+        <p class="metric-label">下单转化率</p>
+        <p class="metric-value">0.00%</p>
+        <p class="metric-sub"><span class="delta neutral">0.0%</span></p>
+      </div>
+      <div class="metric-card blue">
+        <p class="metric-label">商品曝光PV</p>
+        <p class="metric-value">0.0万</p>
+        <p class="metric-sub"><span class="delta up">+0.0%</span></p>
+      </div>
+    </div>
+
+    <!-- 趋势图 2×2 -->
+    <div class="grid-2" style="margin-top: var(--sp-10);">
+      <div class="chart-container">
+        <figcaption>GMV 周趋势</figcaption>
+        <div class="chart-area"><canvas id="s1-gmv"></canvas></div>
+      </div>
+      <div class="chart-container">
+        <figcaption>买家数 周趋势</figcaption>
+        <div class="chart-area"><canvas id="s1-buyer"></canvas></div>
+      </div>
+      <div class="chart-container">
+        <figcaption>下单转化率 周趋势</figcaption>
+        <div class="chart-area"><canvas id="s1-cvr"></canvas></div>
+      </div>
+      <div class="chart-container">
+        <figcaption>商品曝光PV 周趋势</figcaption>
+        <div class="chart-area"><canvas id="s1-pv"></canvas></div>
+      </div>
+    </div>
+
+    <!-- 结论 -->
+    <div class="conclusion">
+      <h4>本周结论</h4>
+      <ul>
+        <li><span class="hl">GMV:</span> ¥X.X万，环比<span class="delta up">+X.X%</span>，上涨。</li>
+        <li><span class="hl">买家数:</span> X人，环比<span class="delta down">-X.X%</span>，下跌。</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════
+       S2: GMV 拆解
+       ══════════════════════════════════════ -->
+  <section class="section" id="s2">
+    <div class="section-head">
+      <div>
+        <p class="section-num">Section 02</p>
+        <h2>GMV 拆解</h2>
+        <p class="section-desc">按行业拆解交易规模变化趋势</p>
+      </div>
+    </div>
+
+    <!-- 行业趋势 2×2 -->
+    <div class="grid-2">
+      <div class="chart-container">
+        <figcaption>GMV by行业</figcaption>
+        <div class="chart-area"><canvas id="s2-gmv-industry"></canvas></div>
+      </div>
+      <div class="chart-container">
+        <figcaption>买家数 by行业</figcaption>
+        <div class="chart-area"><canvas id="s2-buyer-industry"></canvas></div>
+      </div>
+      <div class="chart-container">
+        <figcaption>下单转化率 by行业</figcaption>
+        <div class="chart-area"><canvas id="s2-cvr-industry"></canvas></div>
+      </div>
+      <div class="chart-container">
+        <figcaption>商品曝光PV by行业</figcaption>
+        <div class="chart-area"><canvas id="s2-pv-industry"></canvas></div>
+      </div>
+    </div>
+
+    <!-- ── 绘画+绘画周边 ── -->
+    <div class="breakdown-block">
+      <div class="breakdown-head">
+        <div>
+          <h3>绘画+绘画周边 <span>行业分析</span></h3>
+        </div>
+      </div>
+
+      <!-- 指标卡 -->
+      <div class="metric-grid">
+        <div class="metric-card">
+          <p class="metric-label">GMV</p>
+          <p class="metric-value">¥0.0万</p>
+          <p class="metric-sub"><span class="delta up">+0.0%</span></p>
+        </div>
+        <div class="metric-card green">
+          <p class="metric-label">买家数</p>
+          <p class="metric-value">0</p>
+          <p class="metric-sub"><span class="delta neutral">0.0%</span></p>
+        </div>
+        <div class="metric-card amber">
+          <p class="metric-label">下单转化率</p>
+          <p class="metric-value">0.00%</p>
+          <p class="metric-sub"><span class="delta down">-0.0%</span></p>
+        </div>
+        <div class="metric-card blue">
+          <p class="metric-label">商品曝光PV</p>
+          <p class="metric-value">0.0万</p>
+          <p class="metric-sub"><span class="delta up">+0.0%</span></p>
+        </div>
+      </div>
+
+      <!-- 重点商家 TOP5 -->
+      <div class="panel" style="margin-top: var(--sp-10);">
+        <h4>重点商家 TOP5</h4>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th rowspan="2">店铺名称</th>
+                <th colspan="3" class="num">GMV</th>
+                <th class="num">GMV占比</th>
+                <th colspan="3" class="num">买家数</th>
+                <th colspan="3" class="num">转化率</th>
+                <th colspan="3" class="num">曝光PV</th>
+              </tr>
+              <tr>
+                <th class="num">本周</th><th class="num">上周</th><th class="num">环比</th>
+                <th class="num">本周</th>
+                <th class="num">本周</th><th class="num">上周</th><th class="num">环比</th>
+                <th class="num">本周</th><th class="num">上周</th><th class="num">环比</th>
+                <th class="num">本周</th><th class="num">上周</th><th class="num">环比</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>示例店铺A</td>
+                <td class="num">¥1.2万</td><td class="num">¥1.0万</td><td class="num"><span class="tag tag-up">+20.0%</span></td>
+                <td class="num">15.3%</td>
+                <td class="num">234</td><td class="num">198</td><td class="num"><span class="tag tag-up">+18.2%</span></td>
+                <td class="num">5.23%</td><td class="num">4.89%</td><td class="num"><span class="tag tag-up">+7.0%</span></td>
+                <td class="num">1.2万</td><td class="num">1.1万</td><td class="num"><span class="tag tag-up">+9.1%</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 重点商品 TOP10 -->
+      <div class="panel" style="margin-top: var(--sp-7);">
+        <h4>重点商品 TOP10</h4>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th rowspan="2">商品名称</th>
+                <th colspan="3" class="num">GMV</th>
+                <th colspan="3" class="num">买家数</th>
+                <th colspan="3" class="num">转化率</th>
+                <th colspan="3" class="num">曝光PV</th>
+              </tr>
+              <tr>
+                <th class="num">本周</th><th class="num">上周</th><th class="num">环比</th>
+                <th class="num">本周</th><th class="num">上周</th><th class="num">环比</th>
+                <th class="num">本周</th><th class="num">上周</th><th class="num">环比</th>
+                <th class="num">本周</th><th class="num">上周</th><th class="num">环比</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>示例商品X</td>
+                <td class="num">¥3,456</td><td class="num">¥2,890</td><td class="num"><span class="tag tag-up">+19.6%</span></td>
+                <td class="num">89</td><td class="num">72</td><td class="num"><span class="tag tag-up">+23.6%</span></td>
+                <td class="num">8.12%</td><td class="num">7.45%</td><td class="num"><span class="tag tag-up">+9.0%</span></td>
+                <td class="num">4,523</td><td class="num">3,890</td><td class="num"><span class="tag tag-up">+16.3%</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 结论 -->
+      <div class="conclusion">
+        <h4>绘画+绘画周边 结论</h4>
+        <ul>
+          <li><span class="hl">GMV</span> 环比<span class="delta up">+X.X%</span>，上涨，主要由头部商家X带动。</li>
+          <li>头部商品Y的曝光PV环比<span class="delta up">+X.X%</span>，带动整体流量上涨。</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- ── VUP周边 ── -->
+    <div class="breakdown-block">
+      <div class="breakdown-head">
+        <div>
+          <h3>VUP周边 <span>行业分析</span></h3>
+        </div>
+      </div>
+      <!-- 同上结构：指标卡 + TOP5商家表 + TOP10商品表 + 结论 -->
+      <p class="text-muted" style="padding: var(--sp-10); text-align: center;">
+        结构同绘画+绘画周边（指标卡 + TOP5 商家表 + TOP10 商品表 + 结论）
+      </p>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════
+       S3: 流量拆解
+       ══════════════════════════════════════ -->
+  <section class="section" id="s3">
+    <div class="section-head">
+      <div>
+        <p class="section-num">Section 03</p>
+        <h2>流量拆解</h2>
+        <p class="section-desc">按渠道和资源位拆解流量转化趋势</p>
+      </div>
+    </div>
+
+    <!-- ── 绘画+绘画周边 ── -->
+    <div class="breakdown-block">
+      <div class="breakdown-head">
+        <div>
+          <h3>绘画+绘画周边 <span>流量分析</span></h3>
+        </div>
+      </div>
+
+      <!-- 内容渠道组合图 -->
+      <div class="panel">
+        <h4>内容渠道 — GMV Top2 渠道趋势</h4>
+        <div class="grid-2" style="margin-top: var(--sp-6);">
+          <div class="chart-container">
+            <figcaption>渠道A — GMV + 占比</figcaption>
+            <div class="chart-area"><canvas id="s3-paint-ch1-gmv"></canvas></div>
+          </div>
+          <div class="chart-container">
+            <figcaption>渠道A — 曝光PV + 占比</figcaption>
+            <div class="chart-area"><canvas id="s3-paint-ch1-pv"></canvas></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 内容渠道汇总表 -->
+      <div class="panel" style="margin-top: var(--sp-7);">
+        <h4>内容渠道汇总</h4>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>内容渠道</th>
+                <th class="num">GMV W1</th>
+                <th class="num">GMV W2</th>
+                <th class="num">GMV W3</th>
+                <th class="num">GMV W4</th>
+                <th class="num">GMV占比</th>
+                <th class="num">PV W1</th>
+                <th class="num">PV W2</th>
+                <th class="num">PV W3</th>
+                <th class="num">PV W4</th>
+                <th class="num">PV占比</th>
+                <th class="num">PVCTR W1</th>
+                <th class="num">PVCTR W2</th>
+                <th class="num">PVCTR W3</th>
+                <th class="num">PVCTR W4</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>商品</td>
+                <td class="num">¥X.X万</td><td class="num">¥X.X万</td><td class="num">¥X.X万</td><td class="num">¥X.X万</td>
+                <td class="num">X.X%</td>
+                <td class="num">X.X万</td><td class="num">X.X万</td><td class="num">X.X万</td><td class="num">X.X万</td>
+                <td class="num">X.X%</td>
+                <td class="num">X.X%</td><td class="num">X.X%</td><td class="num">X.X%</td><td class="num">X.X%</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 资源位二级入口组合图 -->
+      <div class="panel" style="margin-top: var(--sp-7);">
+        <h4>资源位二级入口 — GMV Top4 入口趋势</h4>
+        <div class="grid-2" style="margin-top: var(--sp-6);">
+          <div class="chart-container">
+            <figcaption>入口A — GMV + 占比</figcaption>
+            <div class="chart-area"><canvas id="s3-paint-res1-gmv"></canvas></div>
+          </div>
+          <div class="chart-container">
+            <figcaption>入口A — 曝光PV + 占比</figcaption>
+            <div class="chart-area"><canvas id="s3-paint-res1-pv"></canvas></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 资源位二级入口汇总表 -->
+      <div class="panel" style="margin-top: var(--sp-7);">
+        <h4>资源位二级入口汇总</h4>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>资源位二级入口</th>
+                <th class="num">GMV W1</th>
+                <th class="num">GMV W2</th>
+                <th class="num">GMV W3</th>
+                <th class="num">GMV W4</th>
+                <th class="num">GMV占比</th>
+                <th class="num">PV W1</th>
+                <th class="num">PV W2</th>
+                <th class="num">PV W3</th>
+                <th class="num">PV W4</th>
+                <th class="num">PV占比</th>
+                <th class="num">PVCTR W1</th>
+                <th class="num">PVCTR W2</th>
+                <th class="num">PVCTR W3</th>
+                <th class="num">PVCTR W4</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>入口示例</td>
+                <td class="num">¥X.X万</td><td class="num">¥X.X万</td><td class="num">¥X.X万</td><td class="num">¥X.X万</td>
+                <td class="num">X.X%</td>
+                <td class="num">X.X万</td><td class="num">X.X万</td><td class="num">X.X万</td><td class="num">X.X万</td>
+                <td class="num">X.X%</td>
+                <td class="num">X.X%</td><td class="num">X.X%</td><td class="num">X.X%</td><td class="num">X.X%</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 结论 -->
+      <div class="conclusion">
+        <h4>绘画+绘画周边 流量结论</h4>
+        <ul>
+          <li><span class="hl">商品渠道</span> GMV 环比<span class="delta up">+X.X%</span>，上涨，曝光PV增长带动。</li>
+          <li><span class="hl">资源位XX入口</span> 曝光PV 环比<span class="delta down">-X.X%</span>，下跌，导致该渠道GMV下降。</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- ── VUP周边 ── -->
+    <div class="breakdown-block">
+      <div class="breakdown-head">
+        <div>
+          <h3>VUP周边 <span>流量分析</span></h3>
+        </div>
+      </div>
+      <p class="text-muted" style="padding: var(--sp-10); text-align: center;">
+        结构同绘画+绘画周边（渠道组合图 + 渠道汇总表 + 资源位组合图 + 资源位汇总表 + 结论）
+      </p>
+    </div>
+  </section>
+
+  <!-- ══ Footnote ══ -->
+  <div class="footnote">
+    <strong>数据说明</strong><br>
+    1. 数据来源：整体数据、行业数据、行业商品明细数据、内容渠道数据、商家销售明细、资源位二级入口数据<br>
+    2. 周期定义：每周五到周四为一个完整周<br>
+    3. GMV 口径：不减退款<br>
+    4. 下单转化率 = 支付订单数 / 商详UV<br>
+    5. PVCTR = 商详UV / 商品曝光PV<br>
+    6. GPM = GMV / 商品曝光PV × 1000<br>
+    7. 结论仅解释环比波动超过5%的指标<br>
+    8. 绘画+绘画周边合并分析，VUP周边独立分析
+  </div>
+
+</div><!-- .page -->
+
+<!-- ══ Scripts ══ -->
+<!-- 1. Inline Chart.js 4.x source here (NOT CDN) -->
+<script>
+  // ══ Paste full Chart.js 4.x minified source here ══
+</script>
+
+<!-- 2. Inline chart-defaults.js here -->
+<script>
+  // ══ Paste full chart-defaults.js source here ══
+</script>
+
+<!-- 3. Report data & chart initialization -->
+<script>
+  // ── Example: S1 charts ──
+  var weekLabels = ['W11', 'W12', 'W13', 'W14'];
+
+  // GMV bar chart
+  reportChart('s1-gmv', chartPresets.bar(weekLabels, [
+    { label: 'GMV', data: [0, 0, 0, 0] }
+  ], { yFormat: 'gmv' }));
+
+  // Buyer bar chart
+  reportChart('s1-buyer', chartPresets.bar(weekLabels, [
+    { label: '买家数', data: [0, 0, 0, 0] }
+  ], { yFormat: 'num' }));
+
+  // CVR line chart
+  reportChart('s1-cvr', chartPresets.line(weekLabels, [
+    { label: '下单转化率', data: [0, 0, 0, 0] }
+  ], { yFormat: 'pct' }));
+
+  // PV line chart
+  reportChart('s1-pv', chartPresets.line(weekLabels, [
+    { label: '商品曝光PV', data: [0, 0, 0, 0] }
+  ], { yFormat: 'pv' }));
+
+  // ── Example: S3 combo chart ──
+  reportChart('s3-paint-ch1-gmv', chartPresets.combo(weekLabels, [
+    { label: '商品渠道 GMV', data: [0, 0, 0, 0], yAxisID: 'y' },
+    { type: 'line', label: 'GMV占比%', data: [0, 0, 0, 0], yAxisID: 'y1' }
+  ], { yFormat: 'gmv', y1Format: 'pct' }));
+</script>
+</body>
 </html>

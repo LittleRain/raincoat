@@ -46,7 +46,8 @@ description: Use when turning a business weekly-report requirement document into
   - 需要字段模板时：`assets/spec-template.md`
   - 需要下游检查点时：`assets/downstream-skill-checklist.md`
   - 需要对照历史案例时：`examples/*`
-- 下游 skill 的 `examples/normalized-spec.md` 应使用“引用 + 摘要”，不要粘贴完整长 spec
+  - 需要样式标准时：`assets/DESIGN.md`
+- 下游 skill 的 `examples/normalized-spec.md` 应使用”引用 + 摘要”，不要粘贴完整长 spec
 
 ## 约束
 
@@ -63,6 +64,9 @@ description: Use when turning a business weekly-report requirement document into
 - 若声明 `runnable`，禁止只在任务结束后一次性输出日志；必须支持执行过程中的实时日志
 - 若声明 `runnable` 且含图表，禁止依赖外部 CDN 才能渲染；`file://` 直接打开必须可见图表
 - 当生成结果偏离预期时，应优先定位偏差层级，再做定向修正
+- 禁止自行发明样式系统；下游 skill 的 HTML 必须使用 `assets/base-report.css` 定义的标准 CSS class
+- 禁止使用 `<link>` 引入外部 CSS；样式必须内联到 `<style>` 中
+- 图表必须使用 `assets/chart-defaults.js` 提供的 chartPresets / reportChart API
 
 ## 参考资料
 
@@ -70,3 +74,7 @@ description: Use when turning a business weekly-report requirement document into
 - `references/operating-model.md`
 - `assets/spec-template.md`
 - `assets/downstream-skill-checklist.md`
+- `assets/DESIGN.md` — 设计系统文档
+- `assets/base-report.css` — 共享 CSS（内联到下游 HTML）
+- `assets/chart-defaults.js` — Chart.js 标准配置（内联到下游 HTML）
+- `assets/downstream-report-prompt-template.md` — 下游 Prompt 模板（含组件 class 速查）

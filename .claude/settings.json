@@ -1,14 +1,16 @@
 {
   "permissions": {
     "allow": [
-<<<<<<< Updated upstream
-      "Bash(python3 -c ':*)",
-      "Bash(python3 scripts/generate_report.py --input-dir input --output output/report.html --run-id fix-pct-tooltip)"
-=======
       "Bash(git fetch:*)",
-      "Bash(git reset:*)",
-      "Bash(git worktree:*)"
->>>>>>> Stashed changes
+      "Bash(git worktree:*)",
+      "Bash(python3 scripts/generate_report.py --input-dir input --output output/report-old.html --run-id test-run)",
+      "Bash(curl -sL \"https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js\" -o /Users/raincai/Documents/GitHub/raincoat/skills/gongfang-weekly-report/assets/chart.umd.min.js)",
+      "Bash(python3 skills/gongfang-weekly-report/scripts/generate_report.py --input-dir skills/gongfang-weekly-report/input --output output/report.html --run-id gongfang-w14-design-system)",
+      "Bash(python3 skills/gongfang-weekly-report/scripts/generate_report.py --input-dir skills/gongfang-weekly-report/input --output output/report.html --run-id gongfang-w14-v2)",
+      "Bash(python3 skills/gongfang-weekly-report/scripts/generate_report.py --input-dir skills/gongfang-weekly-report/input --output skills/gongfang-weekly-report/output/report.html --run-id gongfang-w16-v1)",
+      "Bash(python3 skills/gongfang-weekly-report/scripts/generate_report.py --input-dir skills/gongfang-weekly-report/input --output skills/gongfang-weekly-report/output/report.html --run-id gongfang-w16-v2)",
+      "Bash(python3 skills/gongfang-weekly-report/scripts/generate_report.py --input-dir skills/gongfang-weekly-report/input --output skills/gongfang-weekly-report/output/report.html --run-id gongfang-w16-v3)",
+      "Bash(git add *)"
     ]
   }
 }

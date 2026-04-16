@@ -19,6 +19,19 @@
 - `assets/` 和 `examples/` 不引用仓库外部绝对路径
 - 不包含 `__pycache__`、运行产物或其他本地缓存文件
 
+## 样式合规
+
+- `output-outline.html` 内联了 `create-report/assets/base-report.css` 完整内容
+- 使用 base-report.css 定义的标准 CSS class 构建页面
+- 未自行发明替代样式系统（如自定义变量名、自定义 class 命名）
+- 报告头使用 `.hero` 组件
+- 导航使用 `.nav` 锚点模式（滚动+sticky）
+- 指标卡使用 `.metric-grid` + `.metric-card`
+- 图表容器使用 `.chart-container` + `.chart-area`
+- 结论框使用 `.conclusion` 组件
+- 数据说明使用 `.footnote` 组件
+- 表格数值列自动启用 tnum（已内置于 table 样式）
+
 ## 对外发布额外检查
 
 - 全包不依赖上游 `create-report`、`report-creator` 或原始需求文档路径
@@ -36,9 +49,11 @@
 - 执行日志包含文件匹配、读取状态、关键处理阶段摘要
 - 日志在执行过程中实时输出，而不是仅结束后一次性输出
 - 日志至少包含 `INFO` / `WARN` / `ERROR` 语义层级
-- 生成出的 HTML 包含 spec 要求的关键图表 / 表格 / 结论区
-- 图表相关依赖不强制外部 CDN；`file://` 直接打开时图表可渲染
-- 若使用图表库，运行时来自本地相对路径或内联脚本，而非网络拉取
+- 生成出的 HTML 内联了 base-report.css 完整内容
+- 生成出的 HTML 内联了 Chart.js 4.x（非 CDN 引用）
+- 生成出的 HTML 内联了 chart-defaults.js
+- 图表使用 chartPresets / reportChart API 创建
+- `file://` 直接打开时图表可渲染
 - 若 spec 声明表格 schema，则输出列名与 schema 一致
 - 若 spec 要求隐藏全空周期列，渲染结果中对应空列已自动隐藏
 - 若 spec 声明 narrative schema，则结论文本符合 schema
