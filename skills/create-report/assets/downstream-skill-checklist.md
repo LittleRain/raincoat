@@ -12,6 +12,7 @@
 - 存在 `examples/normalized-spec.md`
 - 存在 `examples/normalized-spec-summary.md`
 - 存在 `examples/input_inventory.md`
+- 存在 `examples/expected-output-inventory.json`
 - 存在 `examples/output-outline.html`
 - 已明确本 skill 是 `L0 Documentation`、`L1 Runnable MVP` 还是 `L2 Publishable`
 - 存在 `skill-manifest.yaml`
@@ -64,6 +65,8 @@
 - 生成出的 HTML 内联了 chart-defaults.js
 - 图表使用 chartPresets / reportChart API 创建
 - `file://` 直接打开时图表可渲染
+- `scripts/validate-output-inventory.py` 校验生成 HTML 的图表、表格数量和 `required_metrics` 与 `expected-output-inventory.json` 一致
+- `judgment_metrics` 可由大模型选择展示，不作为强制出现项；若展示，需标记 inferred/judgment-based 口径
 - 若 spec 声明表格 schema，则输出列名与 schema 一致
 - 若 spec 要求隐藏全空周期列，渲染结果中对应空列已自动隐藏
 - 若 spec 声明 narrative schema，则结论文本符合 schema

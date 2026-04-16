@@ -104,6 +104,18 @@ copy_evidence() {
   fi
 }
 
+copy_output_inventory_validator() {
+  local target_dir="$1"
+  local validator="$SKILLS_DIR/create-report/scripts/validate-output-inventory.py"
+
+  if [[ -f "$validator" ]]; then
+    cp "$validator" "$target_dir/scripts/validate-output-inventory.py"
+    chmod +x "$target_dir/scripts/validate-output-inventory.py"
+  else
+    echo "  WARNING: validate-output-inventory.py not found at $validator" >&2
+  fi
+}
+
 if [[ $# -lt 4 ]]; then
   usage
   exit 1
@@ -200,6 +212,7 @@ Current level: $SKILL_LEVEL_LABEL
 - [html-contract.md](./assets/html-contract.md)
 - [report-outline.md](./assets/report-outline.md)
 - [acceptance-matrix.md](./assets/acceptance-matrix.md)
+- [expected-output-inventory.json](./examples/expected-output-inventory.json)
 EOF_SKILL
 
 cat > "$TARGET_DIR/skill-manifest.yaml" <<EOF_MANIFEST
@@ -220,6 +233,7 @@ case "$SKILL_LEVEL" in
   - assets/html-contract.md
   - assets/report-outline.md
   - assets/validation-checklist.md
+  - examples/expected-output-inventory.json
   - examples/normalized-spec-summary.md
 blocking_gaps:
   - real sample-backed execution is not included
@@ -296,7 +310,9 @@ cat > "$TARGET_DIR/assets/html-contract.md" <<'EOF_HTML'
 ## 数据合同
 - if table schema is declared, output columns must match the spec
 - if narrative schema is declared, direction words must match the spec
-- core metrics must not rely on REPORT_FORMAT.auto unless explicitly allowed by the spec
+- explicit required metrics should use declared formatter rules when available
+- ambiguous or non-enumerated metrics may use model judgment when supported by source fields and marked as inferred
+- rendered chart/table counts and required metrics must match examples/expected-output-inventory.json
 EOF_HTML
 
 cat > "$TARGET_DIR/assets/report-outline.md" <<'EOF_OUTLINE'
@@ -324,6 +340,7 @@ contracts only.
 ## Level Gate
 
 - Read `skill-manifest.yaml` before generation.
+- Read `examples/expected-output-inventory.json` before generation.
 - L0 may only produce documentation or outlines; do not claim runnable output.
 - L1 may generate internal runnable reports only when sample-backed execution evidence exists.
 - L2 may claim publishable output only when browser and validation evidence exists.
@@ -356,7 +373,9 @@ contracts only.
 
 ## 数据规则
 
-- use only metrics and fields declared in the normalized spec
+- use declared official metrics as hard constraints; for exploratory display metrics that cannot be fully enumerated, use model judgment with source-field evidence
+- render every chart, table, and explicitly required metric declared in expected-output-inventory.json
+- use model judgment for ambiguous desired metrics when the requirement cannot enumerate every口径; mark those outputs as inferred or judgment-based
 - keep the validated section order
 - include charts, tables, and conclusion blocks where required
 - block unsupported analysis instead of guessing
@@ -385,7 +404,9 @@ cat > "$TARGET_DIR/assets/validation-checklist.md" <<'EOF_CHECKLIST'
 - scripts/run-report.sh invokes real generation logic, not a stub
 - output/report.html is generated from real samples
 - output/run.log includes file discovery, row counts, period detection, section build progress, and output path
-- core metric formulas and formatter choices are declared
+- explicit core metric formulas and formatter choices are declared when known
+- ambiguous metric口径 may use LLM judgment with source-field evidence
+- chart/table counts and required metric labels match expected-output-inventory.json
 - HTML smoke validation confirms non-placeholder standard report structure
 
 ## L2 Publishable
@@ -442,6 +463,21 @@ Fill with the datasets required by the normalized spec.
 If the target level is L1 or L2, replace this placeholder with real sample files
 and actual file-name patterns before claiming runnable output.
 EOF_INV
+
+cat > "$TARGET_DIR/examples/expected-output-inventory.json" <<'EOF_VIEW_INV'
+{
+  "source_requirement": "source requirement markdown summarized into the normalized spec",
+  "description": "Expected rendered view counts. Derive these counts from 需求.md during normalization, then validate generated report.html with scripts/validate-output-inventory.py.",
+  "totals": {
+    "sections": 0,
+    "charts": 0,
+    "tables": 0
+  },
+  "required_metrics": [],
+  "judgment_metrics": [],
+  "sections": []
+}
+EOF_VIEW_INV
 
 cat > "$TARGET_DIR/examples/output-outline.html" <<EOF_HTML_OUTLINE
 <!DOCTYPE html>
@@ -501,5 +537,6 @@ if [[ "$SKILL_LEVEL" == "L0" ]]; then
 else
   copy_evidence "$TARGET_DIR" "$EVIDENCE_DIR"
 fi
+copy_output_inventory_validator "$TARGET_DIR"
 
 echo "Created or updated report skill: $SKILL_NAME ($SKILL_LEVEL_LABEL)"

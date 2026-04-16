@@ -50,6 +50,48 @@ assert_contains "$ROOT_DIR/skills/$L0_SKILL/skill-manifest.yaml" "effective_leve
 assert_contains "$ROOT_DIR/skills/$L0_SKILL/skill-manifest.yaml" "acceptance_status: passed"
 assert_contains "$ROOT_DIR/skills/$L0_SKILL/assets/validation-checklist.md" "L0 Documentation"
 assert_contains "$ROOT_DIR/skills/$L0_SKILL/SKILL.md" "Current level: L0 Documentation"
+assert_file "$ROOT_DIR/skills/$L0_SKILL/examples/expected-output-inventory.json"
+assert_file "$ROOT_DIR/skills/$L0_SKILL/scripts/validate-output-inventory.py"
+assert_contains "$ROOT_DIR/skills/$L0_SKILL/assets/validation-checklist.md" "chart/table counts and required metric labels match expected-output-inventory.json"
+
+echo "[test] output inventory validator catches missing charts and tables"
+cat > "$TMP_DIR/expected-output-inventory.json" <<'JSON'
+{
+  "source_requirement": "source.md",
+  "totals": {
+    "sections": 2,
+    "charts": 2,
+    "tables": 3
+  },
+  "required_metrics": [
+    { "metric_name": "GMV" },
+    { "metric_name": "成交买家数" }
+  ],
+  "judgment_metrics": [
+    { "metric_name": "内容效率分", "llm_judgment_allowed": true }
+  ]
+}
+JSON
+cat > "$TMP_DIR/report.html" <<'HTML'
+<!DOCTYPE html>
+<html><body>
+  <section class="section" id="s1"><div class="chart-container"><canvas id="c1"></canvas></div><div class="table-wrap"><table><thead><tr><th>GMV</th></tr></thead></table></div></section>
+  <section class="section" id="s2"></section>
+</body></html>
+HTML
+set +e
+python3 "$ROOT_DIR/skills/$L0_SKILL/scripts/validate-output-inventory.py" \
+  --inventory "$TMP_DIR/expected-output-inventory.json" \
+  --html "$TMP_DIR/report.html" >"$TMP_DIR/inventory.out" 2>"$TMP_DIR/inventory.err"
+status=$?
+set -e
+[[ $status -ne 0 ]] || fail "expected output inventory validator to fail on missing views"
+assert_contains "$TMP_DIR/inventory.err" "charts expected 2, found 1"
+assert_contains "$TMP_DIR/inventory.err" "tables expected 3, found 1"
+assert_contains "$TMP_DIR/inventory.err" "metric 成交买家数 expected, found 0"
+if grep -Fq "内容效率分" "$TMP_DIR/inventory.err"; then
+  fail "judgment metrics should not be required for rendered HTML presence"
+fi
 
 echo "[test] L1 generation without evidence is blocked"
 set +e

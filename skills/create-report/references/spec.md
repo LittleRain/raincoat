@@ -93,6 +93,7 @@ Recommended additional fields for `L1` / `L2` reliability:
 - `section_data_mapping` (primary/fallback contracts and precedence)
 - `table_schemas`
 - `narrative_schema`
+- `view_inventory` (expected chart/table counts, explicit required metrics, and optional judgment metrics derived from the source requirement)
 
 If a section needs charts or tables, they must be declared in
 `required_views`.
@@ -141,6 +142,11 @@ If ratio metrics are used, define both primary and fallback formulas explicitly.
 Example: `CTR = click_pv / exposure_pv`; fallback `CTR ~= detail_pv / exposure_pv`
 when `click_pv` is unavailable.
 
+For non-core or ambiguous desired metrics that cannot be enumerated precisely,
+the spec may set `llm_judgment_allowed: true`. Those metrics are not strict
+output-presence gates, but generated reports must mark the口径 as inferred or
+judgment-based and cite the supporting source fields.
+
 ### `output_contract`
 
 Define the final report output contract.
@@ -158,6 +164,7 @@ Recommended additional fields for table stability:
 - `table_column_rules`
 - `wow_display_rules`
 - `narrative_direction_rules`
+- `expected_output_inventory` (total/section-level chart/table counts, `required_metrics`, and optional `judgment_metrics`)
 - `empty_period_column_policy` (hide period columns that are empty for all rows)
 - `runtime_dependency_policy` (must support `file://` open; no external CDN required)
 - `axis_origin_policy` (numeric axes must start at zero; truncation is forbidden)
@@ -187,17 +194,20 @@ Recommended default `required_files`:
 - `SKILL.md`
 - `skill-manifest.yaml`
 - `agents/openai.yaml`
+- `scripts/validate-output-inventory.py`
 
 Recommended default `required_assets`:
 
 - report outline template
 - HTML contract template
 - validation checklist
+- expected output inventory template
 
 Recommended default `required_examples`:
 
 - normalized spec example
 - input inventory example
+- expected output inventory example
 - output outline example
 
 Level definitions:
@@ -221,6 +231,7 @@ Must include at least:
 - `html_output_checks`
 - `level_readiness_checks`
 - `level_acceptance_checks`
+- `output_inventory_checks`
 
 ## Stop Conditions
 
@@ -233,3 +244,4 @@ Must include at least:
 - analysis requirements exceed allowed inference bounds
 - the output contract is incompatible with HTML
 - target level is `L1` or `L2` but required level evidence is missing
+- target level is `L1` or `L2` but chart/table counts or explicit `required_metrics` are not declared or rendered output does not match declarations

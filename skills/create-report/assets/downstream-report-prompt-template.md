@@ -71,16 +71,23 @@
 ## 数据规则
 
 - 生成前必须读取下游 `skill-manifest.yaml`
+- 生成前必须读取下游 `examples/expected-output-inventory.json`
 - `L0` 只能输出文档、outline 或 gap report，禁止声称 runnable
 - `L1` 必须有真实样本、真实 runner、真实 HTML、运行日志和验证证据
 - `L2` 必须额外具备自包含依赖、`file://` 浏览器验证和回归测试证据
 - 禁止声明高于证据支持的等级
 - 严格按照标准化 spec 中的栏目顺序输出
-- 只使用 spec 中声明过的指标、维度和数据合同
+- 严格渲染 `expected-output-inventory.json` 声明的全部图表、表格和 `required_metrics`
+- 对官方 KPI 和强约束指标，只使用 spec 中声明过的指标、维度和数据合同
+- “只使用声明指标”主要约束官方 KPI 和强口径，不代表要穷举所有想展示的探索指标
+- 对 `judgment_metrics` 或需求无法枚举清楚的指标，以大模型基于源字段和业务上下文的判断为准，并在报告中标记 inferred/judgment-based
 - 若同一栏目映射到多份数据合同，必须按 spec 声明的主/备优先级取数
 - 对不具备支撑的数据分析要求，必须阻塞而不是猜测
 - 每条结论都要有数据依据
 - 若 spec 已声明表格 schema，必须严格按 schema 输出，不能临时改列
+- 若生成的 HTML 图表或表格数量与 `expected-output-inventory.json` 不一致，必须阻塞并修正
+- 若 `expected-output-inventory.json` 声明的 `required_metrics` 未出现在 HTML 中，必须阻塞并修正
+- `judgment_metrics` 不作为强制出现项，不因未展示而失败
 - 若 spec 已声明某些字段要展示 WoW，必须逐列展示
 - 若 spec 已声明比率指标回退规则（如 CTR），必须按主口径与回退口径执行，不能擅自改公式
 - 若 spec 已声明"全空周期列隐藏"，则表格中全空周期列不得渲染

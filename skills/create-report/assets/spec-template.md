@@ -35,6 +35,13 @@
 - `required_dimensions`:
 - `required_outputs`:
 - `narrative_expectations`:
+- `view_inventory`:
+  - `charts_count`:
+  - `tables_count`:
+  - `required_metric_names`:
+  - `judgment_metric_candidates`:
+  - `llm_judgment_allowed`:
+  - `source_requirement_evidence`:
 - `table_schemas`:
 - `narrative_schema`:
 - `section_data_mapping`:
@@ -75,6 +82,14 @@
 - `section_order`:
 - `required_blocks`:
 - `citation_rules`:
+- `expected_output_inventory`:
+  - `totals`:
+    - `sections`:
+    - `charts`:
+    - `tables`:
+  - `required_metrics`:
+  - `judgment_metrics`:
+  - `sections`:
 - `table_column_rules`:
 - `wow_display_rules`:
 - `narrative_direction_rules`:
@@ -110,6 +125,7 @@
 - `spec_consistency_checks`:
 - `generation_readiness_checks`:
 - `html_output_checks`:
+- `output_inventory_checks`:
 - `runnable_readiness_checks`:
 - `runtime_log_checks`:
 - `level_acceptance_checks`:

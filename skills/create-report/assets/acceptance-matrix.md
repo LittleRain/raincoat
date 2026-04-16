@@ -35,12 +35,14 @@ Must pass:
 - all L0 checks
 - real sample files exist
 - samples cover at least two comparable periods
-- core metric formulas are declared
+- explicit core metric formulas are declared when known
 - core table schemas and WoW columns are declared
+- expected chart/table counts and explicit required metrics are derived from the source requirement
+- ambiguous desired metrics may be delegated to model judgment with source-field evidence
 - `scripts/run-report.sh` invokes real generation logic, not a stub
 - one real `report.html` is generated from samples
 - runtime logs include file discovery, read checks, period detection, section build progress, and output path
-- smoke validation confirms the HTML is non-placeholder and uses the standard report structure
+- smoke validation confirms the HTML is non-placeholder, uses the standard report structure, and matches expected chart/table/required-metric inventory
 
 Allowed:
 - limited manual visual review
@@ -51,8 +53,9 @@ Forbidden:
 - missing real samples
 - stub runner
 - placeholder output HTML
-- ambiguous core metric formulas
+- ambiguous official KPI formulas
 - undocumented multi-source precedence
+- missing or mismatched chart/table/metric inventory
 
 ### L2 Publishable / Stable
 
@@ -85,13 +88,16 @@ Forbidden:
 | missing gaps documented | Must | Must | Must |
 | real sample data | No | Must | Must |
 | two comparable periods | No | Must | Must |
-| core metric formulas declared | Gap allowed | Must | Must |
-| all metric formulas declared | Gap allowed | Should | Must |
+| explicit core metric formulas declared | Gap allowed | Must when known | Must when known |
+| ambiguous metric judgment documented | Should | Must when used | Must when used |
 | core formatter map | No | Must | Must |
-| full formatter map | No | Should | Must |
+| full formatter map | No | Optional | Optional |
 | table schemas and WoW rules | Gap allowed | Must for rendered tables | Must |
 | real runner | No | Must | Must |
 | non-placeholder report.html | No | Must | Must |
+| chart/table inventory declared | Should | Must | Must |
+| rendered chart/table counts match inventory | No | Must | Must |
+| required_metrics appear in rendered HTML | No | Must | Must |
 | runtime logs | No | Must | Must |
 | HTML structure validation | No | Smoke | Must |
 | browser file:// validation | No | Should | Must |
