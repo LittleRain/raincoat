@@ -1,19 +1,19 @@
 ---
 name: gongfang-weekly-report
-description: 读取工房交易周报所需的 Excel/CSV 数据文件并生成交互式 HTML 周报。使用标准化设计系统（base-report.css + chart-defaults.js），输出暗色主题、数据精度优先的交互式报告。
+description: 读取工房交易双周报所需的 Excel/CSV 数据文件并生成交互式 HTML 双周报。使用标准化设计系统（base-report.css + chart-defaults.js），输出暗色主题、数据精度优先的交互式报告。
 ---
 
-# Gongfang Weekly Report
+# Gongfang Biweekly Report
 
 ## 目的
 
-根据 skill 内置的业务口径和栏目合同，读取指定数据文件，生成最终交互式 HTML 周报。
+根据 skill 内置的业务口径和栏目合同，读取指定数据文件，生成最终交互式 HTML 双周报。
 
-这个 skill 的定位是"执行工房周报生成"，不是"重新定义口径"或"补需求"。
+这个 skill 的定位是"执行工房双周报生成"，不是"重新定义口径"或"补需求"。
 
 ## 输入
 
-- 一个输入目录，目录中放置本次周报所需 6 个 Excel 或 CSV 文件
+- 一个输入目录，目录中放置本次双周报所需 6 个 Excel 或 CSV 文件
 
 **必需文件（6个）：**
 - `整体数据*` — 全局汇总数据
@@ -86,7 +86,7 @@ bash skills/gongfang-weekly-report/scripts/run-report.sh \
 
 调用这个 skill 时，应明确要求：
 
-- 按 skill 内置合同生成周报
+- 按 skill 内置合同生成双周报
 - 输入数据来自指定目录中的 Excel/CSV
 - 最终输出一个 `report.html`
 
@@ -94,7 +94,7 @@ bash skills/gongfang-weekly-report/scripts/run-report.sh \
 
 - 输入清单：[input_inventory.md](./examples/input_inventory.md)
 - HTML 结构要求：[html-contract.md](./assets/html-contract.md)
-- 周报栏目结构：[report-outline.md](./assets/report-outline.md)
+- 双周报栏目结构：[report-outline.md](./assets/report-outline.md)
 - 生成 Prompt：[report-prompt.md](./assets/report-prompt.md)
 - 校验清单：[validation-checklist.md](./assets/validation-checklist.md)
 - 骨架 HTML 示例：[output-outline.html](./examples/output-outline.html)

@@ -22,8 +22,7 @@ import pandas as pd
 
 
 FOCUS_INDUSTRY_MAP = {
-    "绘画": "绘画+绘画周边",
-    "绘画周边": "绘画+绘画周边",
+    "绘画": "绘画",
     "VUP周边": "VUP周边",
 }
 
@@ -704,7 +703,7 @@ def build_report(
     lookback_4w = all_industry_weeks[-4:] if len(all_industry_weeks) >= 4 else all_industry_weeks
     chart_labels_4w = ["W" + str(int(w)) for w in lookback_4w]
 
-    for focus_name in ["绘画+绘画周边", "VUP周边"]:
+    for focus_name in ["绘画", "VUP周边"]:
         curr_industry = focus_industry_weekly[
             (focus_industry_weekly["focus_industry"] == focus_name)
             & (focus_industry_weekly["周"] == current_week["周"])
@@ -735,7 +734,7 @@ def build_report(
         ind_buyers_4w = {}
         ind_conv_4w = {}
         ind_pv_4w = {}
-        for fn in ["绘画+绘画周边", "VUP周边"]:
+        for fn in ["绘画", "VUP周边"]:
             ind_gmv_4w[fn] = [
                 focus_industry_weekly[
                     (focus_industry_weekly["focus_industry"] == fn)
@@ -914,7 +913,7 @@ def build_report(
 
     # ── Section 3: 流量 拆解 ────────────────────────────────────────────────
     flow_blocks = []
-    for focus_name in ["绘画+绘画周边", "VUP周边"]:
+    for focus_name in ["绘画", "VUP周边"]:
         ch_data = focus_channel_weekly[focus_channel_weekly["focus_industry"] == focus_name].copy()
         re_data = focus_resource_weekly[focus_resource_weekly["focus_industry"] == focus_name].copy()
 
@@ -973,14 +972,14 @@ def build_report(
         prev_ch = ch_data[ch_data["周"] == previous_week["周"]]
         if not curr_ch.empty and not prev_ch.empty:
             merged_ch = curr_ch.merge(
-                prev_ch[["内容类型", "GMV", "曝光PV"]],
+                prev_ch[["内容类型", "GMV", "曝光PV", "PVCTR"]],
                 on="内容类型", suffixes=("_curr", "_prev")
             ).fillna(0)
             for _, row in merged_ch.iterrows():
                 gmv_delta = pct_change(row["GMV_curr"], row["GMV_prev"])
                 pv_delta = pct_change(row["曝光PV_curr"], row["曝光PV_prev"])
-                ctr_curr = row["商详UV"] / row["曝光PV_curr"] if row["曝光PV_curr"] else 0
-                ctr_prev = row["商详UV"] / row["曝光PV_prev"] if row["曝光PV_prev"] else 0
+                ctr_curr = row["PVCTR_curr"]
+                ctr_prev = row["PVCTR_prev"]
                 ctr_delta = pct_change(ctr_curr, ctr_prev)
                 if abs(gmv_delta) > 0.05:
                     reasons = []
@@ -1133,7 +1132,7 @@ def build_report(
   <body>
     <div class="page">
       <header class="hero">
-        <div class="hero-eyebrow">工房业务交易周报</div>
+        <div class="hero-eyebrow">工房业务交易双周报</div>
         <h1>交易数据概览</h1>
         <p class="hero-desc">聚焦核心数据趋势、重点行业波动、渠道占比变化与商品归因。</p>
         <div class="hero-meta">
@@ -1220,7 +1219,7 @@ def build_report(
         <div class="panel">
           <ul>
             <li>所有源文件每行已代表一个完整周（周数在"周五-周四周"列），无需再按日聚合。</li>
-            <li>绘画+绘画周边为合并行业口径，VUP周边单独分析。</li>
+            <li>行业口径聚焦绘画与 VUP周边，分别独立分析。</li>
             <li>下单转化率使用周内支付订单数 / 商详UV 聚合口径计算。</li>
             <li>商品曝光PV/GPM 使用周内 GMV / 商品曝光PV x 1000 聚合口径计算。</li>
             <li>PVCTR 使用周内 商详UV / 商品曝光PV 计算。</li>
