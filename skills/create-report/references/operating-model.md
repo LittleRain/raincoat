@@ -57,7 +57,7 @@ Do not generate a downstream skill when any of these are unresolved:
 - output contract
 - downstream skill name
 
-For `runnable` downstream skills, also block when:
+For `L1` / `L2` downstream skills, also block when:
 
 - required data contracts do not have minimal real sample files
 - sample file names do not match the declared `file_name_pattern`
@@ -105,11 +105,11 @@ If a section includes tables or structured conclusions, the spec must define:
 - which sections use charts, tables, or both
 - whether all-empty period columns should be hidden
 
-Section titles alone are not enough to justify a `runnable` output.
+Section titles alone are not enough to justify an `L1` or `L2` output.
 
 ## Execution Logging Rules
 
-For `runnable` downstream skills, runtime logging is part of the execution
+For `L1` / `L2` downstream skills, runtime logging is part of the execution
 contract, not an optional enhancement.
 
 Required logging categories:
@@ -134,7 +134,7 @@ Failure logs must include:
 
 ## Downstream Skill Levels
 
-### `documentation-only`
+### `L0 Documentation`
 
 Use when the requirement can support a normalized spec, but real samples or
 execution details are still missing.
@@ -149,10 +149,10 @@ Allowed outputs:
 
 Restrictions:
 
-- do not claim the skill is runnable
+- do not claim the skill is `L1` or `L2`
 - do not present placeholder HTML as runnable proof
 
-### `runnable`
+### `L1 Runnable MVP`
 
 Use only when:
 
@@ -167,6 +167,28 @@ Additional requirements:
 - dependency declaration
 - at least one regression test
 - one HTML output generated from real samples
+
+### `L2 Publishable`
+
+Use only when:
+
+- all `L1` requirements pass
+- the package is self-contained
+- no absolute paths or upstream repo-only references are required
+- chart rendering works through local or inlined assets without required CDN
+- browser validation proves `file://` chart rendering
+- regression tests cover missing values, zero denominators, and fallback paths
+
+Every generated downstream skill must include `skill-manifest.yaml` with:
+
+- declared level
+- effective level
+- acceptance status
+- acceptance date
+- evidence paths
+- blocking gaps
+
+The effective level must never exceed the level supported by evidence.
 
 ## Standalone Publishability
 
@@ -184,7 +206,7 @@ If those checks fail, treat the package as repo-local only.
 
 ## Post-Generation Verification
 
-For `runnable` outputs, verify more than file existence:
+For `L1` / `L2` outputs, verify more than file existence:
 
 - `run-report.sh` or equivalent actually runs
 - output HTML is not a placeholder

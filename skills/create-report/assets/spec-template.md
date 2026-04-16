@@ -91,7 +91,13 @@
 
 - `skill_name`:
 - `skill_title`:
-- `skill_level`: `documentation-only` / `runnable`
+- `skill_level`: `L0` / `L1` / `L2`
+- `level_readiness`:
+  - `real_samples_present`:
+  - `two_period_coverage`:
+  - `real_runner_present`:
+  - `validation_evidence_present`:
+  - `browser_evidence_present`:
 - `required_files`:
 - `required_references`:
 - `required_assets`:
@@ -106,3 +112,4 @@
 - `html_output_checks`:
 - `runnable_readiness_checks`:
 - `runtime_log_checks`:
+- `level_acceptance_checks`:

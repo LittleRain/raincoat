@@ -16,11 +16,11 @@
 
 - 信息 1
 - 信息 2
-- 是否只生成 `documentation-only`：
+- 是否只生成 `L0 Documentation`：
 
 ## 下一步动作
 
 - 继续追问
 - 更新标准化 spec
 - 重新执行校验
-- 降级为 `documentation-only`
+- 降级为 `L0 Documentation`

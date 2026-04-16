@@ -88,7 +88,7 @@ Each section must contain:
 - `required_outputs`
 - `narrative_expectations`
 
-Recommended additional fields for runnable reliability:
+Recommended additional fields for `L1` / `L2` reliability:
 
 - `section_data_mapping` (primary/fallback contracts and precedence)
 - `table_schemas`
@@ -177,6 +177,7 @@ Required fields:
 
 - `skill_name`
 - `skill_title`
+- `skill_level` (`L0`, `L1`, or `L2`)
 - `required_files`
 - `required_assets`
 - `required_examples`
@@ -184,6 +185,7 @@ Required fields:
 Recommended default `required_files`:
 
 - `SKILL.md`
+- `skill-manifest.yaml`
 - `agents/openai.yaml`
 
 Recommended default `required_assets`:
@@ -198,6 +200,15 @@ Recommended default `required_examples`:
 - input inventory example
 - output outline example
 
+Level definitions:
+
+- `L0`: documentation-only package. Allows stubs and gap records. Must not
+  claim runnable output.
+- `L1`: runnable MVP. Requires real samples, real runner, generated HTML,
+  runtime logs, and validation evidence.
+- `L2`: publishable/stable. Requires all L1 evidence plus standalone packaging,
+  no required CDN, browser validation, and regression evidence.
+
 ### `acceptance_checks`
 
 Define pre-generation and post-generation validation.
@@ -208,6 +219,8 @@ Must include at least:
 - `spec_consistency_checks`
 - `generation_readiness_checks`
 - `html_output_checks`
+- `level_readiness_checks`
+- `level_acceptance_checks`
 
 ## Stop Conditions
 
@@ -219,3 +232,4 @@ Must include at least:
 - time definitions are missing or conflict
 - analysis requirements exceed allowed inference bounds
 - the output contract is incompatible with HTML
+- target level is `L1` or `L2` but required level evidence is missing

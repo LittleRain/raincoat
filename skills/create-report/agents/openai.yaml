@@ -3,4 +3,4 @@ interface:
   display_name: Create Report
   short_description: 把周报需求转成标准化 spec，并生成或收紧可独立发布的 HTML report skill。
   default_prompt: |
-    读取这份周报需求文档，使用 create-report 将需求整理成标准化 spec，判断应该生成 documentation-only 还是 runnable 下游 skill，并输出或更新一个自包含、可独立发布的 HTML report skill 包。
+    读取这份周报需求文档，使用 create-report 将需求整理成标准化 spec，判断应该生成 L0 Documentation、L1 Runnable MVP 还是 L2 Publishable 下游 skill，并输出或更新一个带验收证据的 HTML report skill 包。

@@ -8,11 +8,14 @@
 - 存在 `assets/report-outline.md`
 - 存在 `assets/report-prompt.md`
 - 存在 `assets/validation-checklist.md`
+- 存在 `assets/acceptance-matrix.md`
 - 存在 `examples/normalized-spec.md`
 - 存在 `examples/normalized-spec-summary.md`
 - 存在 `examples/input_inventory.md`
 - 存在 `examples/output-outline.html`
-- 已明确本 skill 是 `documentation-only` 还是 `runnable`
+- 已明确本 skill 是 `L0 Documentation`、`L1 Runnable MVP` 还是 `L2 Publishable`
+- 存在 `skill-manifest.yaml`
+- `skill-manifest.yaml` 声明 `declared_level`、`effective_level`、`acceptance_status`、`acceptance_evidence`
 - 已定义首次生成后不符合预期时的调整入口或记录方式
 - 输入合同已经写入 `SKILL.md`、`examples/` 或 `references/`
 - `SKILL.md` 只引用 skill 包内部相对路径，或完全不依赖外部路径
@@ -37,7 +40,14 @@
 - 全包不依赖上游 `create-report`、`report-creator` 或原始需求文档路径
 - 输入合同已经内嵌到 `SKILL.md`、`examples/` 或 `references/` 中，包本身可独立理解
 
-## `runnable` 额外检查
+## `L0 Documentation` 额外检查
+
+- 已明确不可声明 runnable 输出
+- placeholder HTML 没有作为执行证据
+- `scripts/run-report.sh` 若存在，必须明确是文档 stub 并失败退出
+- `blocking_gaps` 已记录真实样本、真实 runner、浏览器验证等缺口
+
+## `L1 Runnable MVP` 额外检查
 
 - 存在 `scripts/run-report.sh`
 - 存在 `scripts/requirements.txt`
@@ -57,3 +67,13 @@
 - 若 spec 声明表格 schema，则输出列名与 schema 一致
 - 若 spec 要求隐藏全空周期列，渲染结果中对应空列已自动隐藏
 - 若 spec 声明 narrative schema，则结论文本符合 schema
+
+## `L2 Publishable` 额外检查
+
+- 满足全部 `L1` 检查
+- 全包不依赖上游 repo-only 路径或绝对路径
+- 图表运行时本地打包或内联，禁止 required CDN
+- `file://` 浏览器验证通过
+- 浏览器 console 无 blocking error
+- 存在回归测试，覆盖缺失值、分母为 0、fallback 路径
+- 存在 `output/browser-validation.json` 或等价证据

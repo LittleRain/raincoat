@@ -118,7 +118,7 @@ Weekly report HTML 的标准化设计系统。基于 Linear（暗色分层）+ S
 **典型场景：**
 - PV(柱) + 小店占比%(线): `{ yFormat: 'pv', y1Format: 'pct' }`
 - GMV(柱) + 转化率%(线): `{ yFormat: 'gmv', y1Format: 'pct' }`
-- 订单数(柱) + GPM(线): `{ yFormat: 'num', y1Format: 'pct' }`
+- 订单数(柱) + GPM(线): `{ yFormat: 'num', y1Format: 'gmv' }` 或业务明确声明的自定义 GPM formatter
 
 **代码示例：**
 ```javascript
@@ -168,7 +168,8 @@ reportChart('c1', chartPresets.combo(weekLabels, [
 | 金额 | GMV、客单价、ARPU | ¥ + 万/亿自动缩写 | ¥12.3万、¥1.05亿 | `REPORT_FORMAT.gmv` |
 | 人数 | DAU、MAU、买家数、新客数 | 万自动缩写，无¥ | 3.4万、12,345 | `REPORT_FORMAT.num` |
 | 量级 | 订单数、曝光数(PV)、点击数、UV | 万/亿自动缩写 | 8.2万、1.03亿 | `REPORT_FORMAT.pv` |
-| 率值 | 下单转化率、点击转化率(CTR)、GPM、复购率 | 百分比，2位小数 | 5.23%、0.87% | `REPORT_FORMAT.pct` |
+| 率值 | 下单转化率、点击转化率(CTR)、复购率 | 百分比，2位小数 | 5.23%、0.87% | `REPORT_FORMAT.pct` |
+| 金额效率 | GPM（千次展示 GMV）、ARPU | ¥ + 万/亿自动缩写或业务自定义 | ¥12.3、¥1.05万 | `REPORT_FORMAT.gmv` 或显式自定义 |
 | 环比 | 所有 WoW 变化 | 带符号百分比，1位小数 | +5.2%、-3.1% | `REPORT_WOW` |
 
 ### 强制规则
@@ -195,8 +196,8 @@ reportChart('c1', chartPresets.combo(weekLabels, [
 ### 指标名自动识别
 
 `chart-defaults.js` 中的 `REPORT_FORMAT.auto(metricName, value)` 可根据指标名自动选择格式：
-- 含「率」「CTR」「GPM」「ARPU」「占比」→ `pct`
-- 含「GMV」「客单价」「金额」「收入」「营收」→ `gmv`
+- 含「率」「CTR」「占比」→ `pct`
+- 含「GMV」「GPM」「客单价」「金额」「收入」「营收」「ARPU」→ `gmv`
 - 含「DAU」「MAU」「买家」「用户」「新客」「商家」→ `num`
 - 含「PV」「UV」「曝光」「点击」「订单」「次数」→ `pv`
 - 其他 → `num`（兜底）

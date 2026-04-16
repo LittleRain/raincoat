@@ -6,7 +6,7 @@ generation.
 Suggested contents:
 
 - generated skill name
-- whether it is `documentation-only` or `runnable`
+- whether it is `L0 Documentation`, `L1 Runnable MVP`, or `L2 Publishable`
 - required packaged files used at runtime
 - validation evidence kept inside the package
 
