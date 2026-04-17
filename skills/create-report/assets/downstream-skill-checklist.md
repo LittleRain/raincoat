@@ -13,6 +13,8 @@
 - 存在 `examples/normalized-spec-summary.md`
 - 存在 `examples/input_inventory.md`
 - 存在 `examples/expected-output-inventory.json`
+- 存在 `examples/semantic-contract.json`
+- 存在 `examples/table-layout-contract.json`
 - 存在 `examples/output-outline.html`
 - 已明确本 skill 是 `L0 Documentation`、`L1 Runnable MVP` 还是 `L2 Publishable`
 - 存在 `skill-manifest.yaml`
@@ -65,7 +67,10 @@
 - 生成出的 HTML 内联了 chart-defaults.js
 - 图表使用 chartPresets / reportChart API 创建
 - `file://` 直接打开时图表可渲染
-- `scripts/validate-output-inventory.py` 校验生成 HTML 的图表、表格数量和 `required_metrics` 与 `expected-output-inventory.json` 一致
+- `scripts/validate-output-inventory.py` 校验生成 HTML 的图表、表格数量、`required_metrics`、`required_dimensions` 和 `required_text` 与 `expected-output-inventory.json` 一致
+- 表格按需求文档中的业务场景口径渲染，例如行业、分类、业务线、渠道、内容类型
+- `semantic-contract.json` 中的 hard constraint 业务词、别名、分组规则和 semantic_examples 已被执行
+- `table-layout-contract.json` 中的 layout_mode 已被执行，未把“按维度拆分”误解成错误的多表或单表
 - `judgment_metrics` 可由大模型选择展示，不作为强制出现项；若展示，需标记 inferred/judgment-based 口径
 - 若 spec 声明表格 schema，则输出列名与 schema 一致
 - 若 spec 要求隐藏全空周期列，渲染结果中对应空列已自动隐藏

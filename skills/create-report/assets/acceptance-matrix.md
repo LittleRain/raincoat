@@ -38,11 +38,14 @@ Must pass:
 - explicit core metric formulas are declared when known
 - core table schemas and WoW columns are declared
 - expected chart/table counts and explicit required metrics are derived from the source requirement
+- required business dimensions and classification labels are derived from the source requirement
+- semantic contract captures requester-specific terms, aliases, segment rules, null fallback, and semantic examples
+- table layout contract captures whether dimensions render as separate tables, rows, columns, or hybrid subtables
 - ambiguous desired metrics may be delegated to model judgment with source-field evidence
 - `scripts/run-report.sh` invokes real generation logic, not a stub
 - one real `report.html` is generated from samples
 - runtime logs include file discovery, read checks, period detection, section build progress, and output path
-- smoke validation confirms the HTML is non-placeholder, uses the standard report structure, and matches expected chart/table/required-metric inventory
+- smoke validation confirms the HTML is non-placeholder, uses the standard report structure, and matches expected chart/table/required-metric/business-scene/layout inventory
 
 Allowed:
 - limited manual visual review
@@ -55,7 +58,7 @@ Forbidden:
 - placeholder output HTML
 - ambiguous official KPI formulas
 - undocumented multi-source precedence
-- missing or mismatched chart/table/metric inventory
+- missing or mismatched chart/table/metric/business-scene inventory
 
 ### L2 Publishable / Stable
 
@@ -98,6 +101,11 @@ Forbidden:
 | chart/table inventory declared | Should | Must | Must |
 | rendered chart/table counts match inventory | No | Must | Must |
 | required_metrics appear in rendered HTML | No | Must | Must |
+| required business dimensions appear in rendered HTML | No | Must | Must |
+| required classification labels appear in rendered HTML | No | Must | Must |
+| semantic contract declared | Should | Must | Must |
+| table layout contract declared | Should | Must | Must |
+| rendered table layout matches contract | No | Must | Must |
 | runtime logs | No | Must | Must |
 | HTML structure validation | No | Smoke | Must |
 | browser file:// validation | No | Should | Must |

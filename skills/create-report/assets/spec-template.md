@@ -19,6 +19,30 @@
 - `terms`:
 - `segment_rules`:
 
+## semantic_contract
+
+- `business_terms`:
+  - `name`:
+  - `definition`:
+  - `source_fields`:
+  - `hard_constraint`: `true` / `false`
+  - `needs_clarification`: `true` / `false`
+- `term_aliases`:
+  - `alias`:
+  - `canonical_term`:
+- `segment_rules`:
+  - `segment_name`:
+  - `applies_to`:
+  - `rule_logic`:
+  - `source_fields`:
+  - `allowed_categories`:
+- `rule_priority`:
+- `null_fallback`:
+- `semantic_examples`:
+  - `input`:
+  - `expected`:
+- `judgment_terms`:
+
 ## time_definition
 
 - `reporting_granularity`:
@@ -39,10 +63,22 @@
   - `charts_count`:
   - `tables_count`:
   - `required_metric_names`:
+  - `required_dimensions`:
+  - `required_text`:
   - `judgment_metric_candidates`:
   - `llm_judgment_allowed`:
   - `source_requirement_evidence`:
 - `table_schemas`:
+- `table_layout_contract`:
+  - `layout_mode`: `separate_tables_by_dimension` / `dimension_as_rows` / `dimension_as_columns` / `hybrid_section_with_subtables` / `unresolved`
+  - `split_dimension`:
+  - `row_dimensions`:
+  - `column_dimensions`:
+  - `required_table_instances`:
+  - `table_grain`:
+  - `source_phrase`:
+  - `interpretation_reason`:
+  - `ambiguity_level`: `low` / `medium` / `high`
 - `narrative_schema`:
 - `section_data_mapping`:
   - `primary_contracts`:
@@ -88,7 +124,11 @@
     - `charts`:
     - `tables`:
   - `required_metrics`:
+  - `required_dimensions`:
+  - `required_text`:
   - `judgment_metrics`:
+  - `semantic_contract`:
+  - `table_layout_contract`:
   - `sections`:
 - `table_column_rules`:
 - `wow_display_rules`:

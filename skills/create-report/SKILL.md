@@ -35,7 +35,9 @@ description: Use when turning a business weekly-report requirement document into
 8. 若目标是 `L1` 或 `L2`，必须补齐真实执行脚本、依赖、样本、验证证据和最小回归测试
 9. 检查生成后的 skill 包是否具备必需文件、资产、实时过程日志和对应级别的验证证据
 10. 校验生成 HTML 的图表数量、表格数量与从需求文档抽取的视图清单一致
-11. 若首次生成结果不符合预期，输出定向调整建议，而不是建议整体重做
+11. 校验生成 HTML 的业务场景维度、分类标签与需求文档定义一致
+12. 校验业务语义契约与表格布局契约是否被下游 skill 执行
+13. 若首次生成结果不符合预期，输出定向调整建议，而不是建议整体重做
 
 ## 下游 Skill 等级
 
@@ -55,8 +57,11 @@ description: Use when turning a business weekly-report requirement document into
 - 必须有真实 `run-report.sh` 或等价入口，禁止 stub
 - 必须生成真实 `report.html`、`run.log`、`validation-report.json`
 - 必须声明明确要求的核心指标公式、formatter、核心表格 schema、WoW 展示规则和多数据源优先级
+- 必须声明行业、分类、业务线等业务场景维度及其分类口径
+- 必须声明 `semantic_contract`，把需求方专属业务词、别名、分组规则和黄金样例固化为硬约束
+- 必须声明 `table_layout_contract`，区分“按维度拆成多表”和“同表内按维度拆分”
 - 无法枚举清楚的展示指标允许由大模型基于字段和上下文判断，但必须标记为推断/判断口径
-- 必须通过 `expected-output-inventory.json` 的图表/表格数量和必需指标出现校验
+- 必须通过 `expected-output-inventory.json` 的图表/表格数量、必需指标、业务维度、分类标签和表格布局校验
 
 ### `L2 Publishable`
 
@@ -86,6 +91,8 @@ description: Use when turning a business weekly-report requirement document into
 
 - 禁止直接从原始业务 prose 生成下游 skill
 - 禁止猜测指标定义、分类口径或图表字段
+- 禁止把 hard-constrained 业务词当成自然语言重新解释
+- 禁止把“按行业拆分”等模糊表达直接交给下游模型猜测；必须先结构化为 `table_layout_contract`
 - 例外：需求无法穷举的非强约束展示指标，可由大模型判断口径，但必须有源字段依据并标记为 inferred/judgment-based
 - 禁止生成非 HTML 的下游输出合同
 - 栏目与数据映射不完整时，禁止继续
@@ -93,8 +100,14 @@ description: Use when turning a business weekly-report requirement document into
 - 若声明 `L1` / `L2`，禁止只生成 placeholder HTML、占位脚本或仅文档型骨架
 - 表格 schema、结论 schema、关键指标的 WoW 展示方式未明确时，禁止擅自发明输出细节
 - 图表和表格数量未从需求文档抽取成 `expected-output-inventory.json` 时，禁止进入 `L1` / `L2`
+- 行业、分类、业务线等业务场景维度未抽取成 `required_dimensions` / `required_text` 时，禁止进入 `L1` / `L2`
+- 业务语义词、别名、分组规则未抽取成 `semantic_contract` 时，禁止进入 `L1` / `L2`
+- 产出表格的 section 未抽取成 `table_layout_contract` 时，禁止进入 `L1` / `L2`
 - 生成 HTML 中图表或表格数量少于 `expected-output-inventory.json` 时，禁止通过验收
 - 已声明 `required_metrics` 未出现在生成 HTML 中时，禁止通过验收
+- 已声明 `required_dimensions` 或 `required_text` 未出现在生成 HTML 中时，禁止通过验收
+- 已声明 `table_layout_contract` 未被生成 HTML 满足时，禁止通过验收
+- 已声明 `semantic_examples` 的期望业务标签未出现在 HTML 或分类结果中时，禁止通过验收
 - `judgment_metrics` 不要求逐项枚举或逐项出现，由下游模型按上下文选择展示
 - 若同一 section 可由多份数据源支持，未明确主/备数据源优先级时，禁止进入 runnable 生成
 - 比率指标（如 CTR）未声明主口径与缺字段回退口径时，禁止进入 runnable 生成

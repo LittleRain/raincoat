@@ -58,6 +58,28 @@ Each `segment_rule` should contain:
 - `rule_logic`
 - `source_fields`
 
+### `semantic_contract`
+
+Define requester-specific business language that downstream skills must obey.
+This contract prevents terms such as 行业、分类、业务线、渠道、内容类型 from
+being reinterpreted as generic labels.
+
+Required fields:
+
+- `business_terms`
+- `term_aliases`
+- `segment_rules`
+- `semantic_examples`
+- `judgment_terms`
+
+Rules:
+
+- Terms with explicit source fields or classification rules are hard constraints.
+- Aliases such as “分行业”“行业拆解”“行业维度” must resolve to a canonical term.
+- If a term is named but lacks source fields or rules, mark it `needs_clarification`.
+- Downstream skills may infer judgment metrics, but must not override hard-constrained business terms.
+- `semantic_examples` should contain representative input rows and expected labels for classification-sensitive terms.
+
 ### `time_definition`
 
 Define reporting windows and comparison logic.
@@ -92,11 +114,45 @@ Recommended additional fields for `L1` / `L2` reliability:
 
 - `section_data_mapping` (primary/fallback contracts and precedence)
 - `table_schemas`
+- `table_layout_contract` (how dimensions become rows, columns, separate tables, or hybrid subtables)
 - `narrative_schema`
-- `view_inventory` (expected chart/table counts, explicit required metrics, and optional judgment metrics derived from the source requirement)
+- `view_inventory` (expected chart/table counts, explicit required metrics, business-scene dimensions, required labels, and optional judgment metrics derived from the source requirement)
 
 If a section needs charts or tables, they must be declared in
 `required_views`.
+
+### `table_layout_contract`
+
+Define table layout intent separately from business dimensions.
+
+Supported `layout_mode` values:
+
+- `separate_tables_by_dimension`: split one dimension into multiple table instances.
+- `dimension_as_rows`: render the dimension as row fields in one table.
+- `dimension_as_columns`: render the dimension as columns or column groups in one table.
+- `hybrid_section_with_subtables`: render a section-level overview plus one or more subtables.
+- `unresolved`: wording is too ambiguous; generation must surface the ambiguity.
+
+Each layout entry should contain:
+
+- `section` or `section_id`
+- `layout_mode`
+- `split_dimension`
+- `row_dimensions`
+- `column_dimensions`
+- `required_table_instances`
+- `required_tables`
+- `table_grain`
+- `source_phrase`
+- `interpretation_reason`
+- `ambiguity_level`
+
+Interpretation defaults:
+
+- “按某维度拆分” defaults to `dimension_as_rows`.
+- “每个/分别/各自/单独/逐个表格” indicates `separate_tables_by_dimension`.
+- “行业拆解” with both “分行业” and “分行业及分类” indicates `hybrid_section_with_subtables`.
+- High-ambiguity layouts must include `source_phrase` and `interpretation_reason`.
 
 ### `data_contracts`
 
@@ -164,7 +220,9 @@ Recommended additional fields for table stability:
 - `table_column_rules`
 - `wow_display_rules`
 - `narrative_direction_rules`
-- `expected_output_inventory` (total/section-level chart/table counts, `required_metrics`, and optional `judgment_metrics`)
+- `expected_output_inventory` (total/section-level chart/table counts, `required_metrics`, `required_dimensions`, `required_text`, and optional `judgment_metrics`)
+- `semantic_contract` (business terms and semantic examples that must be visible or validated)
+- `table_layout_contract` (table layout modes that rendered HTML must satisfy)
 - `empty_period_column_policy` (hide period columns that are empty for all rows)
 - `runtime_dependency_policy` (must support `file://` open; no external CDN required)
 - `axis_origin_policy` (numeric axes must start at zero; truncation is forbidden)
@@ -245,3 +303,5 @@ Must include at least:
 - the output contract is incompatible with HTML
 - target level is `L1` or `L2` but required level evidence is missing
 - target level is `L1` or `L2` but chart/table counts or explicit `required_metrics` are not declared or rendered output does not match declarations
+- hard-constrained business terms are missing from `semantic_contract`
+- table-producing sections lack `table_layout_contract`

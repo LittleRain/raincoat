@@ -51,8 +51,12 @@ assert_contains "$ROOT_DIR/skills/$L0_SKILL/skill-manifest.yaml" "acceptance_sta
 assert_contains "$ROOT_DIR/skills/$L0_SKILL/assets/validation-checklist.md" "L0 Documentation"
 assert_contains "$ROOT_DIR/skills/$L0_SKILL/SKILL.md" "Current level: L0 Documentation"
 assert_file "$ROOT_DIR/skills/$L0_SKILL/examples/expected-output-inventory.json"
+assert_file "$ROOT_DIR/skills/$L0_SKILL/examples/semantic-contract.json"
+assert_file "$ROOT_DIR/skills/$L0_SKILL/examples/table-layout-contract.json"
 assert_file "$ROOT_DIR/skills/$L0_SKILL/scripts/validate-output-inventory.py"
-assert_contains "$ROOT_DIR/skills/$L0_SKILL/assets/validation-checklist.md" "chart/table counts and required metric labels match expected-output-inventory.json"
+assert_contains "$ROOT_DIR/skills/$L0_SKILL/assets/validation-checklist.md" "chart/table counts, required metric labels, required dimensions, and required text match expected-output-inventory.json"
+assert_contains "$ROOT_DIR/skills/$L0_SKILL/assets/report-prompt.md" "examples/semantic-contract.json"
+assert_contains "$ROOT_DIR/skills/$L0_SKILL/assets/report-prompt.md" "examples/table-layout-contract.json"
 
 echo "[test] output inventory validator catches missing charts and tables"
 cat > "$TMP_DIR/expected-output-inventory.json" <<'JSON'
@@ -69,6 +73,14 @@ cat > "$TMP_DIR/expected-output-inventory.json" <<'JSON'
   ],
   "judgment_metrics": [
     { "metric_name": "内容效率分", "llm_judgment_allowed": true }
+  ],
+  "required_dimensions": [
+    "行业",
+    "分类"
+  ],
+  "required_text": [
+    "南征",
+    "ACG行业-出版物"
   ]
 }
 JSON
@@ -89,9 +101,104 @@ set -e
 assert_contains "$TMP_DIR/inventory.err" "charts expected 2, found 1"
 assert_contains "$TMP_DIR/inventory.err" "tables expected 3, found 1"
 assert_contains "$TMP_DIR/inventory.err" "metric 成交买家数 expected, found 0"
+assert_contains "$TMP_DIR/inventory.err" "dimension 行业 expected, found 0"
+assert_contains "$TMP_DIR/inventory.err" "dimension 分类 expected, found 0"
+assert_contains "$TMP_DIR/inventory.err" "required text 南征 expected, found 0"
+assert_contains "$TMP_DIR/inventory.err" "required text ACG行业-出版物 expected, found 0"
 if grep -Fq "内容效率分" "$TMP_DIR/inventory.err"; then
   fail "judgment metrics should not be required for rendered HTML presence"
 fi
+
+echo "[test] output inventory validator catches table layout contract mismatches"
+cat > "$TMP_DIR/layout-inventory.json" <<'JSON'
+{
+  "totals": {
+    "sections": 1,
+    "charts": 0,
+    "tables": 2
+  },
+  "semantic_contract": {
+    "business_terms": [
+      {
+        "name": "行业",
+        "definition": "行业分组",
+        "source_fields": ["owner_ld"],
+        "hard_constraint": true
+      }
+    ],
+    "semantic_examples": [
+      {
+        "input": {
+          "owner_ld": "南征",
+          "owner_cate": "ACG行业-出版物"
+        },
+        "expected": {
+          "行业": "南征",
+          "分类": "ACG行业-出版物"
+        }
+      }
+    ]
+  },
+  "table_layout_contract": [
+    {
+      "section_id": "industry",
+      "section": "行业拆解",
+      "layout_mode": "hybrid_section_with_subtables",
+      "required_tables": [
+        {
+          "name": "分行业汇总",
+          "layout_mode": "dimension_as_rows",
+          "row_dimensions": ["行业"]
+        },
+        {
+          "name": "分行业及分类明细",
+          "layout_mode": "dimension_as_rows",
+          "row_dimensions": ["行业", "分类"]
+        }
+      ]
+    }
+  ]
+}
+JSON
+cat > "$TMP_DIR/layout-report.html" <<'HTML'
+<!DOCTYPE html>
+<html><body>
+  <section class="section" id="industry">
+    <h2>行业拆解</h2>
+    <h3>分行业汇总</h3>
+    <div class="table-wrap"><table><thead><tr><th>行业</th><th>GMV</th></tr></thead><tbody><tr><td>南征</td><td>100</td></tr></tbody></table></div>
+    <h3>分行业及分类明细</h3>
+    <div class="table-wrap"><table><thead><tr><th>行业</th><th>GMV</th></tr></thead><tbody><tr><td>南征</td><td>100</td></tr></tbody></table></div>
+  </section>
+</body></html>
+HTML
+set +e
+python3 "$ROOT_DIR/skills/$L0_SKILL/scripts/validate-output-inventory.py" \
+  --inventory "$TMP_DIR/layout-inventory.json" \
+  --html "$TMP_DIR/layout-report.html" >"$TMP_DIR/layout.out" 2>"$TMP_DIR/layout.err"
+status=$?
+set -e
+[[ $status -ne 0 ]] || fail "expected layout contract validation to fail on missing table dimensions and semantic labels"
+assert_contains "$TMP_DIR/layout.err" "section industry table 分行业及分类明细 dimension 分类 expected in table, found 0"
+assert_contains "$TMP_DIR/layout.err" "semantic example expected 分类=ACG行业-出版物, found 0"
+
+echo "[test] output inventory validator accepts matching semantic and table layout contracts"
+cat > "$TMP_DIR/layout-report-pass.html" <<'HTML'
+<!DOCTYPE html>
+<html><body>
+  <section class="section" id="industry">
+    <h2>行业拆解</h2>
+    <h3>分行业汇总</h3>
+    <div class="table-wrap"><table><thead><tr><th>行业</th><th>GMV</th></tr></thead><tbody><tr><td>南征</td><td>100</td></tr></tbody></table></div>
+    <h3>分行业及分类明细</h3>
+    <div class="table-wrap"><table><thead><tr><th>行业</th><th>分类</th><th>GMV</th></tr></thead><tbody><tr><td>南征</td><td>ACG行业-出版物</td><td>100</td></tr></tbody></table></div>
+  </section>
+</body></html>
+HTML
+python3 "$ROOT_DIR/skills/$L0_SKILL/scripts/validate-output-inventory.py" \
+  --inventory "$TMP_DIR/layout-inventory.json" \
+  --html "$TMP_DIR/layout-report-pass.html" >"$TMP_DIR/layout-pass.out" 2>"$TMP_DIR/layout-pass.err"
+assert_contains "$TMP_DIR/layout-pass.out" "output inventory validation passed"
 
 echo "[test] L1 generation without evidence is blocked"
 set +e

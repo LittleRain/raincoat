@@ -190,14 +190,17 @@ Current level: $SKILL_LEVEL_LABEL
 1. validate the embedded contract and input inventory
 2. map input files to the declared data contracts
 3. build each section in the validated order
-4. generate conclusions using only declared metrics and evidence rules
-5. confirm the current package level before claiming runnable or publishable output
-6. render the final HTML report and include source-data notes
+4. read semantic and table-layout contracts before deciding dimensions or tables
+5. generate conclusions using only declared metrics and evidence rules
+6. confirm the current package level before claiming runnable or publishable output
+7. render the final HTML report and include source-data notes
 
 ## 约束
 
 - do not change the validated section order
 - do not infer undeclared metric logic
+- do not reinterpret hard-constrained business terms from raw prose
+- do not reinterpret table split wording when table-layout-contract.json declares the layout
 - do not change the output format away from HTML
 - do not require external CDN/network to render charts in delivered HTML
 - ensure chart rendering works when opening output via \`file://\`
@@ -213,6 +216,8 @@ Current level: $SKILL_LEVEL_LABEL
 - [report-outline.md](./assets/report-outline.md)
 - [acceptance-matrix.md](./assets/acceptance-matrix.md)
 - [expected-output-inventory.json](./examples/expected-output-inventory.json)
+- [semantic-contract.json](./examples/semantic-contract.json)
+- [table-layout-contract.json](./examples/table-layout-contract.json)
 EOF_SKILL
 
 cat > "$TARGET_DIR/skill-manifest.yaml" <<EOF_MANIFEST
@@ -272,10 +277,11 @@ interface:
   short_description: Generate the $SKILL_TITLE HTML weekly report from packaged contracts and declared input files.
   default_prompt: |
     Generate the $SKILL_TITLE HTML weekly report using the packaged spec summary,
-    input inventory, and output contract. Check skill-manifest.yaml first. Do not
-    claim a higher level than the manifest supports. Ensure chart rendering works
-    when opening via file:// and avoid required external CDN dependencies. Do not
-    infer undeclared metrics or claim runnable output unless L1/L2 evidence exists.
+    input inventory, semantic contract, table-layout contract, and output contract.
+    Check skill-manifest.yaml first. Do not claim a higher level than the manifest
+    supports. Ensure chart rendering works when opening via file:// and avoid
+    required external CDN dependencies. Do not infer undeclared metrics or
+    reinterpret hard-constrained business terms unless L1/L2 evidence exists.
 EOF_AGENT
 
 cat > "$TARGET_DIR/assets/html-contract.md" <<'EOF_HTML'
@@ -309,10 +315,11 @@ cat > "$TARGET_DIR/assets/html-contract.md" <<'EOF_HTML'
 
 ## 数据合同
 - if table schema is declared, output columns must match the spec
+- business terms, segment rules, and layout modes declared in examples/semantic-contract.json and examples/table-layout-contract.json are hard constraints
 - if narrative schema is declared, direction words must match the spec
 - explicit required metrics should use declared formatter rules when available
 - ambiguous or non-enumerated metrics may use model judgment when supported by source fields and marked as inferred
-- rendered chart/table counts and required metrics must match examples/expected-output-inventory.json
+- rendered chart/table counts, required metrics, business dimensions, and required labels must match examples/expected-output-inventory.json
 EOF_HTML
 
 cat > "$TARGET_DIR/assets/report-outline.md" <<'EOF_OUTLINE'
@@ -341,6 +348,8 @@ contracts only.
 
 - Read `skill-manifest.yaml` before generation.
 - Read `examples/expected-output-inventory.json` before generation.
+- Read `examples/semantic-contract.json` before generation.
+- Read `examples/table-layout-contract.json` before generation.
 - L0 may only produce documentation or outlines; do not claim runnable output.
 - L1 may generate internal runnable reports only when sample-backed execution evidence exists.
 - L2 may claim publishable output only when browser and validation evidence exists.
@@ -374,7 +383,11 @@ contracts only.
 ## 数据规则
 
 - use declared official metrics as hard constraints; for exploratory display metrics that cannot be fully enumerated, use model judgment with source-field evidence
-- render every chart, table, and explicitly required metric declared in expected-output-inventory.json
+- render every chart, table, explicitly required metric, required dimension, and required label declared in expected-output-inventory.json
+- preserve business-scene grouping from the source requirement, such as 行业、分类、业务线、渠道、内容类型; do not collapse these into generic summary tables
+- apply hard-constrained business terms and segment rules from semantic-contract.json; do not redefine them from raw prose
+- apply table-layout-contract.json before deciding whether a dimension becomes separate tables, rows, columns, or hybrid subtables
+- if a layout is marked unresolved, surface the unresolved source phrase and interpretation reason in logs or report notes instead of silently choosing a layout
 - use model judgment for ambiguous desired metrics when the requirement cannot enumerate every口径; mark those outputs as inferred or judgment-based
 - keep the validated section order
 - include charts, tables, and conclusion blocks where required
@@ -406,7 +419,8 @@ cat > "$TARGET_DIR/assets/validation-checklist.md" <<'EOF_CHECKLIST'
 - output/run.log includes file discovery, row counts, period detection, section build progress, and output path
 - explicit core metric formulas and formatter choices are declared when known
 - ambiguous metric口径 may use LLM judgment with source-field evidence
-- chart/table counts and required metric labels match expected-output-inventory.json
+- chart/table counts, required metric labels, required dimensions, and required text match expected-output-inventory.json
+- semantic examples and table layout contracts match the generated HTML
 - HTML smoke validation confirms non-placeholder standard report structure
 
 ## L2 Publishable
@@ -474,10 +488,63 @@ cat > "$TARGET_DIR/examples/expected-output-inventory.json" <<'EOF_VIEW_INV'
     "tables": 0
   },
   "required_metrics": [],
+  "required_dimensions": [],
+  "required_text": [],
   "judgment_metrics": [],
+  "semantic_contract": {
+    "business_terms": [],
+    "term_aliases": [],
+    "segment_rules": [],
+    "semantic_examples": [],
+    "judgment_terms": []
+  },
+  "table_layout_contract": [],
   "sections": []
 }
 EOF_VIEW_INV
+
+cat > "$TARGET_DIR/examples/semantic-contract.json" <<'EOF_SEMANTIC'
+{
+  "description": "Requester-specific business language contract. Populate from 需求.md before promoting beyond L0.",
+  "business_terms": [
+    {
+      "name": "行业",
+      "definition": "Replace with the requester-specific definition.",
+      "source_fields": [],
+      "hard_constraint": true,
+      "needs_clarification": true
+    }
+  ],
+  "term_aliases": [
+    {
+      "alias": "分行业",
+      "canonical_term": "行业"
+    }
+  ],
+  "segment_rules": [],
+  "rule_priority": [],
+  "null_fallback": [],
+  "semantic_examples": [],
+  "judgment_terms": []
+}
+EOF_SEMANTIC
+
+cat > "$TARGET_DIR/examples/table-layout-contract.json" <<'EOF_LAYOUT'
+[
+  {
+    "section": "replace-with-section-title",
+    "layout_mode": "unresolved",
+    "split_dimension": "",
+    "row_dimensions": [],
+    "column_dimensions": [],
+    "required_table_instances": [],
+    "table_grain": "",
+    "source_phrase": "",
+    "interpretation_reason": "",
+    "ambiguity_level": "high"
+  }
+]
+EOF_LAYOUT
 
 cat > "$TARGET_DIR/examples/output-outline.html" <<EOF_HTML_OUTLINE
 <!DOCTYPE html>

@@ -29,18 +29,23 @@ Must clarify when:
 - the time window is missing or conflicts
 - conclusions are required but the supporting rules are undefined
 - classification logic depends on missing attachments
+- business terms such as 行业、分类、业务线、渠道、内容类型 lack source fields or segment rules
+- table wording such as “按行业拆分” would change table count and lacks layout evidence
 
 Safe defaults are allowed only when:
 
 - the final format is not specified and `html` is a reasonable default
 - a spec field is optional and does not affect execution
 - wording differs but business semantics do not
+- “按某维度拆分” appears without “每个/分别/单独/逐个表格”; default to same-table row grouping and record the interpretation reason
 
 Never guess:
 
 - metric definitions
 - segment rules
 - chart field choices
+- hard-constrained business terms or aliases
+- whether a dimension should become separate tables when wording is ambiguous
 - cross-dataset joins
 - unsupported causal claims
 
@@ -111,6 +116,8 @@ If a section includes tables or structured conclusions, the spec must define:
 - which sections use charts, tables, or both
 - how many charts and tables each section must render
 - which explicit `required_metrics` must visibly appear in the rendered HTML
+- which business-scene dimensions must appear in rendered tables, such as 行业、分类、业务线、渠道、内容类型
+- which required classification labels must appear when the requirement defines them, such as 南征 or ACG行业-出版物
 - which `judgment_metrics` may be selected by model judgment without strict presence enforcement
 - whether all-empty period columns should be hidden
 
@@ -177,6 +184,9 @@ Additional requirements:
 - at least one regression test
 - one HTML output generated from real samples
 - output inventory validation proving chart/table counts and explicit required metric presence match the source requirement
+- business-scene inventory validation proving required dimensions and classification labels appear in the rendered HTML
+- semantic-contract validation proving hard-constrained business labels are preserved
+- table-layout validation proving dimensions are rendered as rows, columns, separate tables, or hybrid subtables as declared
 
 ### `L2 Publishable`
 
@@ -225,6 +235,9 @@ For `L1` / `L2` outputs, verify more than file existence:
 - required tables match the declared schema
 - total and section-level chart/table counts match `expected-output-inventory.json`
 - `required_metrics` declared in `expected-output-inventory.json` appear in the rendered HTML
+- `required_dimensions` and `required_text` declared in `expected-output-inventory.json` appear in the rendered HTML
+- semantic examples declared in `expected-output-inventory.json` appear in rendered labels or classification output
+- table layout contracts declared in `expected-output-inventory.json` match rendered table structure
 - all-empty period columns are hidden when the spec requires this behavior
 - required direction words appear in conclusions when the spec demands them
 - runtime logs include file-read status and key processing checkpoints

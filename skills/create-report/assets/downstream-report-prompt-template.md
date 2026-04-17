@@ -72,12 +72,19 @@
 
 - 生成前必须读取下游 `skill-manifest.yaml`
 - 生成前必须读取下游 `examples/expected-output-inventory.json`
+- 生成前必须读取下游 `examples/semantic-contract.json`
+- 生成前必须读取下游 `examples/table-layout-contract.json`
 - `L0` 只能输出文档、outline 或 gap report，禁止声称 runnable
 - `L1` 必须有真实样本、真实 runner、真实 HTML、运行日志和验证证据
 - `L2` 必须额外具备自包含依赖、`file://` 浏览器验证和回归测试证据
 - 禁止声明高于证据支持的等级
 - 严格按照标准化 spec 中的栏目顺序输出
-- 严格渲染 `expected-output-inventory.json` 声明的全部图表、表格和 `required_metrics`
+- 严格渲染 `expected-output-inventory.json` 声明的全部图表、表格、`required_metrics`、`required_dimensions` 和 `required_text`
+- 对需求中明确定义的业务场景，如行业、分类、业务线、渠道、内容类型，必须按原始需求的分组口径建表，不得泛化成普通汇总表
+- 对 `semantic-contract.json` 中声明为 hard constraint 的业务词、别名、分组规则和黄金样例，必须作为该需求方的业务语言包执行，禁止从原始 prose 重新解释
+- 对 `table-layout-contract.json` 中声明的布局模式，必须按 `separate_tables_by_dimension` / `dimension_as_rows` / `dimension_as_columns` / `hybrid_section_with_subtables` / `unresolved` 执行
+- “按某维度拆分”默认不是多表；只有出现每个、分别、各自、单独、逐个表格等强信号，才按多表拆分
+- 若布局或语义标记为 `unresolved`，必须在日志或报告说明中输出 `source_phrase` 和 `interpretation_reason`，禁止静默选择
 - 对官方 KPI 和强约束指标，只使用 spec 中声明过的指标、维度和数据合同
 - “只使用声明指标”主要约束官方 KPI 和强口径，不代表要穷举所有想展示的探索指标
 - 对 `judgment_metrics` 或需求无法枚举清楚的指标，以大模型基于源字段和业务上下文的判断为准，并在报告中标记 inferred/judgment-based
@@ -87,6 +94,9 @@
 - 若 spec 已声明表格 schema，必须严格按 schema 输出，不能临时改列
 - 若生成的 HTML 图表或表格数量与 `expected-output-inventory.json` 不一致，必须阻塞并修正
 - 若 `expected-output-inventory.json` 声明的 `required_metrics` 未出现在 HTML 中，必须阻塞并修正
+- 若 `expected-output-inventory.json` 声明的 `required_dimensions` 或 `required_text` 未出现在 HTML 中，必须阻塞并修正
+- 若 HTML 不满足 `table_layout_contract` 的表格实例、行维度、列维度或子表要求，必须阻塞并修正
+- 若 `semantic_examples` 期望的业务标签未出现在 HTML 或分类结果中，必须阻塞并修正
 - `judgment_metrics` 不作为强制出现项，不因未展示而失败
 - 若 spec 已声明某些字段要展示 WoW，必须逐列展示
 - 若 spec 已声明比率指标回退规则（如 CTR），必须按主口径与回退口径执行，不能擅自改公式
