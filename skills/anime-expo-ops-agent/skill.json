@@ -1,0 +1,11 @@
+{
+  "name": "anime-expo-ops-agent",
+  "title": "漫展运营 Agent",
+  "description": "由 Hermes 运行的漫展行业运营 Agent 业务契约，覆盖行业情报、活动草稿、业务指标和动作建议。",
+  "version": "0.1.0",
+  "status": "draft",
+  "visibility": "incubating",
+  "entry": "SKILL.md",
+  "tags": ["anime", "expo", "operations", "agent", "hermes"],
+  "author": "raincai"
+}

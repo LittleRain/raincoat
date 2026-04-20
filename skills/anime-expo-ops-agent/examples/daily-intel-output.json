@@ -1,0 +1,43 @@
+{
+  "agent_run": {
+    "id": "run_20260420_daily_intel",
+    "run_type": "daily_intel",
+    "started_at": "2026-04-20T08:00:00+08:00",
+    "ended_at": "2026-04-20T08:08:00+08:00",
+    "input_window": "2026-04-19T08:00:00+08:00/2026-04-20T08:00:00+08:00",
+    "source_count": 42,
+    "candidate_count": 6,
+    "draft_count": 3,
+    "recommendation_count": 0,
+    "errors": [],
+    "output_refs": []
+  },
+  "event_candidates": [
+    {
+      "id": "cand_001",
+      "source_item_ids": ["src_001"],
+      "name": "示例动漫嘉年华",
+      "event_type_name": "动漫嘉年华",
+      "province": "上海",
+      "city": "上海",
+      "district": null,
+      "venue": "示例会展中心",
+      "place": null,
+      "start_date": "2026-05-01",
+      "end_date": "2026-05-03",
+      "organizer": "示例主办方",
+      "ticket_price_min": 68,
+      "ticket_price_max": 168,
+      "price_status": 0,
+      "poster_portrait_url": null,
+      "poster_landscape_url": null,
+      "description_html": "<p>活动详情待补充</p>",
+      "ip_tags": [],
+      "category_tags": ["漫展", "cosplay"],
+      "guest_tags": [],
+      "evidence": [],
+      "confidence": 0.86,
+      "status": "new"
+    }
+  ]
+}

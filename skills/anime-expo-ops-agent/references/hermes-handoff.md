@@ -1,0 +1,237 @@
+# Hermes 交接说明
+
+Hermes 应把本技能作为版本化业务契约读取。
+
+## 本地字典资产
+
+- 省市区字典：`skills/anime-expo-ops-agent/assets/city-dictionary.xlsx`
+
+## 外部 API
+
+### 认证与敏感信息
+
+接口调用所需 cookie、登录态、CSRF、token、浏览器 headers 都属于 Hermes runtime secrets，不得写入本仓库。
+
+Hermes 可以保存：
+
+- API URL
+- 查询参数契约
+- 返回结构示例
+- 字段映射规则
+
+Hermes 不应保存到本仓库：
+
+- cookie 原文
+- `_AJSESSIONID`
+- `SecurityProxySessionID`
+- 任何用户登录态 header
+
+### 场馆 API
+
+```text
+GET https://show-mng.bilibili.co/api/ticket/mis/Venue/get?key=&page=1&pagesize=20
+```
+
+使用方式：
+
+- 初始化时 `key` 为空，按 `page` 分页拉全量。
+- 只取 `status_text = 有效` 的 `id` 和 `name`。
+- Hermes 应保存 raw 响应、同步时间、页码和错误日志。
+
+返回结构示例：
+
+```json
+{
+  "errno": 0,
+  "errtag": 0,
+  "msg": "",
+  "data": {
+    "list": [
+      {
+        "id": 30227,
+        "name": "濮阳银座京开店",
+        "city": "濮阳市",
+        "province": "河南省",
+        "district": "华龙区",
+        "address_detail": "京开大道中段363",
+        "place_num": 1,
+        "status": 1,
+        "status_text": "有效"
+      }
+    ],
+    "total": 1
+  }
+}
+```
+
+分页判断：
+
+- `data.list` 是当前页场馆列表。
+- `data.total` 是总数。
+- Hermes 用 `page` 和 `pagesize` 翻页，直到已拉取数量 >= `data.total` 或当前页 `data.list` 为空。
+
+### 场地 API
+
+```text
+GET https://show.bilibili.com/api/ticket-b/place/getbyvenue?venue_id=30204
+```
+
+使用方式：
+
+- `venue_id` 必填，来自有效场馆。
+- 返回结果里的 `id` 和 `name` 用于场地缓存。
+- 场地必须与对应场馆绑定，不能跨场馆使用。
+
+返回结构示例：
+
+```json
+{
+  "errno": 0,
+  "errtag": 0,
+  "msg": "",
+  "data": [
+    {
+      "id": 35550,
+      "name": "濮阳银座京开店"
+    }
+  ]
+}
+```
+
+### 已有活动查询 API
+
+用于去重、合并审核和避免重复创建草稿。
+
+```text
+GET https://show-mng.bilibili.co/api/ticket/mis/project/search
+```
+
+已知查询参数：
+
+| 参数 | 用途 |
+| --- | --- |
+| `name` | 项目名称 |
+| `id` | 项目 ID |
+| `start_min` | 开展时间下限 |
+| `start_max` | 开展时间上限 |
+| `page` | 页码 |
+| `size` | 每页数量 |
+| `status` | 状态过滤，当前示例为 `1` |
+| `channel` | 渠道过滤，当前示例为 `1` |
+
+接口还支持但暂未纳入 v0.1 去重核心的参数：`pub_min`、`pub_max`、`sale_min`、`sale_max`、`city`、`sale_flag`、`type`、`project_type`、`merchant_name`、`is_exclusive`、`channel_user_id`。
+
+Hermes v0.1 查询策略：
+
+- 优先用 `name` 搜索。
+- 如果候选活动有明确开始时间，补充 `start_min`、`start_max` 缩小范围。
+- 如果已知项目 ID，用 `id` 精确查询。
+- 读取返回结构中的 `data.item` 作为活动列表。
+- 读取 `data.page.num`、`data.page.size`、`data.page.total` 做分页。
+- Hermes 用 `page` 和 `size` 翻页，直到已拉取数量 >= `data.page.total` 或当前页 `data.item` 为空。
+
+返回结构示例：
+
+```json
+{
+  "errno": 0,
+  "errtag": 0,
+  "msg": "",
+  "data": {
+    "item": [
+      {
+        "id": 1000220,
+        "name": "宁波·文旅动漫嘉年华·泊港南京舰",
+        "city": 330200,
+        "province": 330000,
+        "sponsor_type": "其他",
+        "type": 10,
+        "project_type": 1,
+        "merchant_name": "浙江省宁波市幻焱动漫有限责任公司",
+        "is_exclusive": "1",
+        "start_time": 1777600800,
+        "end_time": 1779271200,
+        "pub_time": 1776677926,
+        "sale_end_time": 1779271200,
+        "sale_flag": "",
+        "performance_image": {
+          "banner": {
+            "desc": "",
+            "url": "//i0.hdslb.com/bfs/openplatform/202604/cJFarnDu1776517492_1776517492752.png"
+          },
+          "first": {
+            "desc": "",
+            "url": "//i2.hdslb.com/bfs/openplatform/202604/i1nuUugR1776517487_1776517487276.png"
+          }
+        },
+        "venue_name": "131南京舰",
+        "status": 1,
+        "ver_id": "1231260863129",
+        "hide": 0,
+        "channel": 1,
+        "channel_user_id": 303305152,
+        "city_name": "宁波市",
+        "today_count": 0,
+        "total_count": 0,
+        "remain": 92691,
+        "jump_url": "https://show.bilibili.com/platform/detail.html?id=1000220",
+        "real_auth": 0,
+        "id_bind": 0,
+        "pending": 0
+      }
+    ],
+    "page": {
+      "num": 1,
+      "size": 20,
+      "total": 63909
+    },
+    "ids": []
+  }
+}
+```
+
+敏感说明：
+
+- 查询接口需要登录态 cookie 和浏览器 headers。
+- cookie 必须由 Hermes secrets 管理，不得写入 skill、artifact 或日志。
+
+### 活动草稿创建 API
+
+当前接口尚未上线，因此不阻塞阶段 0、阶段 1、阶段 2。
+
+在接口上线前：
+
+- Hermes 只生成 `platform_event_draft_payload`。
+- schema gate、dictionary gate、duplicate gate 仍然照常运行。
+- `can_create_unpublished_drafts` 默认关闭。
+- 阶段 3 等接口上线后再开启。
+
+## 推荐运行时配置
+
+- `dictionary_sync`：首次部署立即执行；之后每周一 03:00 更新。
+- `daily_intel`：每天 08:00，v0.1 只抓 `source-config.md` 中的微博和小红书测试源。
+- `business_sync`：每天 10:00。
+- `recommend_actions`：每天业务同步完成后。
+- `weekly_review`：每周一 09:00。
+
+## Hermes 必需能力
+
+- 场馆 API 分页拉取和本地缓存。
+- 场地 API 按场馆逐个拉取和本地缓存。
+- 已有活动查询 API 适配器。
+- 微博账号动态采集适配器。
+- 小红书用户笔记采集适配器。
+- `source_item` 归一化器。
+- 字典解析器：活动类型、省市区、场馆、场地。
+- schema 校验器。
+- 活动草稿创建/更新适配器；接口上线前保持 disabled。
+- 审批任务创建。
+- 运行审计日志、重试和死信队列。
+
+## 不得自动执行
+
+- 发布活动。
+- 改价。
+- 花推广预算。
+- 删除或降权内容。
+- 发送非模板化商务消息。
