@@ -20,6 +20,15 @@
 - `language`：内容语言
 - `confidence`：0-1 的采集置信度
 
+来源完整性要求：
+
+- `source_url` 必须来自采集工具返回的原始链接或 `source-config.md` 中明确配置的 seed/profile 链接。
+- 不得由模型编造、拼接或把搜索页、登录页、跳转页当成原文链接。
+- 微博 `source_item` 必须能追溯到配置的 `uid = 6596632265`。
+- 小红书 `source_item` 必须能追溯到配置的 `user_id = 6333b2ee0000000023024449`。
+- 如果采集器无法拿到稳定原文链接，`source_url` 可以为空，但该 source item 只能进入人工排查，不能进入自动活动抽取。
+- 如果原始内容来自登录页、错误页、空页面或非目标账号，必须写入 `errors`，不得进入 `event_candidates`。
+
 ## event_candidate
 
 从一个或多个 source items 中抽取出的结构化活动候选。
@@ -50,6 +59,27 @@
 - `evidence`
 - `confidence`
 - `status`：`new`、`duplicate`、`needs_review`、`approved`、`rejected` 或 `published`
+
+证据要求：
+
+- `evidence` 中每条证据必须包含 `source_item_id`、`field`、`quote`、`url`。
+- `url` 必须等于对应 `source_item.source_url`，或是该 source item 原始媒体里的 URL；不得是模型生成的新 URL。
+- `quote` 必须能在对应 `source_item.raw_text` 中找到，或明确标记为 `media_ocr` 并关联 `raw_media`。
+- 非空字段没有 evidence 时，该字段必须清空或整条候选进入 `needs_review`。
+- 如果活动名称、城市、开始时间三者都缺少直接证据，不得生成 `event_candidate`。
+- 如果候选活动与 `source_item.raw_text` 的主题明显无关，必须标记为 `rejected`，不要进入字典解析。
+
+证据对象建议结构：
+
+```json
+{
+  "source_item_id": "weibo_6596632265_xxx",
+  "field": "start_date",
+  "quote": "5月1日-5月2日",
+  "url": "https://weibo.com/6596632265/xxx",
+  "evidence_type": "text|media_ocr|metadata"
+}
+```
 
 ## platform_event_draft_payload
 

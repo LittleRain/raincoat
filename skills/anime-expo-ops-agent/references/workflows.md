@@ -53,14 +53,24 @@ GET https://show.bilibili.com/api/ticket-b/place/getbyvenue?venue_id=30204
 2. 抓取微博 `uid = 6596632265` 的最近动态。
 3. 抓取小红书用户 `6333b2ee0000000023024449` 的最近笔记。
 4. 将微博和小红书内容统一归一化为 `source_item`。
-5. 对 `content_hash` 去重。
-6. 采集失败、登录态失效、限流都必须进入 `errors` artifact。
-7. 使用活动抽取提示词抽取 `event_candidate`。
-8. 用省市区字典解析 `provinceId`、`cityId`、`districtId`。
-9. 用场馆/场地缓存解析 `venueId`、`placeId`。
-10. 输出 `create_draft`、`merge_review`、`needs_review` 队列。
+5. 执行来源完整性门禁，确认内容确实来自配置的微博 uid 或小红书 user_id。
+6. 对 `content_hash` 去重。
+7. 采集失败、登录态失效、限流、来源不匹配都必须进入 `errors` artifact。
+8. 只有通过来源完整性门禁的 source item 才能进入活动抽取。
+9. 使用活动抽取提示词抽取 `event_candidate`。
+10. 执行证据 URL 门禁，确认 evidence 的 URL 和 quote 都能追溯到输入 source item。
+11. 用省市区字典解析 `provinceId`、`cityId`、`districtId`。
+12. 用场馆/场地缓存解析 `venueId`、`placeId`。
+13. 输出 `create_draft`、`merge_review`、`needs_review` 队列。
 
 v0.1 不做全网搜索，只抓指定账号。
+
+采集限制：
+
+- 如果微博工具只能按 uid 拉动态，就只使用该 uid 的返回结果；不要退化为关键词搜索。
+- 如果小红书工具不能按 user_id 拉 profile 笔记，必须返回 `unsupported_connector` 或 `auth_required`，不要退化为关键词搜索。
+- 不得把平台搜索结果、推荐流结果或其他账号内容混入本次 dry-run。
+- 不得为 source item 或 evidence 生成新的社交平台 URL；只能使用采集器返回的 URL 或配置中的 seed/profile URL。
 
 ## 已有活动查重（`duplicate_match`）
 

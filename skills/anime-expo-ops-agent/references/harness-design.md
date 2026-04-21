@@ -112,12 +112,16 @@ Replay 输出：
 硬门禁：
 
 - JSON schema 校验失败，停止。
+- source item 不属于 `source-config.md` 配置的账号或入口，停止。
+- evidence URL 不是对应 `source_item.source_url` 或原始媒体 URL，停止。
+- evidence quote 无法在 `source_item.raw_text` 或 `media_ocr` 中定位，停止。
 - `type`、`provinceId`、`cityId` 为空，停止写入。
 - `placeId` 不属于 `venueId`，停止写入。
 - 高风险动作未审批，停止。
 
 软门禁：
 
+- 原文链接为空或无法验证打开，进入人工排查，不进入自动抽取。
 - 场馆/场地模糊匹配，进入人工审核。
 - 时间待定，允许草稿但标记 `projectTimeStatus = 1`。
 - 价格待定，允许草稿但标记 `priceStatus = 1`。
@@ -166,6 +170,44 @@ Replay 输出：
 - `can_execute_low_risk_actions`
 
 默认只打开读和 dry-run。写入能力必须在对应 eval 通过后打开。
+
+## 来源完整性门禁
+
+`daily_intel` 必须先通过来源完整性门禁，再进入模型抽取。
+
+必须校验：
+
+- `source_type` 只能是当前 run 允许的渠道。
+- 微博内容必须来自 `source-config.md` 中配置的 `uid = 6596632265`。
+- 小红书内容必须来自 `source-config.md` 中配置的 `user_id = 6333b2ee0000000023024449`。
+- `source_url` 必须是采集器返回的原文 URL、配置里的 seed URL 或 profile URL；不得由模型生成。
+- 采集结果不能是登录页、错误页、搜索结果页、空正文或其他账号内容。
+
+失败处理：
+
+- 写入 `errors` artifact，错误类型为 `source_scope_mismatch`、`invalid_source_url`、`empty_source_text`、`auth_required` 或 `unsupported_connector`。
+- 不生成 `event_candidate`。
+
+## 证据 URL 门禁
+
+`event_candidate.evidence[].url` 必须可追溯到输入 source item。
+
+通过条件：
+
+- evidence URL 等于某个 `source_item.source_url`。
+- 或 evidence URL 等于该 source item 的 `raw_media` URL。
+- evidence quote 能在 `raw_text` 中精确匹配；如果来自图片 OCR，必须标记 `evidence_type = media_ocr`。
+
+阻断条件：
+
+- URL 无法打开、是登录页、是搜索页、是短链未展开失败、或不属于输入 source。
+- quote 不存在于原文。
+- 候选活动关键字段来自模型推断但没有 evidence。
+
+失败输出：
+
+- `gate_results` 记录 `evidence_url_invalid`、`evidence_quote_missing` 或 `candidate_not_supported_by_source`。
+- 候选状态设为 `rejected` 或 `needs_review`，不得进入 `dictionary_resolution_results`。
 
 ## 推荐 harness 结构
 

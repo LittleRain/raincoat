@@ -222,6 +222,8 @@ Hermes v0.1 查询策略：
 - 微博账号动态采集适配器。
 - 小红书用户笔记采集适配器。
 - `source_item` 归一化器。
+- 来源完整性门禁：校验 source item 属于配置账号，且不是搜索结果、推荐流、登录页、错误页或空正文。
+- 证据 URL 门禁：校验 evidence URL 来自 `source_item.source_url` 或 `raw_media`，quote 能在原文或 OCR 中定位。
 - 字典解析器：活动类型、省市区、场馆、场地。
 - schema 校验器。
 - 活动草稿创建/更新适配器；接口上线前保持 disabled。

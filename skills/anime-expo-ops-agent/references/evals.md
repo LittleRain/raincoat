@@ -44,6 +44,10 @@
 
 每周统计 gate 阻断原因：
 
+- 来源账号不匹配。
+- source URL 无效。
+- evidence URL 无效。
+- evidence quote 无法在原文中定位。
 - schema 校验失败。
 - 缺 evidence。
 - 字典解析失败。
@@ -54,6 +58,9 @@
 目标：
 
 - 硬门禁误放行 = 0。
+- 非目标账号内容进入 `event_candidates` = 0。
+- 不可打开或不可追溯 evidence URL 进入 `event_candidates` = 0。
+- evidence quote 不在原文但被接受 = 0。
 - 中高风险未审批执行 = 0。
 - schema gate 阻断项 100% 有错误原因。
 
@@ -101,6 +108,11 @@
 反馈标签：
 
 - `not_an_event`
+- `source_scope_mismatch`
+- `invalid_source_url`
+- `invalid_evidence_url`
+- `evidence_quote_missing`
+- `unsupported_connector`
 - `wrong_event_type`
 - `wrong_city`
 - `wrong_district`
