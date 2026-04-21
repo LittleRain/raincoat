@@ -3,6 +3,7 @@
 ## Spec 完整性
 
 - [x] normalized spec 存在（`examples/normalized-spec-summary.md`）
+- [x] expected output inventory 存在（`examples/expected-output-inventory.json`）
 - [x] 原始需求存在（`docs/skills/工房业务交易双周报需求.md`）
 - [x] 6 个数据合同已映射（整体数据/行业数据/行业商品明细数据/内容渠道数据/商家销售明细/资源位二级入口数据）
 - [x] 3 个栏目已定义（核心数据趋势 / GMV 拆解 / 流量拆解）
@@ -42,6 +43,7 @@
 - [x] 执行日志包含文件匹配、读取状态
 - [x] 日志支持 INFO / WARN / ERROR 层级
 - [x] 生成的 HTML 栏目顺序与 spec 一致
+- [x] 生成的 HTML 通过 expected output inventory 校验（3 栏目 / 16 图表 / 8 表格）
 - [x] 商家 TOP5 表含 GMV 占比 + 每指标环比
 - [x] 商品 TOP10 表含每指标环比
 - [x] 结论文本明确写出 上涨/下跌/持平

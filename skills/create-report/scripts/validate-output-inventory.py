@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from html.parser import HTMLParser
 from pathlib import Path
@@ -27,10 +28,16 @@ class ReportHTMLParser(HTMLParser):
         self.section_counts: dict[str, dict[str, int]] = {}
         self._text_parts: list[str] = []
         self.section_text: dict[str, list[str]] = {}
+        self.conclusion_count = 0
+        self._skip_text_stack: list[str] = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         attr = {k: v or "" for k, v in attrs}
         classes = set(attr.get("class", "").split())
+
+        if tag in {"script", "style", "template", "noscript"}:
+            self._skip_text_stack.append(tag)
+            return
 
         if tag == "section" and "section" in classes:
             section_id = attr.get("id", "")
@@ -45,15 +52,24 @@ class ReportHTMLParser(HTMLParser):
             self.chart_count += 1
             self._increment_section("charts")
 
+        if "conclusion" in classes:
+            self.conclusion_count += 1
+
         if tag == "table":
             self.table_count += 1
             self._increment_section("tables")
 
     def handle_endtag(self, tag: str) -> None:
+        if self._skip_text_stack and tag == self._skip_text_stack[-1]:
+            self._skip_text_stack.pop()
+            return
+
         if tag == "section" and self._section_stack:
             self._current_section = self._section_stack.pop()
 
     def handle_data(self, data: str) -> None:
+        if self._skip_text_stack:
+            return
         self._text_parts.append(data)
         if self._current_section:
             self.section_text.setdefault(self._current_section, []).append(data)
@@ -106,12 +122,31 @@ def validate(inventory: dict[str, Any], html: str) -> list[str]:
     parser.feed(html)
 
     errors: list[str] = []
+    user_text = parser.text
+    for forbidden in ("nan", "None", "undefined"):
+        if re_search_word(forbidden, user_text):
+            errors.append(f"forbidden empty value token {forbidden} found in rendered text")
+
+    expected_sections = inventory.get("sections", [])
+    if expected_sections is None:
+        expected_sections = []
+    if not isinstance(expected_sections, list):
+        raise ValueError("sections must be an array")
+    expected_section_ids = {
+        str(section.get("section_id"))
+        for section in expected_sections
+        if isinstance(section, dict) and section.get("section_id")
+    }
+
     totals = inventory.get("totals", {})
     if not isinstance(totals, dict):
         raise ValueError("totals must be an object")
 
     actual_totals = {
-        "sections": len(parser.section_ids),
+        "sections": (
+            sum(1 for section_id in parser.section_ids if section_id in expected_section_ids)
+            if expected_section_ids else len(parser.section_ids)
+        ),
         "charts": parser.chart_count,
         "tables": parser.table_count,
     }
@@ -126,11 +161,9 @@ def validate(inventory: dict[str, Any], html: str) -> list[str]:
         if metric_name not in parser.text:
             errors.append(f"metric {metric_name} expected, found 0")
 
-    expected_sections = inventory.get("sections", [])
-    if expected_sections is None:
-        expected_sections = []
-    if not isinstance(expected_sections, list):
-        raise ValueError("sections must be an array")
+    expected_conclusions = _expected_int(totals, "conclusions")
+    if expected_conclusions is not None and expected_conclusions != parser.conclusion_count:
+        errors.append(f"conclusions expected {expected_conclusions}, found {parser.conclusion_count}")
 
     for section in expected_sections:
         if not isinstance(section, dict):
@@ -152,6 +185,12 @@ def validate(inventory: dict[str, Any], html: str) -> list[str]:
                 errors.append(f"section {section_id} metric {metric_name} expected, found 0")
 
     return errors
+
+
+def re_search_word(token: str, text: str) -> bool:
+    if token == "nan":
+        return re.search(r"(?<![A-Za-z])nan(?![A-Za-z])", text, re.IGNORECASE) is not None
+    return token in text
 
 
 def main() -> int:

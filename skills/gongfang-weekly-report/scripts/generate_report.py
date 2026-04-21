@@ -229,6 +229,10 @@ def _js_array(values: list) -> str:
     return json.dumps([_convert(v) for v in values])
 
 
+def _js_str(value: str) -> str:
+    return json.dumps(str(value), ensure_ascii=False)
+
+
 def build_bar_chart(
     labels: list[str],
     values: list[float],
@@ -277,6 +281,34 @@ def build_line_chart(
     )
 
 
+def build_multi_line_chart(
+    labels: list[str],
+    series: list[tuple[str, list[float]]],
+    title: str,
+    chart_inits: list[str],
+    y_format: str = "num",
+) -> str:
+    """Emit one line chart with multiple named series."""
+    series = [(name, values) for name, values in series if values]
+    if not labels or not series:
+        return '<div class="chart-empty">暂无数据</div>'
+    cid = next_chart_id()
+    datasets = ", ".join(
+        f"{{label: {_js_str(name)}, data: {_js_array(values)}}}"
+        for name, values in series
+    )
+    chart_inits.append(
+        f"reportChart('{cid}', chartPresets.line({_js_array(labels)}, "
+        f"[{datasets}], {{yFormat: '{y_format}'}}));"
+    )
+    return (
+        f'<div class="chart-container">'
+        f'<figcaption>{html.escape(title)}</figcaption>'
+        f'<div class="chart-area"><canvas id="{cid}"></canvas></div>'
+        f'</div>'
+    )
+
+
 def build_combo_chart(
     labels: list[str],
     bar_values: list[float],
@@ -297,6 +329,42 @@ def build_combo_chart(
         f"{{label: '{html.escape(bar_label)}', data: {_js_array(bar_values)}, yAxisID: 'y'}}, "
         f"{{type: 'line', label: '{html.escape(line_label)}', data: {_js_array(line_values)}, yAxisID: 'y1'}}"
         f"], {{yFormat: '{y_format}', y1Format: '{y1_format}'}}));"
+    )
+    return (
+        f'<div class="chart-container">'
+        f'<figcaption>{html.escape(title)}</figcaption>'
+        f'<div class="chart-area"><canvas id="{cid}"></canvas></div>'
+        f'</div>'
+    )
+
+
+def build_multi_combo_chart(
+    labels: list[str],
+    series: list[tuple[str, list[float], list[float]]],
+    title: str,
+    absolute_label: str,
+    share_label: str,
+    chart_inits: list[str],
+    y_format: str = "pv",
+    y1_format: str = "pct",
+) -> str:
+    """Emit one combo chart with N bar series and matching N share line series."""
+    series = [(name, abs_values, share_values) for name, abs_values, share_values in series if abs_values]
+    if not labels or not series:
+        return '<div class="chart-empty">暂无数据</div>'
+    cid = next_chart_id()
+    datasets = []
+    for name, abs_values, _ in series:
+        datasets.append(
+            f"{{label: {_js_str(name + ' ' + absolute_label)}, data: {_js_array(abs_values)}, yAxisID: 'y'}}"
+        )
+    for name, _, share_values in series:
+        datasets.append(
+            f"{{type: 'line', label: {_js_str(name + ' ' + share_label)}, data: {_js_array(share_values)}, yAxisID: 'y1'}}"
+        )
+    chart_inits.append(
+        f"reportChart('{cid}', chartPresets.combo({_js_array(labels)}, "
+        f"[{', '.join(datasets)}], {{yFormat: '{y_format}', y1Format: '{y1_format}'}}));"
     )
     return (
         f'<div class="chart-container">'
@@ -647,6 +715,9 @@ def build_report(
     resource_df: pd.DataFrame,
     run_id: str,
 ) -> RenderBundle:
+    global _chart_id_counter
+    _chart_id_counter = 0
+
     # Collect chart initialization JS calls
     chart_inits: list[str] = []
 
@@ -702,8 +773,51 @@ def build_report(
     all_industry_weeks = sorted(focus_industry_weekly["周"].unique())
     lookback_4w = all_industry_weeks[-4:] if len(all_industry_weeks) >= 4 else all_industry_weeks
     chart_labels_4w = ["W" + str(int(w)) for w in lookback_4w]
+    focus_names = ["绘画", "VUP周边"]
 
-    for focus_name in ["绘画", "VUP周边"]:
+    def _industry_series(focus_name: str, field_name: str) -> list[float]:
+        return [
+            focus_industry_weekly[
+                (focus_industry_weekly["focus_industry"] == focus_name)
+                & (focus_industry_weekly["周"] == w)
+            ][field_name].iloc[0]
+            if not focus_industry_weekly[
+                (focus_industry_weekly["focus_industry"] == focus_name)
+                & (focus_industry_weekly["周"] == w)
+            ].empty else 0
+            for w in lookback_4w
+        ]
+
+    s2_gmv_chart = build_multi_line_chart(
+        chart_labels_4w,
+        [(name, _industry_series(name, "GMV")) for name in focus_names],
+        "GMV by行业（过去4周）",
+        chart_inits,
+        y_format="gmv",
+    )
+    s2_buyers_chart = build_multi_line_chart(
+        chart_labels_4w,
+        [(name, _industry_series(name, "支付订单买家数")) for name in focus_names],
+        "买家数 by行业（过去4周）",
+        chart_inits,
+        y_format="num",
+    )
+    s2_conv_chart = build_multi_line_chart(
+        chart_labels_4w,
+        [(name, _industry_series(name, "转化率")) for name in focus_names],
+        "下单转化率 by行业（过去4周）",
+        chart_inits,
+        y_format="pct",
+    )
+    s2_pv_chart = build_multi_line_chart(
+        chart_labels_4w,
+        [(name, _industry_series(name, "曝光PV")) for name in focus_names],
+        "商品曝光PV by行业（过去4周）",
+        chart_inits,
+        y_format="pv",
+    )
+
+    for focus_name in focus_names:
         curr_industry = focus_industry_weekly[
             (focus_industry_weekly["focus_industry"] == focus_name)
             & (focus_industry_weekly["周"] == current_week["周"])
@@ -728,57 +842,6 @@ def build_report(
             delta = pct_change(curr_row[col], prev_row[col])
             if abs(delta) > 0.05:
                 metric_changes.append(f"{metric} 环比 {fmt_delta(delta)}")
-
-        # industry 4-week data
-        ind_gmv_4w = {}
-        ind_buyers_4w = {}
-        ind_conv_4w = {}
-        ind_pv_4w = {}
-        for fn in ["绘画", "VUP周边"]:
-            ind_gmv_4w[fn] = [
-                focus_industry_weekly[
-                    (focus_industry_weekly["focus_industry"] == fn)
-                    & (focus_industry_weekly["周"] == w)
-                ]["GMV"].iloc[0]
-                if not focus_industry_weekly[
-                    (focus_industry_weekly["focus_industry"] == fn)
-                    & (focus_industry_weekly["周"] == w)
-                ].empty else 0
-                for w in lookback_4w
-            ]
-            ind_buyers_4w[fn] = [
-                focus_industry_weekly[
-                    (focus_industry_weekly["focus_industry"] == fn)
-                    & (focus_industry_weekly["周"] == w)
-                ]["支付订单买家数"].iloc[0]
-                if not focus_industry_weekly[
-                    (focus_industry_weekly["focus_industry"] == fn)
-                    & (focus_industry_weekly["周"] == w)
-                ].empty else 0
-                for w in lookback_4w
-            ]
-            ind_conv_4w[fn] = [
-                focus_industry_weekly[
-                    (focus_industry_weekly["focus_industry"] == fn)
-                    & (focus_industry_weekly["周"] == w)
-                ]["转化率"].iloc[0]
-                if not focus_industry_weekly[
-                    (focus_industry_weekly["focus_industry"] == fn)
-                    & (focus_industry_weekly["周"] == w)
-                ].empty else 0
-                for w in lookback_4w
-            ]
-            ind_pv_4w[fn] = [
-                focus_industry_weekly[
-                    (focus_industry_weekly["focus_industry"] == fn)
-                    & (focus_industry_weekly["周"] == w)
-                ]["曝光PV"].iloc[0]
-                if not focus_industry_weekly[
-                    (focus_industry_weekly["focus_industry"] == fn)
-                    & (focus_industry_weekly["周"] == w)
-                ].empty else 0
-                for w in lookback_4w
-            ]
 
         # Shop + product tables
         goods_weeks = sorted(goods_df["周"].dropna().astype(float).unique().tolist())
@@ -850,12 +913,6 @@ def build_report(
                     f"{movement_text('商详UV', row['curr_uv'], row['prev_uv'], 0)}。"
                 )
 
-        # Build industry charts (4-week trend lines)
-        ind_gmv_chart = build_line_chart(chart_labels_4w, ind_gmv_4w.get(focus_name, []), f"GMV 过去4周", chart_inits, y_format="gmv")
-        ind_buyers_chart = build_line_chart(chart_labels_4w, ind_buyers_4w.get(focus_name, []), f"买家数 过去4周", chart_inits, y_format="num")
-        ind_conv_chart = build_line_chart(chart_labels_4w, ind_conv_4w.get(focus_name, []), f"下单转化率 过去4周", chart_inits, y_format="pct")
-        ind_pv_chart = build_line_chart(chart_labels_4w, ind_pv_4w.get(focus_name, []), f"商品曝光PV 过去4周", chart_inits, y_format="pv")
-
         # Section 2 industry block (using breakdown-block from design system)
         industry_blocks.append(
             f"""
@@ -871,13 +928,6 @@ def build_report(
                 {summary_card("买家数", curr_row["支付订单买家数"], prev_row["支付订单买家数"], lambda v: fmt_num(v), "green")}
                 {summary_card("下单转化率", curr_row["转化率"], prev_row["转化率"], fmt_pct, "amber")}
                 {summary_card("商品曝光PV", curr_row["曝光PV"], prev_row["曝光PV"], lambda v: fmt_num(v), "blue")}
-              </div>
-
-              <div class="grid-2" style="margin-top: var(--sp-7);">
-                {ind_gmv_chart}
-                {ind_buyers_chart}
-                {ind_conv_chart}
-                {ind_pv_chart}
               </div>
 
               <div class="panel">
@@ -992,51 +1042,47 @@ def build_report(
                         + (f"，主因：{'、'.join(reasons)}" if reasons else "，需进一步分析")
                     )
 
-        # Build combo charts for top-2 channels
-        ch_gmv_charts = []
-        ch_pv_charts = []
-        for ch in top2_channels:
-            gmv_vals = _ch_series(ch, "GMV")
-            gmv_share_vals = _ch_series(ch, "gmv_share")
-            ch_gmv_charts.append(
-                build_combo_chart(
-                    chart_labels_4w, gmv_vals, gmv_share_vals,
-                    f"{ch} 渠道 GMV + 占比", "GMV", "GMV占比",
-                    chart_inits, y_format="gmv", y1_format="pct"
-                )
-            )
-            pv_vals = _ch_series(ch, "曝光PV")
-            pv_share_vals = _ch_series(ch, "pv_share")
-            ch_pv_charts.append(
-                build_combo_chart(
-                    chart_labels_4w, pv_vals, pv_share_vals,
-                    f"{ch} 渠道 曝光PV + 占比", "曝光PV", "曝光PV占比",
-                    chart_inits, y_format="pv", y1_format="pct"
-                )
-            )
-
-        # Build combo charts for top-4 resource entries
-        re_gmv_charts = []
-        re_pv_charts = []
-        for entry in top4_entries:
-            gmv_vals = _re_series(entry, "GMV")
-            gmv_share_vals = _re_series(entry, "gmv_share")
-            re_gmv_charts.append(
-                build_combo_chart(
-                    chart_labels_4w, gmv_vals, gmv_share_vals,
-                    f"{entry} GMV + 占比", "GMV", "GMV占比",
-                    chart_inits, y_format="gmv", y1_format="pct"
-                )
-            )
-            pv_vals = _re_series(entry, "曝光PV")
-            pv_share_vals = _re_series(entry, "pv_share")
-            re_pv_charts.append(
-                build_combo_chart(
-                    chart_labels_4w, pv_vals, pv_share_vals,
-                    f"{entry} 曝光PV + 占比", "曝光PV", "曝光PV占比",
-                    chart_inits, y_format="pv", y1_format="pct"
-                )
-            )
+        # One declared chart row should render as one chart, with split items as series.
+        ch_gmv_chart = build_multi_combo_chart(
+            chart_labels_4w,
+            [(ch, _ch_series(ch, "GMV"), _ch_series(ch, "gmv_share")) for ch in top2_channels],
+            f"{focus_name} 内容渠道 GMV + 占比（Top2，过去4周）",
+            "GMV",
+            "GMV占比",
+            chart_inits,
+            y_format="gmv",
+            y1_format="pct",
+        )
+        ch_pv_chart = build_multi_combo_chart(
+            chart_labels_4w,
+            [(ch, _ch_series(ch, "曝光PV"), _ch_series(ch, "pv_share")) for ch in top2_channels],
+            f"{focus_name} 内容渠道 曝光PV + 占比（Top2，过去4周）",
+            "曝光PV",
+            "曝光PV占比",
+            chart_inits,
+            y_format="pv",
+            y1_format="pct",
+        )
+        re_gmv_chart = build_multi_combo_chart(
+            chart_labels_4w,
+            [(entry, _re_series(entry, "GMV"), _re_series(entry, "gmv_share")) for entry in top4_entries],
+            f"{focus_name} 资源位二级入口 GMV + 占比（Top4，过去4周）",
+            "GMV",
+            "GMV占比",
+            chart_inits,
+            y_format="gmv",
+            y1_format="pct",
+        )
+        re_pv_chart = build_multi_combo_chart(
+            chart_labels_4w,
+            [(entry, _re_series(entry, "曝光PV"), _re_series(entry, "pv_share")) for entry in top4_entries],
+            f"{focus_name} 资源位二级入口 曝光PV + 占比（Top4，过去4周）",
+            "曝光PV",
+            "曝光PV占比",
+            chart_inits,
+            y_format="pv",
+            y1_format="pct",
+        )
 
         flow_blocks.append(
             f"""
@@ -1049,16 +1095,12 @@ def build_report(
 
               <div class="panel">
                 <h4>内容渠道 GMV + 占比 趋势（Top2，过去4周）</h4>
-                <div class="grid-2" style="margin-top: var(--sp-7);">
-                  {''.join(ch_gmv_charts) or '<div class="chart-empty">暂无数据</div>'}
-                </div>
+                {ch_gmv_chart}
               </div>
 
               <div class="panel">
                 <h4>内容渠道 曝光PV + 占比 趋势（Top2，过去4周）</h4>
-                <div class="grid-2" style="margin-top: var(--sp-7);">
-                  {''.join(ch_pv_charts) or '<div class="chart-empty">暂无数据</div>'}
-                </div>
+                {ch_pv_chart}
               </div>
 
               <div class="panel">
@@ -1068,16 +1110,12 @@ def build_report(
 
               <div class="panel">
                 <h4>资源位二级入口 GMV + 占比 趋势（Top4，过去4周）</h4>
-                <div class="grid-2" style="margin-top: var(--sp-7);">
-                  {''.join(re_gmv_charts) or '<div class="chart-empty">暂无资源位数据</div>'}
-                </div>
+                {re_gmv_chart}
               </div>
 
               <div class="panel">
                 <h4>资源位二级入口 曝光PV + 占比 趋势（Top4，过去4周）</h4>
-                <div class="grid-2" style="margin-top: var(--sp-7);">
-                  {''.join(re_pv_charts) or '<div class="chart-empty">暂无资源位数据</div>'}
-                </div>
+                {re_pv_chart}
               </div>
 
               <div class="panel">
@@ -1192,6 +1230,12 @@ def build_report(
         <div class="conclusion">
           <h4>行业汇总摘要</h4>
           <ul>{narrative_list(industry_narratives, "当前未形成重点行业摘要。")}</ul>
+        </div>
+        <div class="grid-2" style="margin-top: var(--sp-7);">
+          {s2_gmv_chart}
+          {s2_buyers_chart}
+          {s2_conv_chart}
+          {s2_pv_chart}
         </div>
         {''.join(industry_blocks)}
       </section>

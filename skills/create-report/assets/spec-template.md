@@ -1,131 +1,88 @@
-# 标准化周报 Spec 模板
+# Report Spec Questionnaire
 
-## report_goal
+Use this as the intake form for non-technical users. Free-form requirement docs
+may prefill the answers, but missing required answers must be confirmed before
+L1/L2 generation.
 
-- `report_name`:
-- `domain`:
-- `audience`:
-- `decision_goals`:
-- `success_definition`:
+## 1. Report Goal
 
-## business_context
+- report name:
+- business domain:
+- audience:
+- decisions this report should support:
+- what a good report must explain:
 
-- `business_summary`:
-- `business_units`:
-- `scope_notes`:
+## 2. Time Window
 
-## terminology
+- reporting period:
+- comparison period:
+- historical weeks or months to show:
+- timezone or calendar rule:
 
-- `terms`:
-- `segment_rules`:
+## 3. Sections
 
-## time_definition
+Repeat for each report section.
 
-- `reporting_granularity`:
-- `current_period_definition`:
-- `comparison_period_definition`:
+- section id:
+- title:
+- purpose:
+- primary data source:
+- fallback data source:
+- required metrics:
+- required dimensions:
+- expected charts count:
+- expected tables count:
+- chart splitting rule:
+- required tables and columns:
+- required conclusion style:
 
-## report_outline
+## 4. Data Sources
 
-- `section_id`:
-- `title`:
-- `purpose`:
-- `required_views`:
-- `required_metrics`:
-- `required_dimensions`:
-- `required_outputs`:
-- `narrative_expectations`:
-- `view_inventory`:
-  - `charts_count`:
-  - `tables_count`:
-  - `required_metric_names`:
-  - `judgment_metric_candidates`:
-  - `llm_judgment_allowed`:
-  - `source_requirement_evidence`:
-- `table_schemas`:
-- `narrative_schema`:
-- `section_data_mapping`:
-  - `primary_contracts`:
-  - `fallback_contracts`:
-  - `merge_or_override_rule`:
+Repeat for each input file.
 
-## data_contracts
+- contract id:
+- file name pattern:
+- required or optional:
+- supported sections:
+- period coverage:
+- dimensions:
+- metrics:
+- known field aliases:
+- quality risks:
 
-- `contract_id`:
-- `display_name`:
-- `file_name_pattern`:
-- `time_granularity`:
-- `dimensions`:
-- `metrics`:
-- `field_notes`:
-- `supported_sections`:
-- `sample_file_required`:
-- `period_coverage_expectation`:
-- `priority_for_sections`:
+## 5. Metric Formulas
 
-## analysis_rules
+Repeat for every official KPI.
 
-- `must_explain_conditions`:
-- `allowed_evidence`:
-- `forbidden_inferences`:
-- `metric_calculation_contracts`:
-- `ratio_metric_fallback_rules`:
-  - `metric_name`:
-  - `primary_formula`:
-  - `fallback_formula`:
-  - `fallback_condition`:
+- metric name:
+- source fields:
+- formula:
+- formatter:
+- zero denominator behavior:
+- fallback formula:
 
-## output_contract
+## 6. Attribution Evidence
 
-- `format`: `html`
-- `required_sections`:
-- `section_order`:
-- `required_blocks`:
-- `citation_rules`:
-- `expected_output_inventory`:
-  - `totals`:
-    - `sections`:
-    - `charts`:
-    - `tables`:
-  - `required_metrics`:
-  - `judgment_metrics`:
-  - `sections`:
-- `table_column_rules`:
-- `wow_display_rules`:
-- `narrative_direction_rules`:
-- `runtime_logging_rules`:
-- `runtime_dependency_policy`:
-  - `mode`: `self-contained-or-local`
-  - `allow_external_cdn`: `false`
-  - `file_protocol_must_render`: `true`
-- `empty_period_column_policy`:
-  - `hide_when_all_rows_empty`:
-  - `applies_to_tables`:
+Repeat for each conclusion type.
 
-## skill_generation_contract
+- section:
+- trigger condition:
+- allowed evidence fields:
+- allowed evidence datasets:
+- forbidden claims:
+- required direction words:
 
-- `skill_name`:
-- `skill_title`:
-- `skill_level`: `L0` / `L1` / `L2`
-- `level_readiness`:
-  - `real_samples_present`:
-  - `two_period_coverage`:
-  - `real_runner_present`:
-  - `validation_evidence_present`:
-  - `browser_evidence_present`:
-- `required_files`:
-- `required_references`:
-- `required_assets`:
-- `required_examples`:
-- `required_tests`:
+## 7. Empty Values
 
-## acceptance_checks
+- fields that must block when empty:
+- fields that may display as "unknown":
+- numeric null handling:
+- all-empty period column handling:
 
-- `spec_completeness_checks`:
-- `spec_consistency_checks`:
-- `generation_readiness_checks`:
-- `html_output_checks`:
-- `output_inventory_checks`:
-- `runnable_readiness_checks`:
-- `runtime_log_checks`:
-- `level_acceptance_checks`:
+## 8. Downstream Skill
+
+- skill name:
+- skill title:
+- target level: L0 / L1 / L2
+- evidence directory:
+- publishability requirement:

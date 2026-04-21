@@ -1,0 +1,1147 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Create Report Intake Wizard</title>
+    <style>
+      :root {
+        --ink: #1d2420;
+        --muted: #66726a;
+        --line: #d9e1d8;
+        --paper: #f7faf6;
+        --white: #ffffff;
+        --mint: #3fb57f;
+        --mint-deep: #146b4b;
+        --coral: #e1573f;
+        --gold: #d49b25;
+        --aqua: #217b85;
+        --shadow: 0 18px 48px rgba(28, 43, 35, 0.12);
+        --r: 8px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(247, 250, 246, 0.96)),
+          repeating-linear-gradient(90deg, rgba(63, 181, 127, 0.08) 0 1px, transparent 1px 42px),
+          repeating-linear-gradient(0deg, rgba(33, 123, 133, 0.06) 0 1px, transparent 1px 42px);
+        color: var(--ink);
+        font-family: "Aptos", "Gill Sans", "Trebuchet MS", sans-serif;
+        letter-spacing: 0;
+      }
+
+      button,
+      input,
+      textarea,
+      select {
+        font: inherit;
+      }
+
+      .app {
+        min-height: 100vh;
+        display: grid;
+        grid-template-columns: 340px minmax(0, 1fr) 420px;
+      }
+
+      .rail {
+        position: sticky;
+        top: 0;
+        height: 100vh;
+        padding: 28px 22px;
+        border-right: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.8);
+        overflow: auto;
+      }
+
+      .brand {
+        display: grid;
+        gap: 10px;
+        margin-bottom: 24px;
+      }
+
+      .eyebrow {
+        color: var(--mint-deep);
+        font-size: 12px;
+        font-weight: 800;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      h3 {
+        margin: 0;
+        font-family: Georgia, "Times New Roman", serif;
+        line-height: 1.08;
+        letter-spacing: 0;
+      }
+
+      h1 {
+        font-size: 34px;
+      }
+
+      h2 {
+        font-size: 25px;
+      }
+
+      h3 {
+        font-size: 18px;
+      }
+
+      p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.55;
+      }
+
+      .steps {
+        display: grid;
+        gap: 8px;
+        margin: 22px 0;
+      }
+
+      .step {
+        width: 100%;
+        min-height: 42px;
+        border: 1px solid var(--line);
+        border-radius: var(--r);
+        background: var(--white);
+        color: var(--ink);
+        text-align: left;
+        padding: 10px 12px;
+        cursor: pointer;
+      }
+
+      .step.active {
+        border-color: var(--mint);
+        box-shadow: inset 4px 0 0 var(--mint);
+      }
+
+      .actions {
+        display: grid;
+        gap: 10px;
+      }
+
+      .btn {
+        border: 1px solid var(--line);
+        border-radius: var(--r);
+        background: var(--white);
+        color: var(--ink);
+        min-height: 42px;
+        padding: 10px 13px;
+        cursor: pointer;
+        font-weight: 750;
+      }
+
+      .btn.primary {
+        border-color: var(--mint-deep);
+        background: var(--mint-deep);
+        color: white;
+      }
+
+      .btn.warn {
+        border-color: rgba(225, 87, 63, 0.35);
+        color: var(--coral);
+      }
+
+      .workspace {
+        padding: 32px;
+        min-width: 0;
+      }
+
+      .panel {
+        background: rgba(255, 255, 255, 0.86);
+        border: 1px solid var(--line);
+        border-radius: var(--r);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+      }
+
+      .panel-head {
+        padding: 22px 24px;
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        justify-content: space-between;
+        gap: 18px;
+        align-items: start;
+      }
+
+      .panel-body {
+        padding: 22px 24px 26px;
+        display: grid;
+        gap: 18px;
+      }
+
+      .drop {
+        border: 1px dashed rgba(20, 107, 75, 0.5);
+        border-radius: var(--r);
+        background:
+          linear-gradient(135deg, rgba(63, 181, 127, 0.1), rgba(255, 255, 255, 0.6)),
+          var(--white);
+        padding: 18px;
+        display: grid;
+        gap: 12px;
+      }
+
+      .grid-2 {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      label {
+        display: grid;
+        gap: 7px;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 750;
+      }
+
+      input,
+      textarea,
+      select {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: var(--r);
+        background: var(--white);
+        color: var(--ink);
+        padding: 10px 11px;
+        min-height: 40px;
+      }
+
+      textarea {
+        min-height: 150px;
+        resize: vertical;
+        line-height: 1.5;
+      }
+
+      .section-list,
+      .source-list,
+      .issue-list {
+        display: grid;
+        gap: 12px;
+      }
+
+      .item {
+        border: 1px solid var(--line);
+        border-radius: var(--r);
+        background: var(--white);
+        padding: 14px;
+        display: grid;
+        gap: 12px;
+      }
+
+      .item-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: center;
+      }
+
+      .badge {
+        display: inline-flex;
+        min-height: 26px;
+        align-items: center;
+        border-radius: var(--r);
+        padding: 4px 8px;
+        border: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .badge.good {
+        border-color: rgba(63, 181, 127, 0.4);
+        color: var(--mint-deep);
+      }
+
+      .badge.bad {
+        border-color: rgba(225, 87, 63, 0.35);
+        color: var(--coral);
+      }
+
+      .preview {
+        position: sticky;
+        top: 0;
+        height: 100vh;
+        overflow: auto;
+        border-left: 1px solid var(--line);
+        background: rgba(29, 36, 32, 0.96);
+        color: #eff7f0;
+        padding: 24px;
+      }
+
+      .preview h2,
+      .preview h3 {
+        color: white;
+      }
+
+      .preview p,
+      .preview .muted {
+        color: #b8c7bd;
+      }
+
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+        margin: 18px 0;
+      }
+
+      .stat {
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: var(--r);
+        padding: 12px;
+      }
+
+      .stat strong {
+        display: block;
+        font-size: 24px;
+        color: #ffffff;
+      }
+
+      pre {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        background: #101714;
+        color: #dce8df;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: var(--r);
+        padding: 14px;
+        line-height: 1.45;
+        font-size: 12px;
+      }
+
+      .issue {
+        border-left: 4px solid var(--coral);
+        padding-left: 10px;
+      }
+
+      .issue.warn {
+        border-left-color: var(--gold);
+      }
+
+      .export-box {
+        border: 1px solid var(--line);
+        border-radius: var(--r);
+        background: var(--white);
+        padding: 14px;
+        display: grid;
+        gap: 10px;
+      }
+
+      .export-box textarea {
+        min-height: 240px;
+        font-family: "SFMono-Regular", Consolas, monospace;
+        font-size: 12px;
+      }
+
+      .hidden {
+        display: none;
+      }
+
+      @media (max-width: 1120px) {
+        .app {
+          grid-template-columns: 280px minmax(0, 1fr);
+        }
+
+        .preview {
+          grid-column: 1 / -1;
+          position: static;
+          height: auto;
+        }
+      }
+
+      @media (max-width: 760px) {
+        .app {
+          display: block;
+        }
+
+        .rail {
+          position: static;
+          height: auto;
+        }
+
+        .workspace {
+          padding: 18px;
+        }
+
+        .panel-head,
+        .grid-2,
+        .item-head {
+          display: grid;
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app">
+      <aside class="rail">
+        <div class="brand">
+          <div class="eyebrow">create-report intake</div>
+          <h1>周报需求结构化</h1>
+          <p>把自由需求文档转成可校验的 report spec，先补缺口，再设计、测试并打包下游周报 skill。</p>
+        </div>
+
+        <nav class="steps" aria-label="步骤">
+          <button class="step active" data-step="import">1. 导入需求</button>
+          <button class="step" data-step="goal">2. 场景和口径</button>
+          <button class="step" data-step="sections">3. 章节与图表</button>
+          <button class="step" data-step="sources">4. 数据源</button>
+          <button class="step" data-step="validate">5. 校验与导出</button>
+        </nav>
+
+        <div class="actions">
+          <button class="btn primary" id="demoBtn">载入工房示例</button>
+          <button class="btn" id="downloadSpecBtn">下载 normalized-spec.md</button>
+          <button class="btn" id="downloadInventoryBtn">下载 inventory.json</button>
+          <button class="btn warn" id="resetBtn">清空</button>
+        </div>
+      </aside>
+
+      <section class="workspace">
+        <div class="panel" data-panel="import">
+          <div class="panel-head">
+            <div>
+              <h2>导入需求</h2>
+              <p>上传或粘贴现有需求.md，系统会先抽取章节、图表和数据源。</p>
+            </div>
+            <span class="badge good">Markdown first</span>
+          </div>
+          <div class="panel-body">
+            <div class="drop">
+              <label>
+                上传需求.md
+                <input type="file" id="fileInput" accept=".md,.markdown,.txt" />
+              </label>
+              <label>
+                粘贴需求内容
+                <textarea id="rawInput" placeholder="粘贴需求.md 内容，或点击左侧载入示例"></textarea>
+              </label>
+              <button class="btn primary" id="parseBtn">抽取结构</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel hidden" data-panel="goal">
+          <div class="panel-head">
+            <div>
+              <h2>场景和口径</h2>
+              <p>这部分会进入 report_goal、business_context、terminology 和 time_definition。</p>
+            </div>
+            <span class="badge">Intent</span>
+          </div>
+          <div class="panel-body">
+            <div class="grid-2">
+              <label>报告名称<input id="reportName" /></label>
+              <label>业务域<input id="domain" /></label>
+            </div>
+            <label>使用场景 / 业务背景<textarea id="scenario"></textarea></label>
+            <label>名词解释<textarea id="terms"></textarea></label>
+            <label>时间口径<textarea id="timeRule"></textarea></label>
+          </div>
+        </div>
+
+        <div class="panel hidden" data-panel="sections">
+          <div class="panel-head">
+            <div>
+              <h2>章节与图表</h2>
+              <p>重点确认每个章节会生成多少图、多少表，以及图表是否需要拆分。</p>
+            </div>
+            <button class="btn" id="addSectionBtn">新增章节</button>
+          </div>
+          <div class="panel-body">
+            <div class="section-list" id="sections"></div>
+          </div>
+        </div>
+
+        <div class="panel hidden" data-panel="sources">
+          <div class="panel-head">
+            <div>
+              <h2>数据源</h2>
+              <p>让每个章节和图表都能追溯到文件、字段和时间覆盖。</p>
+            </div>
+            <button class="btn" id="addSourceBtn">新增数据源</button>
+          </div>
+          <div class="panel-body">
+            <div class="source-list" id="sources"></div>
+          </div>
+        </div>
+
+        <div class="panel hidden" data-panel="validate">
+          <div class="panel-head">
+            <div>
+              <h2>校验与导出</h2>
+              <p>这里显示阻塞项。红色问题不补齐，不建议进入执行方案设计、样本测试和 L1/L2 打包。</p>
+            </div>
+            <span class="badge" id="statusBadge">待校验</span>
+          </div>
+        <div class="panel-body">
+          <div class="issue-list" id="issues"></div>
+            <div class="export-box hidden" id="exportBox">
+              <div class="item-head">
+                <div>
+                  <h3 id="exportTitle">导出内容</h3>
+                  <p id="exportHint">如果浏览器没有触发下载，可以复制这里的内容。</p>
+                </div>
+                <button class="btn" id="copyExportBtn" type="button">复制内容</button>
+              </div>
+              <textarea id="exportText" spellcheck="false"></textarea>
+            </div>
+        </div>
+      </div>
+      </section>
+
+      <aside class="preview">
+        <div class="eyebrow">Live contract</div>
+        <h2 id="previewTitle">未导入需求</h2>
+        <p class="muted" id="previewSubtitle">载入需求后会生成 spec 和 inventory。</p>
+        <div class="stats">
+          <div class="stat"><span>章节</span><strong id="statSections">0</strong></div>
+          <div class="stat"><span>图表</span><strong id="statCharts">0</strong></div>
+          <div class="stat"><span>表格</span><strong id="statTables">0</strong></div>
+        </div>
+        <h3>Normalized Spec</h3>
+        <pre id="specPreview"></pre>
+        <h3>Expected Inventory</h3>
+        <pre id="inventoryPreview"></pre>
+      </aside>
+    </main>
+
+    <script>
+      const demoMarkdown = `# 工房业务交易双周周报需求
+
+## 任务目标
+基于一个内容电商平台，做一个交易业务双周周报。
+
+**业务介绍：** 用户个人开店，平台提供交易工具和流量给用户成交。
+
+名词定义：
+- **核心成交体裁**：根据"内容类型"字段区分，分别为：商品、视频、动态、直播、其他
+- **行业**：绘画、VUP周边、绘画周边、知识&服务、手工
+
+时间段定义:
+- 每周五到周四，对比当周和上周
+
+## 输出的周报格式
+
+### ① 核心数据趋势
+**目的：** 看清交易规模变化 by周
+
+**图表：**
+| 图表类型 | 维度 | 内容 | 数据源 |
+|--------|------|------|------|
+| 柱状图 | 周 | GMV 周维度变化 | 文档1 |
+| 柱状图 | 周 | 买家数 周维度变化 | 文档1 |
+| 折线图 | 周 | 下单转化率 周维度变化 | 文档1 |
+| 折线图 | 周 | 商品曝光PV 周维度变化 | 文档1 |
+
+**得出结论：** 波动超过5%的指标（GMV、订单数、买家数、支付转化率）
+
+### ② GMV 拆解
+**目的：** 了解每个行业及类目的交易规模变化趋势，得出 GMV 波动原因
+
+**图表：**
+| 图表类型 | 维度 | 内容 | 数据源 |
+|--------|------|------|------|
+| 折线图 | 周 | GMV by行业 | 文档2 |
+| 折线图 | 周 | 买家数 by行业 | 文档2 |
+| 折线图 | 周 | 下单转化率 by行业 | 文档2 |
+| 折线图 | 周 | 商品曝光PV by行业 | 文档2 |
+| 表格1 | 店铺名称 | 绘画下本周GMV top5商家 | 文档5 |
+| 表格2 | 商品名称 | 绘画下本周GMV top10商品 | 文档3 |
+
+### ③ 流量 拆解
+**目的：** 了解每个行业及类目的流量渠道转化趋势
+
+**图表：**
+| 图表类型 | 维度 | 内容 | 数据源 |
+|--------|------|------|------|
+| 组合图表 | 周 | 绘画GMV前2内容渠道 GMV+占比 | 文档4 |
+| 组合图表 | 周 | 绘画GMV前2内容渠道 曝光PV+占比 | 文档4 |
+| 表格1 | 内容渠道 | 每个内容渠道GMV、曝光PV、PVCTR | 文档4 |
+
+## 数据源文档
+
+### 1. 整体数据
+**字段：** 周五-周四周 PVCTR 商品曝光PV 支付订单数 支付订单买家数 GMV
+**文件名格式：** 整体数据
+
+### 2. 行业整体数据
+**字段：** 周五-周四周 后台一级类目名称 商品曝光PV 支付订单买家数 GMV
+**文件名格式：** 行业数据`;
+
+      const state = {
+        raw: "",
+        goal: { reportName: "", domain: "", scenario: "", terms: "", timeRule: "" },
+        sections: [],
+        sources: [],
+      };
+
+      const panels = [...document.querySelectorAll("[data-panel]")];
+      const steps = [...document.querySelectorAll(".step")];
+
+      function setStep(name) {
+        panels.forEach((panel) => panel.classList.toggle("hidden", panel.dataset.panel !== name));
+        steps.forEach((step) => step.classList.toggle("active", step.dataset.step === name));
+      }
+
+      function lines(text) {
+        return text.split(/\r?\n/).map((line) => line.trim());
+      }
+
+      function between(text, start, endPatterns) {
+        const startIndex = text.search(start);
+        if (startIndex < 0) return "";
+        const rest = text.slice(startIndex);
+        let endIndex = rest.length;
+        for (const pattern of endPatterns) {
+          const hit = rest.slice(1).search(pattern);
+          if (hit >= 0) endIndex = Math.min(endIndex, hit + 1);
+        }
+        return rest.slice(0, endIndex).trim();
+      }
+
+      function parseMarkdown(text) {
+        const clean = text.trim();
+        const title = (clean.match(/^#\s+(.+)$/m) || [null, "未命名周报"])[1].trim();
+        const scenario = between(clean, /业务介绍|任务目标/, [/名词定义/, /时间段定义/, /## 输出/]);
+        const terms = between(clean, /名词定义/, [/时间段定义/, /## 输出/]);
+        const timeRule = between(clean, /时间段定义|时间定义/, [/## 输出/, /## 数据源/]);
+        const sectionBlocks = splitSections(clean);
+        const sourceBlocks = splitSources(clean);
+
+        state.raw = clean;
+        state.goal = {
+          reportName: title.replace(/^#\s*/, ""),
+          domain: inferDomain(title, scenario),
+          scenario: scenario.replace(/^.*?(业务介绍|任务目标).*$/m, "").trim(),
+          terms,
+          timeRule,
+        };
+        state.sections = sectionBlocks.map((block, index) => parseSection(block, index));
+        state.sources = sourceBlocks.map(parseSource);
+        syncInputs();
+        renderAll();
+        setStep("goal");
+      }
+
+      function splitSections(text) {
+        const outputIndex = text.search(/##\s*输出的周报格式/);
+        const sourceIndex = text.search(/##\s*数据源/);
+        const body = text.slice(outputIndex >= 0 ? outputIndex : 0, sourceIndex >= 0 ? sourceIndex : text.length);
+        return body.split(/\n(?=###\s+)/).filter((block) => /^###\s+/.test(block.trim()));
+      }
+
+      function splitSources(text) {
+        const sourceIndex = text.search(/##\s*数据源/);
+        if (sourceIndex < 0) return [];
+        return text.slice(sourceIndex).split(/\n(?=###\s+)/).filter((block) => /^###\s+/.test(block.trim()));
+      }
+
+      function parseSection(block, index) {
+        const title = (block.match(/^###\s+(.+)$/m) || [null, `Section ${index + 1}`])[1].trim();
+        const purpose = (block.match(/\*\*目的[:：]\*\*\s*(.+)/) || [null, ""])[1].trim();
+        const conclusion = (block.match(/\*\*得出结论[:：]\*\*\s*([\s\S]*?)(?=\n###|\n##|$)/) || [null, ""])[1].trim();
+        const rows = tableRows(block);
+        const charts = rows.filter((row) => isChartType(row.type)).map((row, i) => ({
+          id: `c${index + 1}_${i + 1}`,
+          name: row.content || row.type,
+          type: row.type,
+          source: row.source,
+          description: row.content,
+          xAxis: row.dimension || "周",
+          yAxis: inferYAxis(row.content),
+          splitRule: inferSplitRule(row.content),
+          required: true,
+        }));
+        const tables = rows.filter((row) => isTableType(row.type)).map((row, i) => ({
+          id: `t${index + 1}_${i + 1}`,
+          name: row.content || row.type,
+          source: row.source,
+          description: row.content,
+          columns: inferColumns(row.content),
+          sortRule: inferSort(row.content),
+          required: true,
+        }));
+        return {
+          id: `s${index + 1}`,
+          title,
+          purpose,
+          dataSource: firstSource(rows),
+          metrics: inferMetrics(block),
+          charts,
+          tables,
+          attribution: conclusion,
+          emptyPolicy: "关键维度为空时阻塞；数值为空按 0 或缺失说明处理，需人工确认。",
+        };
+      }
+
+      function parseSource(block) {
+        const title = (block.match(/^###\s+(.+)$/m) || [null, "未命名数据源"])[1].trim();
+        const fields = (block.match(/\*\*字段[:：]\*\*\s*(.+)/) || [null, ""])[1].trim();
+        const pattern = (block.match(/\*\*文件名格式[:：]\*\*\s*(.+)/) || [null, ""])[1].trim();
+        const description = (block.match(/\*\*描述[:：]\*\*\s*(.+)/) || [null, ""])[1].trim();
+        return {
+          id: slugSource(title),
+          name: title,
+          pattern,
+          fields,
+          description,
+          required: true,
+        };
+      }
+
+      function tableRows(block) {
+        return lines(block).filter((line) => line.startsWith("|")).map((line) => {
+          const cells = line.replace(/^\|/, "").replace(/\|$/, "").split("|").map((cell) => cell.trim());
+          return { type: cells[0] || "", dimension: cells[1] || "", content: cells[2] || "", source: cells[3] || "" };
+        }).filter((row) => row.type && !/^-+$|图表类型/.test(row.type));
+      }
+
+      function isChartType(type) {
+        return /图/.test(type);
+      }
+
+      function isTableType(type) {
+        return /表/.test(type) && !/图表/.test(type);
+      }
+
+      function inferDomain(title, scenario) {
+        if (/工房|工坊/.test(title + scenario)) return "工房交易";
+        if (/交易/.test(title + scenario)) return "交易业务";
+        if (/圈子/.test(title + scenario)) return "圈子业务";
+        return "";
+      }
+
+      function inferYAxis(text) {
+        return ["GMV", "买家数", "订单数", "转化率", "商品曝光PV", "PVCTR", "GPM"].filter((metric) => text.includes(metric)).join("、");
+      }
+
+      function inferMetrics(text) {
+        return ["GMV", "订单数", "买家数", "支付转化率", "下单转化率", "商品曝光PV", "PVCTR", "GPM", "CTR"].filter((metric) => text.includes(metric));
+      }
+
+      function inferSplitRule(text) {
+        if (/Top\d+|前\d+/.test(text)) return text.match(/Top\d+|前\d+/)[0];
+        if (/by/.test(text)) return text.split("by").slice(1).join("by").trim();
+        if (/每个|分别/.test(text)) return "按描述中的对象分别拆分";
+        return "";
+      }
+
+      function inferColumns(text) {
+        const hit = text.match(/字段[:：](.+)/);
+        return hit ? hit[1].trim() : "";
+      }
+
+      function inferSort(text) {
+        const hit = text.match(/top\d+|Top\d+|GMV\s*顺位|gmv倒序/i);
+        return hit ? hit[0] : "";
+      }
+
+      function firstSource(rows) {
+        return [...new Set(rows.map((row) => row.source).filter(Boolean))].join("、");
+      }
+
+      function slugSource(title) {
+        const num = title.match(/\d+/);
+        return num ? `doc${num[0]}` : title.replace(/\s+/g, "-").toLowerCase();
+      }
+
+      function syncInputs() {
+        document.querySelector("#rawInput").value = state.raw;
+        document.querySelector("#reportName").value = state.goal.reportName;
+        document.querySelector("#domain").value = state.goal.domain;
+        document.querySelector("#scenario").value = state.goal.scenario;
+        document.querySelector("#terms").value = state.goal.terms;
+        document.querySelector("#timeRule").value = state.goal.timeRule;
+      }
+
+      function readGoalInputs() {
+        state.goal.reportName = document.querySelector("#reportName").value.trim();
+        state.goal.domain = document.querySelector("#domain").value.trim();
+        state.goal.scenario = document.querySelector("#scenario").value.trim();
+        state.goal.terms = document.querySelector("#terms").value.trim();
+        state.goal.timeRule = document.querySelector("#timeRule").value.trim();
+      }
+
+      function renderSections() {
+        const target = document.querySelector("#sections");
+        target.innerHTML = "";
+        state.sections.forEach((section, index) => {
+          const el = document.createElement("div");
+          el.className = "item";
+          el.innerHTML = `
+            <div class="item-head">
+              <h3>${escapeHtml(section.title || `Section ${index + 1}`)}</h3>
+              <span class="badge">${section.charts.length} 图 / ${section.tables.length} 表</span>
+            </div>
+            <div class="grid-2">
+              <label>章节标题<input data-section="${index}" data-field="title" value="${escapeAttr(section.title)}"></label>
+              <label>主要数据源<input data-section="${index}" data-field="dataSource" value="${escapeAttr(section.dataSource)}"></label>
+            </div>
+            <label>目的<textarea data-section="${index}" data-field="purpose">${escapeHtml(section.purpose)}</textarea></label>
+            <label>核心指标<input data-section="${index}" data-field="metrics" value="${escapeAttr(section.metrics.join("、"))}"></label>
+            <label>归因要求<textarea data-section="${index}" data-field="attribution">${escapeHtml(section.attribution)}</textarea></label>
+            <label>空值策略<textarea data-section="${index}" data-field="emptyPolicy">${escapeHtml(section.emptyPolicy)}</textarea></label>
+            <details open>
+              <summary>图表</summary>
+              ${section.charts.map((chart, chartIndex) => chartEditor(index, chartIndex, chart)).join("") || "<p>暂无图表</p>"}
+              <button class="btn" data-add-chart="${index}" type="button">新增图表</button>
+            </details>
+            <details>
+              <summary>表格</summary>
+              ${section.tables.map((table, tableIndex) => tableEditor(index, tableIndex, table)).join("") || "<p>暂无表格</p>"}
+              <button class="btn" data-add-table="${index}" type="button">新增表格</button>
+            </details>
+          `;
+          target.appendChild(el);
+        });
+      }
+
+      function chartEditor(sectionIndex, chartIndex, chart) {
+        return `
+          <div class="item">
+            <div class="grid-2">
+              <label>名称<input data-chart="${sectionIndex}:${chartIndex}" data-field="name" value="${escapeAttr(chart.name)}"></label>
+              <label>类型<input data-chart="${sectionIndex}:${chartIndex}" data-field="type" value="${escapeAttr(chart.type)}"></label>
+              <label>数据源<input data-chart="${sectionIndex}:${chartIndex}" data-field="source" value="${escapeAttr(chart.source)}"></label>
+              <label>横轴<input data-chart="${sectionIndex}:${chartIndex}" data-field="xAxis" value="${escapeAttr(chart.xAxis)}"></label>
+              <label>纵轴<input data-chart="${sectionIndex}:${chartIndex}" data-field="yAxis" value="${escapeAttr(chart.yAxis)}"></label>
+              <label>拆分规则<input data-chart="${sectionIndex}:${chartIndex}" data-field="splitRule" value="${escapeAttr(chart.splitRule)}"></label>
+            </div>
+            <label>描述<textarea data-chart="${sectionIndex}:${chartIndex}" data-field="description">${escapeHtml(chart.description)}</textarea></label>
+          </div>`;
+      }
+
+      function tableEditor(sectionIndex, tableIndex, table) {
+        return `
+          <div class="item">
+            <div class="grid-2">
+              <label>名称<input data-table="${sectionIndex}:${tableIndex}" data-field="name" value="${escapeAttr(table.name)}"></label>
+              <label>数据源<input data-table="${sectionIndex}:${tableIndex}" data-field="source" value="${escapeAttr(table.source)}"></label>
+              <label>字段列<input data-table="${sectionIndex}:${tableIndex}" data-field="columns" value="${escapeAttr(table.columns)}"></label>
+              <label>排序规则<input data-table="${sectionIndex}:${tableIndex}" data-field="sortRule" value="${escapeAttr(table.sortRule)}"></label>
+            </div>
+            <label>描述<textarea data-table="${sectionIndex}:${tableIndex}" data-field="description">${escapeHtml(table.description)}</textarea></label>
+          </div>`;
+      }
+
+      function renderSources() {
+        const target = document.querySelector("#sources");
+        target.innerHTML = "";
+        state.sources.forEach((source, index) => {
+          const el = document.createElement("div");
+          el.className = "item";
+          el.innerHTML = `
+            <div class="item-head">
+              <h3>${escapeHtml(source.name || `数据源 ${index + 1}`)}</h3>
+              <span class="badge">${source.required ? "必需" : "可选"}</span>
+            </div>
+            <div class="grid-2">
+              <label>名称<input data-source="${index}" data-field="name" value="${escapeAttr(source.name)}"></label>
+              <label>文件名格式<input data-source="${index}" data-field="pattern" value="${escapeAttr(source.pattern)}"></label>
+            </div>
+            <label>字段<textarea data-source="${index}" data-field="fields">${escapeHtml(source.fields)}</textarea></label>
+            <label>描述<textarea data-source="${index}" data-field="description">${escapeHtml(source.description)}</textarea></label>
+          `;
+          target.appendChild(el);
+        });
+      }
+
+      function validate() {
+        const issues = [];
+        if (!state.goal.reportName) issues.push(["bad", "缺少报告名称"]);
+        if (!state.goal.timeRule) issues.push(["bad", "缺少时间口径"]);
+        if (!state.sections.length) issues.push(["bad", "缺少报告章节"]);
+        if (!state.sources.length) issues.push(["bad", "缺少数据源"]);
+        state.sections.forEach((section) => {
+          if (!section.dataSource) issues.push(["bad", `${section.title} 缺少数据源映射`]);
+          if (!section.charts.length && !section.tables.length) issues.push(["bad", `${section.title} 没有声明图表或表格`]);
+          if (section.attribution && !section.metrics.length) issues.push(["warn", `${section.title} 有归因要求，但核心指标为空`]);
+          section.charts.forEach((chart) => {
+            if (!chart.source) issues.push(["bad", `${section.title} / ${chart.name} 缺少数据源`]);
+            if (!chart.xAxis || !chart.yAxis) issues.push(["warn", `${section.title} / ${chart.name} 横轴或纵轴待确认`]);
+          });
+        });
+        return issues;
+      }
+
+      function renderIssues() {
+        const issues = validate();
+        const target = document.querySelector("#issues");
+        const badge = document.querySelector("#statusBadge");
+        target.innerHTML = "";
+        badge.textContent = issues.some(([level]) => level === "bad") ? "存在阻塞" : issues.length ? "需要确认" : "可导出";
+        badge.className = `badge ${issues.some(([level]) => level === "bad") ? "bad" : "good"}`;
+        if (!issues.length) {
+          target.innerHTML = "<div class='item'><h3>没有发现阻塞项</h3><p>可以导出 normalized spec，进入下游周报 skill 的执行方案设计和样本测试。</p></div>";
+          return;
+        }
+        issues.forEach(([level, text]) => {
+          const el = document.createElement("div");
+          el.className = `issue ${level === "warn" ? "warn" : ""}`;
+          el.innerHTML = `<strong>${level === "bad" ? "阻塞" : "确认"}</strong><p>${escapeHtml(text)}</p>`;
+          target.appendChild(el);
+        });
+      }
+
+      function inventory() {
+        return {
+          source_requirement: "intake-wizard",
+          description: "Expected rendered view counts generated from structured intake.",
+          totals: {
+            sections: state.sections.length,
+            charts: state.sections.reduce((sum, section) => sum + section.charts.length, 0),
+            tables: state.sections.reduce((sum, section) => sum + section.tables.length, 0),
+          },
+          required_metrics: [...new Set(state.sections.flatMap((section) => section.metrics))].filter(Boolean).map((metric_name) => ({ metric_name })),
+          judgment_metrics: [],
+          sections: state.sections.map((section) => ({
+            section_id: section.id,
+            title: section.title,
+            charts: section.charts.length,
+            tables: section.tables.length,
+            required_metrics: section.metrics.map((metric_name) => ({ metric_name })),
+          })),
+        };
+      }
+
+      function spec() {
+        readGoalInputs();
+        const sectionText = state.sections.map((section) => {
+          const charts = section.charts.map((chart) => `    - name: ${chart.name}
+      type: ${chart.type}
+      source: ${chart.source}
+      description: ${chart.description}
+      x_axis: ${chart.xAxis}
+      y_axis: ${chart.yAxis}
+      split_rule: ${chart.splitRule}`).join("\n");
+          const tables = section.tables.map((table) => `    - name: ${table.name}
+      source: ${table.source}
+      description: ${table.description}
+      columns: ${table.columns}
+      sort_rule: ${table.sortRule}`).join("\n");
+          return `### ${section.id}: ${section.title}
+- purpose: ${section.purpose}
+- data_contracts: ${section.dataSource}
+- required_metrics: ${section.metrics.join("、")}
+- charts_count: ${section.charts.length}
+- tables_count: ${section.tables.length}
+- charts:
+${charts || "    []"}
+- tables:
+${tables || "    []"}
+- attribution_rules: ${section.attribution}
+- empty_value_policy: ${section.emptyPolicy}`;
+        }).join("\n\n");
+
+        const sourceText = state.sources.map((source) => `### ${source.id}: ${source.name}
+- file_name_pattern: ${source.pattern}
+- required: ${source.required}
+- fields: ${source.fields}
+- description: ${source.description}`).join("\n\n");
+
+        return `# ${state.goal.reportName || "未命名周报"} normalized spec
+
+## report_goal
+- report_name: ${state.goal.reportName}
+- domain: ${state.goal.domain}
+- audience: 待确认
+- decision_goals: ${state.goal.scenario}
+- success_definition: 每个章节按声明图表/表格完整输出，并使用声明证据完成归因。
+
+## business_context
+${state.goal.scenario}
+
+## terminology
+${state.goal.terms}
+
+## time_definition
+${state.goal.timeRule}
+
+## report_outline
+${sectionText}
+
+## data_contracts
+${sourceText}
+
+## output_contract
+- format: html
+- expected_output_inventory: see expected-output-inventory.json
+
+## next_stage
+- deliverable: downstream report skill
+- execution_design_required: true
+- sample_test_required_for_L1_L2: true
+- tuning_backflow_rule: business-specific fixes stay downstream; reusable failure patterns go back to create-report`;
+      }
+
+      function renderPreview() {
+        const inv = inventory();
+        document.querySelector("#previewTitle").textContent = state.goal.reportName || "未导入需求";
+        document.querySelector("#previewSubtitle").textContent = state.goal.domain || "载入需求后会生成 spec 和 inventory。";
+        document.querySelector("#statSections").textContent = inv.totals.sections;
+        document.querySelector("#statCharts").textContent = inv.totals.charts;
+        document.querySelector("#statTables").textContent = inv.totals.tables;
+        document.querySelector("#specPreview").textContent = spec();
+        document.querySelector("#inventoryPreview").textContent = JSON.stringify(inv, null, 2);
+      }
+
+      function renderAll() {
+        readGoalInputs();
+        renderSections();
+        renderSources();
+        renderIssues();
+        renderPreview();
+      }
+
+      function showExportFallback(name, text) {
+        const box = document.querySelector("#exportBox");
+        document.querySelector("#exportTitle").textContent = `导出内容：${name}`;
+        document.querySelector("#exportText").value = text;
+        document.querySelector("#exportHint").textContent = "如果 IAB 没有触发下载，请复制这里的内容。";
+        box.classList.remove("hidden");
+        setStep("validate");
+      }
+
+      function download(name, text, type = "text/plain") {
+        showExportFallback(name, text);
+        const blob = new Blob([text], { type });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = name;
+        a.style.display = "none";
+        document.body.appendChild(a);
+        a.click();
+        window.setTimeout(() => {
+          URL.revokeObjectURL(url);
+          a.remove();
+        }, 1000);
+      }
+
+      function ensureParsedBeforeExport() {
+        readGoalInputs();
+        if (state.sections.length > 0 || state.sources.length > 0 || state.goal.reportName) {
+          return true;
+        }
+        const raw = document.querySelector("#rawInput").value.trim();
+        if (!raw) {
+          showExportFallback("未生成", "请先上传或粘贴需求.md，然后点击“抽取结构”。");
+          return false;
+        }
+        parseMarkdown(raw);
+        return true;
+      }
+
+      function escapeHtml(value = "") {
+        return String(value).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[ch]);
+      }
+
+      function escapeAttr(value = "") {
+        return escapeHtml(value).replace(/\n/g, " ");
+      }
+
+      document.querySelector("#fileInput").addEventListener("change", async (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+        const text = await file.text();
+        document.querySelector("#rawInput").value = text;
+        parseMarkdown(text);
+      });
+
+      document.querySelector("#parseBtn").addEventListener("click", () => parseMarkdown(document.querySelector("#rawInput").value));
+      document.querySelector("#demoBtn").addEventListener("click", () => parseMarkdown(demoMarkdown));
+      document.querySelector("#downloadSpecBtn").addEventListener("click", () => {
+        if (!ensureParsedBeforeExport()) return;
+        download("normalized-spec.md", spec());
+      });
+      document.querySelector("#downloadInventoryBtn").addEventListener("click", () => {
+        if (!ensureParsedBeforeExport()) return;
+        download("expected-output-inventory.json", JSON.stringify(inventory(), null, 2), "application/json");
+      });
+      document.querySelector("#copyExportBtn").addEventListener("click", async () => {
+        const text = document.querySelector("#exportText").value;
+        try {
+          await navigator.clipboard.writeText(text);
+          document.querySelector("#exportHint").textContent = "已复制到剪贴板。";
+        } catch (error) {
+          document.querySelector("#exportText").select();
+          document.querySelector("#exportHint").textContent = "当前浏览器禁止自动复制，已选中文本，请手动复制。";
+        }
+      });
+      document.querySelector("#resetBtn").addEventListener("click", () => {
+        state.raw = "";
+        state.goal = { reportName: "", domain: "", scenario: "", terms: "", timeRule: "" };
+        state.sections = [];
+        state.sources = [];
+        syncInputs();
+        renderAll();
+        setStep("import");
+      });
+
+      steps.forEach((step) => step.addEventListener("click", () => setStep(step.dataset.step)));
+      document.body.addEventListener("input", (event) => {
+        const el = event.target;
+        if (el.matches("#reportName, #domain, #scenario, #terms, #timeRule")) {
+          readGoalInputs();
+          renderIssues();
+          renderPreview();
+        }
+        if (el.dataset.section) {
+          const section = state.sections[Number(el.dataset.section)];
+          section[el.dataset.field] = el.dataset.field === "metrics" ? el.value.split(/[、,，]/).map((v) => v.trim()).filter(Boolean) : el.value;
+          renderIssues();
+          renderPreview();
+        }
+        if (el.dataset.chart) {
+          const [s, c] = el.dataset.chart.split(":").map(Number);
+          state.sections[s].charts[c][el.dataset.field] = el.value;
+          renderIssues();
+          renderPreview();
+        }
+        if (el.dataset.table) {
+          const [s, t] = el.dataset.table.split(":").map(Number);
+          state.sections[s].tables[t][el.dataset.field] = el.value;
+          renderIssues();
+          renderPreview();
+        }
+        if (el.dataset.source) {
+          state.sources[Number(el.dataset.source)][el.dataset.field] = el.value;
+          renderIssues();
+          renderPreview();
+        }
+      });
+
+      document.body.addEventListener("click", (event) => {
+        const addChart = event.target.dataset.addChart;
+        const addTable = event.target.dataset.addTable;
+        if (addChart !== undefined) {
+          state.sections[Number(addChart)].charts.push({ id: `c${Date.now()}`, name: "新图表", type: "折线图", source: "", description: "", xAxis: "周", yAxis: "", splitRule: "", required: true });
+          renderAll();
+        }
+        if (addTable !== undefined) {
+          state.sections[Number(addTable)].tables.push({ id: `t${Date.now()}`, name: "新表格", source: "", description: "", columns: "", sortRule: "", required: true });
+          renderAll();
+        }
+      });
+
+      document.querySelector("#addSectionBtn").addEventListener("click", () => {
+        state.sections.push({ id: `s${state.sections.length + 1}`, title: "新章节", purpose: "", dataSource: "", metrics: [], charts: [], tables: [], attribution: "", emptyPolicy: "" });
+        renderAll();
+      });
+      document.querySelector("#addSourceBtn").addEventListener("click", () => {
+        state.sources.push({ id: `doc${state.sources.length + 1}`, name: "新数据源", pattern: "", fields: "", description: "", required: true });
+        renderAll();
+      });
+
+      renderAll();
+    </script>
+  </body>
+</html>

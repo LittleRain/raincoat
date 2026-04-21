@@ -93,6 +93,8 @@ bash skills/gongfang-weekly-report/scripts/run-report.sh \
 ## 参考资料
 
 - 输入清单：[input_inventory.md](./examples/input_inventory.md)
+- 标准化需求：[normalized-spec.md](./examples/normalized-spec.md)
+- 输出清单：[expected-output-inventory.json](./examples/expected-output-inventory.json)
 - HTML 结构要求：[html-contract.md](./assets/html-contract.md)
 - 双周报栏目结构：[report-outline.md](./assets/report-outline.md)
 - 生成 Prompt：[report-prompt.md](./assets/report-prompt.md)
