@@ -190,6 +190,32 @@ Replay 输出：
 - 写入 `errors` artifact，错误类型为 `source_scope_mismatch`、`invalid_source_url`、`empty_source_text`、`auth_required` 或 `unsupported_connector`。
 - 不生成 `event_candidate`。
 
+## Dry-run 不是模拟运行
+
+`dry-run` 的含义是只读真实输入、生成 artifacts 和 payload，不写业务系统。它不是 mock、demo 或样例数据生成。
+
+允许：
+
+- 调用真实只读采集器。
+- 调用真实字典查询 API。
+- 调用真实已有活动查询 API。
+- 生成草稿 payload artifact。
+- 阻断所有写入、发布、改价、投放、删除、降权动作。
+
+禁止：
+
+- 用模拟微博、小红书、场馆、场地或项目搜索数据替代真实 connector 返回。
+- 为了让报告好看而生成示例活动、示例图片、示例 venueId/placeId。
+- 把 fixture、demo、mock、LLM 自造内容写入 `source_items`、`event_candidates` 或 `draft_payloads`。
+- 在没有明确 `run_mode = simulation` 的情况下输出“模拟 API”“示例数据”“mock result”。
+
+如果真实 connector 不可用：
+
+- `daily_intel` 应写入 `auth_required`、`unsupported_connector` 或 `connector_failed`。
+- `dictionary_sync` 应写入 `api_error` 或 `auth_required`。
+- 当前 worker 状态应为 `partial` 或 `failed`。
+- 不得用模拟数据补齐下游节点。
+
 ## 证据 URL 门禁
 
 `event_candidate.evidence[].url` 必须可追溯到输入 source item。

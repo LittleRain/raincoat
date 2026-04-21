@@ -61,6 +61,8 @@
 - 非目标账号内容进入 `event_candidates` = 0。
 - 不可打开或不可追溯 evidence URL 进入 `event_candidates` = 0。
 - evidence quote 不在原文但被接受 = 0。
+- dry-run 使用 mock 数据但被标记为有效 = 0。
+- mock source item、mock venueId、mock placeId 进入 eval/golden set = 0。
 - 中高风险未审批执行 = 0。
 - schema gate 阻断项 100% 有错误原因。
 
@@ -113,6 +115,8 @@
 - `invalid_evidence_url`
 - `evidence_quote_missing`
 - `unsupported_connector`
+- `mock_data_used`
+- `invalid_dry_run`
 - `wrong_event_type`
 - `wrong_city`
 - `wrong_district`

@@ -37,6 +37,15 @@ Hermes 的每次运行都必须有固定、可直接查看的运营视图。Arti
 | `artifact_root` | 链接 | 本次 artifact 根目录或详情页 |
 | `report_url` | 链接 | 中文 dry-run 报告 |
 | `owner_feedback_status` | 单选 | `待看`、`已看`、`需重跑`、`可进入下轮` |
+| `run_mode` | 单选 | `dry_run`、`simulation`、`production` |
+| `uses_mock_data` | 复选框 | 是否使用了 mock/fixture/demo 数据 |
+| `run_validity` | 单选 | `valid`、`invalid`、`needs_review` |
+
+规则：
+
+- `dry_run` 下 `uses_mock_data = true` 时，`run_validity` 必须为 `invalid`。
+- 无效 run 不得进入人工反馈训练、eval 或 golden set。
+- 如果真实 connector 失败，应展示失败，不得用 mock 数据填充下游表。
 
 ### 2. 原始内容：`source_items`
 

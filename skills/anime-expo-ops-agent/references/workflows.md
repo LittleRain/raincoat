@@ -12,6 +12,13 @@
 4. 记录每次同步的新增、更新、失效数量。
 5. 定期重复同步；发现新增场馆或场地时更新本地缓存。
 
+dry-run 规则：
+
+- `dictionary_sync` 在 dry-run 中仍然必须调用真实字典来源或读取真实缓存。
+- 不得使用模拟 B 站 API、mock 场馆、mock 场地或示例 venueId/placeId。
+- 如果真实 API 无法访问，写入 `errors`，并把 run 标记为 `partial` 或 `failed`。
+- 没有真实字典或真实缓存时，不得生成通过门禁的 `dictionary_resolution` 和 `draft_payloads`。
+
 场馆 API：
 
 ```text
@@ -71,6 +78,8 @@ v0.1 不做全网搜索，只抓指定账号。
 - 如果小红书工具不能按 user_id 拉 profile 笔记，必须返回 `unsupported_connector` 或 `auth_required`，不要退化为关键词搜索。
 - 不得把平台搜索结果、推荐流结果或其他账号内容混入本次 dry-run。
 - 不得为 source item 或 evidence 生成新的社交平台 URL；只能使用采集器返回的 URL 或配置中的 seed/profile URL。
+- 不得为了演示流程生成示例微博、示例小红书、示例图片或虚构活动。
+- 如果两个测试源都抓取失败，`event_candidates` 必须为空，run 状态为 `failed` 或 `partial`。
 
 ## 已有活动查重（`duplicate_match`）
 

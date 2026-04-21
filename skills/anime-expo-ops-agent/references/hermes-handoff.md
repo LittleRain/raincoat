@@ -214,6 +214,31 @@ Hermes v0.1 查询策略：
 - `recommend_actions`：每天业务同步完成后。
 - `weekly_review`：每周一 09:00。
 
+## Dry-run 运行语义
+
+Hermes 必须把 `dry-run` 理解为“真实只读输入 + 禁止写入动作”。
+
+dry-run 仍然要真实执行：
+
+- 真实采集微博指定 uid。
+- 真实采集小红书指定 user_id；如果能力不足，返回 `unsupported_connector`。
+- 真实同步场馆/场地 API 或读取真实缓存。
+- 真实调用已有活动查询接口做去重；如果鉴权失败，返回 `auth_required`。
+
+dry-run 不得执行：
+
+- 创建、更新、发布活动。
+- 改价、投放、删除、降权。
+- 使用 mock 数据冒充真实采集结果。
+
+如果 Hermes 需要做演示数据，应显式使用 `run_mode = simulation`，并且输出不得进入 eval、golden set 或运营反馈闭环。
+
+报告要求：
+
+- 中文报告必须标明 `run_mode`。
+- 如果出现 mock、模拟 API、fixture 或 demo 数据，报告必须标红并把 run 判为无效。
+- `source_items`、`event_candidates`、`draft_payloads` 不得包含无法追溯到真实 source item 的内容。
+
 ## Hermes 必需能力
 
 - 场馆 API 分页拉取和本地缓存。

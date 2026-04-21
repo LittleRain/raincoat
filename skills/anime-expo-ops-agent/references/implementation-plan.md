@@ -31,6 +31,7 @@
 - 支持手动刷新。
 - 每次同步都有 artifact 和 gate 结果。
 - 飞书 `runs` 和 `errors` 表能看到本次同步摘要。
+- dry-run 不使用模拟 B 站 API、mock 场馆或 mock 场地。
 - 项目搜索接口的登录态由 Hermes secrets 管理，不写入 repo。
 
 ## 阶段 1：每日情报 dry-run
@@ -67,6 +68,8 @@ v0.1 测试源：
 - 每次采集的原始内容都能在飞书 `source_items` 表直接查看。
 - `source_items` 中能看到原文链接、正文摘要、来源账号、URL 状态、采集状态和 raw artifact 链接。
 - 每个 `event_candidate` 都能通过 `source_item_id` 反查原始内容。
+- 报告中 `run_mode = dry_run` 且 `uses_mock_data = false`。
+- 如果真实 connector 失败，`event_candidates` 为空或只包含真实 source 支持的候选，不得用示例内容补齐。
 - 已积累反馈样本中活动识别 precision >= 80%；golden set 达到 30 条后按完整样本集统计。
 - 所有非空字段都有 evidence。
 - 不编造时间、场馆、票价。
