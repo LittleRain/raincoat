@@ -45,6 +45,7 @@
 每周统计 gate 阻断原因：
 
 - 来源账号不匹配。
+- 来源账号显示名不匹配。
 - source URL 无效。
 - evidence URL 无效。
 - evidence quote 无法在原文中定位。
@@ -59,6 +60,7 @@
 
 - 硬门禁误放行 = 0。
 - 非目标账号内容进入 `event_candidates` = 0。
+- uid/user_id 正确但账号名错误时，`source_account_mismatch` 记录率 = 100%。
 - 不可打开或不可追溯 evidence URL 进入 `event_candidates` = 0。
 - evidence quote 不在原文但被接受 = 0。
 - dry-run 使用 mock 数据但被标记为有效 = 0。
@@ -111,6 +113,7 @@
 
 - `not_an_event`
 - `source_scope_mismatch`
+- `source_account_mismatch`
 - `invalid_source_url`
 - `invalid_evidence_url`
 - `evidence_quote_missing`

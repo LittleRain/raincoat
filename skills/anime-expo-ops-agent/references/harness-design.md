@@ -182,6 +182,8 @@ Replay 输出：
 - `source_type` 只能是当前 run 允许的渠道。
 - 微博内容必须来自 `source-config.md` 中配置的 `uid = 6596632265`。
 - 小红书内容必须来自 `source-config.md` 中配置的 `user_id = 6333b2ee0000000023024449`。
+- `source_account` 必须来自真实 profile/采集器返回，或使用 `source-config.md` 中的 `expected_account_name`。
+- 微博期望账号名是 `animatecafe官方微博`，小红书期望账号名是 `百联ZX创趣场`。
 - `source_url` 必须是采集器返回的原文 URL、配置里的 seed URL 或 profile URL；不得由模型生成。
 - 采集结果不能是登录页、错误页、搜索结果页、空正文或其他账号内容。
 
@@ -189,6 +191,12 @@ Replay 输出：
 
 - 写入 `errors` artifact，错误类型为 `source_scope_mismatch`、`invalid_source_url`、`empty_source_text`、`auth_required` 或 `unsupported_connector`。
 - 不生成 `event_candidate`。
+
+账号名不一致但 uid/user_id 正确时：
+
+- 不阻断 source item。
+- 在 `gate_results` 记录 `source_account_mismatch`。
+- 在 `source_items` 运营视图中展示真实返回名、期望名和 `source_account_status = mismatch`。
 
 ## Dry-run 不是模拟运行
 

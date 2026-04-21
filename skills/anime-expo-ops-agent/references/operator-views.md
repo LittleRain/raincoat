@@ -60,6 +60,7 @@ Hermes 的每次运行都必须有固定、可直接查看的运营视图。Arti
 | `source_type` | 单选 | `weibo`、`xiaohongshu` 等 |
 | `source_account` | 文本 | 账号名、uid 或 user_id |
 | `source_account_expected` | 文本 | 配置中期望的 uid/user_id |
+| `source_account_status` | 单选 | `matched`、`mismatch`、`unknown` |
 | `source_scope_status` | 单选 | `valid`、`mismatch`、`unknown` |
 | `source_url` | 链接 | 原文 URL |
 | `url_status` | 单选 | `openable`、`login_required`、`invalid`、`unknown` |
@@ -80,6 +81,7 @@ Hermes 的每次运行都必须有固定、可直接查看的运营视图。Arti
 - 采集 worker 完成后立即写入。
 - 即使后续抽取失败，也必须能在这里看到原始内容。
 - 如果 `source_scope_status != valid`，不得进入 `event_candidates`。
+- 如果 uid/user_id 正确但账号名不一致，`source_scope_status` 可以是 `valid`，但 `source_account_status` 必须是 `mismatch`，并写入 `gate_results`。
 - 如果 `url_status` 是 `invalid` 或 `login_required`，不得自动抽取，除非人工确认。
 
 ### 3. 抽取候选：`event_candidates`
