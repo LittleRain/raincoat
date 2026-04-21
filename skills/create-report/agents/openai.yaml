@@ -1,6 +1,9 @@
 version: 1
 interface:
-  display_name: Create Report
-  short_description: 把周报需求转成标准化 spec，并生成或收紧可独立发布的 HTML report skill。
+  display_name: Create Report Skill
+  short_description: Normalize report requirements into validated reusable HTML report skills.
   default_prompt: |
-    读取这份周报需求文档，使用 create-report 将需求整理成标准化 spec，判断应该生成 L0 Documentation、L1 Runnable MVP 还是 L2 Publishable 下游 skill，并输出或更新一个带验收证据的 HTML report skill 包。
+    Use $create-report. Normalize the supplied report requirement against the
+    packaged contract, stop on missing execution-critical facts, and generate or
+    update the downstream report skill only after the output inventory and level
+    evidence are valid.

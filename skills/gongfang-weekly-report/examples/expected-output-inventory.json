@@ -1,0 +1,104 @@
+{
+  "source_requirement": "intake-wizard",
+  "description": "Expected rendered view counts generated from structured intake.",
+  "totals": {
+    "sections": 3,
+    "charts": 16,
+    "tables": 8
+  },
+  "required_metrics": [
+    {
+      "metric_name": "GMV"
+    },
+    {
+      "metric_name": "订单数"
+    },
+    {
+      "metric_name": "买家数"
+    },
+    {
+      "metric_name": "支付转化率"
+    },
+    {
+      "metric_name": "下单转化率"
+    },
+    {
+      "metric_name": "商品曝光PV"
+    },
+    {
+      "metric_name": "PVCTR"
+    },
+    {
+      "metric_name": "CTR"
+    }
+  ],
+  "judgment_metrics": [],
+  "sections": [
+    {
+      "section_id": "s1",
+      "title": "① 核心数据趋势",
+      "charts": 4,
+      "tables": 0,
+      "required_metrics": [
+        {
+          "metric_name": "GMV"
+        },
+        {
+          "metric_name": "订单数"
+        },
+        {
+          "metric_name": "买家数"
+        },
+        {
+          "metric_name": "支付转化率"
+        },
+        {
+          "metric_name": "下单转化率"
+        },
+        {
+          "metric_name": "商品曝光PV"
+        }
+      ]
+    },
+    {
+      "section_id": "s2",
+      "title": "② GMV 拆解",
+      "charts": 4,
+      "tables": 4,
+      "required_metrics": [
+        {
+          "metric_name": "GMV"
+        },
+        {
+          "metric_name": "买家数"
+        },
+        {
+          "metric_name": "下单转化率"
+        },
+        {
+          "metric_name": "商品曝光PV"
+        }
+      ]
+    },
+    {
+      "section_id": "s3",
+      "title": "③ 流量 拆解",
+      "charts": 8,
+      "tables": 4,
+      "required_metrics": [
+        {
+          "metric_name": "GMV"
+        },
+        {
+          "metric_name": "商品曝光PV"
+        },
+        {
+          "metric_name": "PVCTR"
+        },
+        {
+          "metric_name": "CTR"
+        }
+      ]
+    }
+  ]
+}

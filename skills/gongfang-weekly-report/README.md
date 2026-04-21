@@ -59,5 +59,15 @@ bash skills/gongfang-weekly-report/scripts/run-report.sh \
 - `SKILL.md`：skill 工作流说明
 - `skill.json`：skill 元数据
 - `assets/`：HTML 合同、栏目结构、提示词、校验清单
-- `examples/`：输入清单与输出骨架示例
+- `examples/`：输入清单、标准化需求、输出 inventory 与输出骨架示例
 - `scripts/`：执行脚本
+
+## 验收基线
+
+本 skill 内置 `examples/expected-output-inventory.json` 作为输出完整性基线。当前合同要求：
+
+- 3 个业务栏目
+- 16 个图表
+- 8 个表格
+
+生成后可用 `create-report` 的 inventory validator 校验 HTML 是否漏图、漏表或漏关键指标。
