@@ -226,9 +226,27 @@ Hermes v0.1 查询策略：
 - 证据 URL 门禁：校验 evidence URL 来自 `source_item.source_url` 或 `raw_media`，quote 能在原文或 OCR 中定位。
 - 字典解析器：活动类型、省市区、场馆、场地。
 - schema 校验器。
+- 运营视图同步器：把 artifacts 幂等同步到飞书多维表格，字段见 `operator-views.md`。
+- 反馈读取器：读取飞书人工反馈，追加写入 `feedback_events` artifact。
 - 活动草稿创建/更新适配器；接口上线前保持 disabled。
 - 审批任务创建。
 - 运行审计日志、重试和死信队列。
+
+## 飞书表格交接
+
+如果使用飞书多维表格作为运营视图，Hermes 需要运行时配置：
+
+- 飞书 app token 或 table app URL。
+- 每个表的 table id。
+- 可写入这些表的飞书应用凭证或机器人能力。
+- 字段名与 `operator-views.md` 保持一致，或提供字段映射。
+
+安全规则：
+
+- 飞书表格只保存摘要、状态和 artifact 链接。
+- raw JSON、长正文、接口响应保存在 artifact store。
+- 不得把 cookie、token、完整 header、登录态写入飞书。
+- 飞书写入失败要进入 `errors`，但不能阻塞 artifact 保存。
 
 ## 不得自动执行
 

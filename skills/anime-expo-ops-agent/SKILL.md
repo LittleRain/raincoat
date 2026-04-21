@@ -51,6 +51,7 @@ Hermes 负责：
 - 产品策略：[references/product-strategy.md](references/product-strategy.md)
 - 系统设计：[references/system-design.md](references/system-design.md)
 - Harness 设计原则：[references/harness-design.md](references/harness-design.md)
+- 运营可视化与人工反馈：[references/operator-views.md](references/operator-views.md)
 - 实施计划：[references/implementation-plan.md](references/implementation-plan.md)
 - 数据模型：[references/data-model.md](references/data-model.md)
 - 信息源配置：[references/source-config.md](references/source-config.md)

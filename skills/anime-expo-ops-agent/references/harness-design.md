@@ -87,6 +87,8 @@ Harness 负责：
 - 谁审批了什么。
 - 最终写入了什么。
 
+每个 artifact 还必须有固定运营视图。推荐同步到飞书多维表格，字段和分表见 `operator-views.md`。运营视图不是事实源，只是查看、筛选和反馈入口；完整 raw 数据仍以 artifact 为准。
+
 ### 4. Replay before automation
 
 任何新 worker 或新规则进入自动执行前，必须先支持 replay。
@@ -215,6 +217,7 @@ Replay 输出：
 Run Scheduler
   -> Input Normalizer
   -> Artifact Store
+  -> Operator View Sync
   -> Worker Runner
   -> Schema Validator
   -> Gate Engine

@@ -45,6 +45,7 @@ Hermes 负责：
 - 审批消息。
 - 工具执行。
 - artifact 存储。
+- 运营视图同步，例如飞书多维表格。
 - replay。
 - gate 判定。
 - capability flag。
@@ -198,6 +199,29 @@ artifact 要求：
 - 可回放。
 - 可对比两个版本输出差异。
 - 可追溯到原始 source。
+
+## 运营视图设计
+
+Hermes 必须把关键 artifact 同步成固定运营视图，推荐使用飞书多维表格。详细字段见 `operator-views.md`。
+
+设计分工：
+
+- Artifact store 是事实源，保存完整 JSON、raw 响应、脱敏错误和 replay 输入。
+- 飞书多维表格是操作视图，保存摘要、状态、链接和人工反馈字段。
+- 飞书写入失败不得影响 artifact 保存，但必须进入 `errors`。
+- 人工在飞书里的审核、拒绝、修正必须回写为 `feedback_events` artifact。
+
+每次 `daily_intel` 至少同步以下表：
+
+- `runs`
+- `source_items`
+- `event_candidates`
+- `dictionary_resolution`
+- `project_search_results`
+- `draft_payloads`
+- `gate_results`
+- `errors`
+- `feedback_events`
 
 ## Replay 与 Eval
 

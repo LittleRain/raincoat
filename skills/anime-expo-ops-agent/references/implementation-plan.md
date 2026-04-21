@@ -16,11 +16,12 @@
 1. 记录活动草稿创建接口未上线，`can_create_unpublished_drafts` 默认关闭。
 2. 接入已有活动查询接口，用于去重。
 3. Hermes 实现 artifact store，至少能保存 `run_manifest`、worker 输出和 gate 结果。
-4. Hermes 实现 capability flag，默认只允许 dry-run。
-5. Hermes 实现 `dictionary_sync`。
-6. 校验省市区 Excel 可读。
-7. 场馆 API 分页拉取全量有效场馆。
-8. 场地 API 按 `venue_id` 拉取并绑定场馆。
+4. Hermes 实现运营视图同步，优先接飞书多维表格，字段见 `operator-views.md`。
+5. Hermes 实现 capability flag，默认只允许 dry-run。
+6. Hermes 实现 `dictionary_sync`。
+7. 校验省市区 Excel 可读。
+8. 场馆 API 分页拉取全量有效场馆。
+9. 场地 API 按 `venue_id` 拉取并绑定场馆。
 
 验收：
 
@@ -29,6 +30,7 @@
 - 每周一 03:00 调度已配置。
 - 支持手动刷新。
 - 每次同步都有 artifact 和 gate 结果。
+- 飞书 `runs` 和 `errors` 表能看到本次同步摘要。
 - 项目搜索接口的登录态由 Hermes secrets 管理，不写入 repo。
 
 ## 阶段 1：每日情报 dry-run
@@ -55,12 +57,16 @@ v0.1 测试源：
 6. 输出 `event_candidate`。
 7. 运行字典解析，但不写入。
 8. 保存所有 artifacts。
-9. 生成日报。
-10. 通过 live dry-run 收集运营反馈样本。
+9. 同步飞书多维表格运营视图，至少包含 `runs`、`source_items`、`event_candidates`、`gate_results` 和 `errors`。
+10. 生成日报。
+11. 通过 live dry-run 收集运营反馈样本。
 
 验收：
 
 - 每天采集 >= 20 条相关信息。
+- 每次采集的原始内容都能在飞书 `source_items` 表直接查看。
+- `source_items` 中能看到原文链接、正文摘要、来源账号、URL 状态、采集状态和 raw artifact 链接。
+- 每个 `event_candidate` 都能通过 `source_item_id` 反查原始内容。
 - 已积累反馈样本中活动识别 precision >= 80%；golden set 达到 30 条后按完整样本集统计。
 - 所有非空字段都有 evidence。
 - 不编造时间、场馆、票价。
@@ -84,6 +90,7 @@ v0.1 测试源：
 4. 生成 `platform_event_draft_payload`。
 5. 输出 `create_draft`、`merge_review`、`needs_review` 队列。
 6. 运行 schema gate、dictionary gate、duplicate gate。
+7. 同步飞书 `dictionary_resolution`、`project_search_results`、`draft_payloads` 和 `gate_results` 表。
 
 验收：
 
@@ -91,6 +98,7 @@ v0.1 测试源：
 - `platform_event_draft_payload` 通过本地 schema 校验。
 - 冲突字段进入人工审核。
 - gate 阻断原因进入 artifact。
+- 你能在飞书 `draft_payloads` 表看到每个候选准备写入系统的完整摘要和 payload artifact 链接。
 
 ## 阶段 3：未发布草稿入库
 
@@ -189,8 +197,9 @@ v0.1 测试源：
 
 优先级最高：
 
-1. v0.1 live dry-run 后的人工反馈：哪些活动应创建、哪些不应创建、哪些字段需要修正。
+1. 飞书多维表格 app token、目标表格配置或 Hermes 可用的飞书写入方式。
+2. v0.1 live dry-run 后的人工反馈：哪些活动应创建、哪些不应创建、哪些字段需要修正。
 
 随后提供：
 
-2. 活动草稿创建接口上线后的 URL、Method、鉴权、headers、成功返回、失败返回。
+3. 活动草稿创建接口上线后的 URL、Method、鉴权、headers、成功返回、失败返回。
