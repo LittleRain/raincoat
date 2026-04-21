@@ -1,0 +1,11 @@
+{
+  "name": "skill-quality-review",
+  "title": "Skill Quality Review",
+  "description": "Review agent skills for trigger quality, scope, structure, execution protocol, resources, and validation evidence.",
+  "version": "0.1.0",
+  "status": "draft",
+  "visibility": "incubating",
+  "entry": "SKILL.md",
+  "tags": ["skills", "review", "quality", "validation"],
+  "author": "raincai"
+}
