@@ -183,7 +183,6 @@ Replay 输出：
 - 微博内容必须来自 `source-config.md` 中配置的 `uid = 6596632265`。
 - 小红书内容必须来自 `source-config.md` 中配置的 `user_id = 6333b2ee0000000023024449`。
 - `source_account` 必须来自真实 profile/采集器返回，或使用 `source-config.md` 中的 `expected_account_name`。
-- 微博期望账号名是 `animatecafe官方微博`，小红书期望账号名是 `百联ZX创趣场`。
 - `source_url` 必须是采集器返回的原文 URL、配置里的 seed URL 或 profile URL；不得由模型生成。
 - 采集结果不能是登录页、错误页、搜索结果页、空正文或其他账号内容。
 

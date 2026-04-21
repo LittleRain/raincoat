@@ -28,8 +28,6 @@
 - 不得由模型编造、拼接或把搜索页、登录页、跳转页当成原文链接。
 - 微博 `source_item` 必须能追溯到配置的 `uid = 6596632265`。
 - 小红书 `source_item` 必须能追溯到配置的 `user_id = 6333b2ee0000000023024449`。
-- 微博 `source_account_expected` 是 `animatecafe官方微博`。
-- 小红书 `source_account_expected` 是 `百联ZX创趣场`。
 - `source_account` 必须来自采集器/profile 返回或配置的 `expected_account_name`，不得由 Hermes 自行编造。
 - uid/user_id 正确但账号名不一致时，保留 source item，并把 `source_account_status` 设为 `mismatch`，同时写入 gate warning `source_account_mismatch`。
 - 如果采集器无法拿到稳定原文链接，`source_url` 可以为空，但该 source item 只能进入人工排查，不能进入自动活动抽取。

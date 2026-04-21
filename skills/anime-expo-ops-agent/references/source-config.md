@@ -17,7 +17,7 @@ https://weibo.com/6596632265/QuYfxs1po
 - 平台：微博
 - `source_type`: `weibo`
 - `uid`: `6596632265`
-- `expected_account_name`: `animatecafe官方微博`
+- `expected_account_name`: 由运营配置或 profile 校验结果提供，不在通用规则中硬编码
 - 示例微博路径标识：`QuYfxs1po`
 - 采集范围：优先采集该 uid 的账号动态；示例微博作为 seed 和解析验证样本。
 
@@ -29,7 +29,7 @@ Hermes 采集要求：
 - 保留原始链接、正文、图片、发布时间、互动数和 raw 响应。
 - 不把微博 cookie 或登录态写入 repo；如需登录态，放 Hermes secrets。
 - 如果工具返回内容不属于 `uid = 6596632265`，必须丢弃并写入 `errors`。
-- `source_account` 必须来自微博 profile 或采集器返回的真实账号名；如果无法获取，用 `expected_account_name`，不得自行命名为“动漫展情报站”等示例名。
+- `source_account` 必须来自微博 profile 或采集器返回的真实账号名；如果无法获取，可用运营配置的 `expected_account_name`，不得自行命名。
 - 如果采集器返回的账号名和 `expected_account_name` 不一致，但 uid 正确，内容可以保留，但必须在 `gate_results` 标记 `source_account_mismatch`。
 - 如果无法获取微博原文 URL，可以暂用 seed URL 作为 run 级来源，但对应候选必须进入人工审核。
 
@@ -54,7 +54,7 @@ http://xiaohongshu.com/user/profile/6333b2ee0000000023024449
 - 平台：小红书
 - `source_type`: `xiaohongshu`
 - `user_id`: `6333b2ee0000000023024449`
-- `expected_account_name`: `百联ZX创趣场`
+- `expected_account_name`: 由运营配置或 profile 校验结果提供，不在通用规则中硬编码
 - 采集范围：该用户 profile 下的公开笔记。
 
 Hermes 采集要求：
@@ -66,7 +66,7 @@ Hermes 采集要求：
 - 小红书通常需要登录态；cookie 必须放 Hermes secrets，不得写入 repo 或 artifact。
 - 如果 Hermes 暂时没有按 `user_id` 拉取 profile 笔记的能力，必须返回 `unsupported_connector`，不要改用关键词搜索或推荐流。
 - 如果工具返回内容不属于 `user_id = 6333b2ee0000000023024449`，必须丢弃并写入 `errors`。
-- `source_account` 必须来自小红书 profile 或采集器返回的真实账号名；如果无法获取，用 `expected_account_name`，不得自行命名为“二次元活动情报”等示例名。
+- `source_account` 必须来自小红书 profile 或采集器返回的真实账号名；如果无法获取，可用运营配置的 `expected_account_name`，不得自行命名。
 - 如果采集器返回的账号名和 `expected_account_name` 不一致，但 user_id 正确，内容可以保留，但必须在 `gate_results` 标记 `source_account_mismatch`。
 
 ## source_item 归一化要求
