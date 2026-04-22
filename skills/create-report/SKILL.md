@@ -29,7 +29,7 @@ report skill when the contract already exists and only the report needs to run.
 
 ## Workflow
 
-1. Requirement intake: collect the user's requirement, prefill the structured questionnaire, and let the user complete missing fields.
+1. Requirement intake: provide the weekly report template, ask the user to fill it offline, then import the completed markdown into `tools/intake-wizard.html` to generate structured spec artifacts.
 2. Execution design: build the downstream report skill contract, including data sources, formulas, section logic, chart/table splitting, attribution rules, HTML contract, runner plan, and output inventory.
 3. Sample test: use the user's test data to generate HTML, logs, and validation evidence. This sample test is the proof step before L1/L2 packaging.
 4. Tuning Backflow: adjust the downstream report skill from test findings; backflow only reusable methods into `create-report`.
@@ -37,7 +37,8 @@ report skill when the contract already exists and only the report needs to run.
 
 ## Hard Gates
 
-- Never generate a downstream skill directly from raw business prose.
+- Never generate a downstream skill directly from raw business prose or from interview-style Q&A notes.
+- Default onboarding path is template-first, then wizard import. Do not replace this with multi-round questioning when the user has a clear requirement scenario.
 - HTML is the only supported primary output format.
 - Every section must have data contracts, expected charts/tables, required metrics, and attribution evidence rules when conclusions are requested.
 - L1/L2 packages require real samples, real runner evidence, generated HTML, logs, and output inventory validation.
@@ -50,6 +51,7 @@ report skill when the contract already exists and only the report needs to run.
 
 - Canonical contract: [report-skill-contract.md](./references/report-skill-contract.md)
 - User-facing questionnaire: [spec-template.md](./assets/spec-template.md)
+- User fill-in template: [weekly-report-requirement-template.md](./assets/weekly-report-requirement-template.md)
 - Browser intake wizard: [intake-wizard.html](./tools/intake-wizard.html)
 - Validation rules: [validation-contract.md](./assets/validation-contract.md)
 - Gap and adjustment output: [review-output-template.md](./assets/review-output-template.md)

@@ -3,7 +3,9 @@ interface:
   display_name: Create Report Skill
   short_description: Normalize report requirements into validated reusable HTML report skills.
   default_prompt: |
-    Use $create-report. Normalize the supplied report requirement against the
-    packaged contract, stop on missing execution-critical facts, and generate or
-    update the downstream report skill only after the output inventory and level
-    evidence are valid.
+    Use $create-report. Enforce template-first onboarding: provide
+    assets/weekly-report-requirement-template.md, ask the user to self-fill,
+    import the completed markdown via tools/intake-wizard.html, then normalize
+    against the packaged contract. Stop on missing execution-critical facts, and
+    generate or update the downstream report skill only after output inventory
+    and level evidence are valid.

@@ -1,12 +1,3 @@
-# Weekly Report Requirement Template
-
-Use this file as the only onboarding template for downstream report skill
-creation. Do not start with multi-round questioning. Ask the user to fill this
-template first, then import the completed markdown into
-`tools/intake-wizard.html` to produce structured spec output.
-
-This file mirrors `assets/weekly-report-requirement-template.md`.
-
 # 周报需求模板
 
 ## 任务目标

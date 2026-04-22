@@ -23,7 +23,7 @@ skill needs a targeted adjustment.
 
 ## Recommended Next Step
 
-- answer the listed questions, or
+- fill the missing fields in the weekly requirement template and re-import, or
 - generate L0 documentation only, or
 - patch the named downstream skill and rerun validation
 
