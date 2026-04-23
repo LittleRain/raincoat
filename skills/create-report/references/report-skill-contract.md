@@ -6,6 +6,7 @@ must be generated from this contract plus a normalized spec, not from raw prose.
 ## Required Stages
 
 1. `requirement intake`: provide `assets/weekly-report-requirement-template.md`, require user self-fill, then import the completed markdown through `tools/intake-wizard.html` to generate structured spec output.
+   For first-use or ambiguous requirement sessions, this wizard upload path is mandatory and takes priority over chat-based requirement interviews.
 2. `execution design`: convert the requirement into a downstream report skill execution design, including data contracts, formulas, section flow, chart/table splitting, attribution rules, HTML contract, runner plan, and output inventory.
 3. `sample test`: run the downstream skill against user-provided test data and produce `report.html`, `run.log`, `validation-report.json`, and inventory validation.
 4. `tuning backflow`: fix downstream skill issues found in testing, then decide which lessons should backflow into `create-report`.
