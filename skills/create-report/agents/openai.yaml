@@ -9,3 +9,6 @@ interface:
     against the packaged contract. Stop on missing execution-critical facts, and
     generate or update the downstream report skill only after output inventory
     and level evidence are valid.
+    For first-time or ambiguous requirement sessions, prioritize wizard upload
+    of the filled markdown template and avoid long back-and-forth requirement
+    interviews in chat.

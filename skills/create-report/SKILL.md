@@ -20,6 +20,7 @@ runtime artifact produced by that downstream skill, not the primary output of
 
 ## Use For
 
+- First-time users who need to create a downstream report skill from a filled requirement template.
 - Creating a new HTML weekly or biweekly report skill from requirements.
 - Tightening an existing report skill after missing charts, empty fields, weak attribution, or wrong chart splitting.
 - Converting free-form `需求.md` into a structured report contract.
@@ -39,6 +40,7 @@ report skill when the contract already exists and only the report needs to run.
 
 - Never generate a downstream skill directly from raw business prose or from interview-style Q&A notes.
 - Default onboarding path is template-first, then wizard import. Do not replace this with multi-round questioning when the user has a clear requirement scenario.
+- For first-use or ambiguous requirements, do not run long requirement interviews in chat. Direct users to upload the filled markdown template in `tools/intake-wizard.html` first.
 - HTML is the only supported primary output format.
 - Every section must have data contracts, expected charts/tables, required metrics, and attribution evidence rules when conclusions are requested.
 - L1/L2 packages require real samples, real runner evidence, generated HTML, logs, and output inventory validation.
