@@ -1,218 +1,187 @@
 ---
 name: skill-quality-review
-description: Use when reviewing newly written or updated agent skills, SKILL.md files, skill folders, skill trigger descriptions, bundled references, scripts, assets, or skill authoring plans before relying on them.
+description: Use when reviewing a new or updated Codex skill against the skill-creator standard, including SKILL.md frontmatter and body, agents/openai.yaml, bundled resources, trigger quality, progressive disclosure, and validation readiness.
 ---
 
 # Skill Quality Review
 
-## Core Principle
+Review the target skill as a reusable Codex skill, not as a generic prompt. Judge it against the `skill-creator` standard: concise metadata, strong triggering, lean SKILL body, appropriate bundled resources, and clear validation evidence.
 
-A good skill is not a long prompt. It is a compact operating protocol that helps an agent load the right context, follow the right process, use deterministic tools where appropriate, and prove the result with evidence.
+## Review Target
 
-## Review Scope
+Review any of these:
 
-Use this review for:
+- a `SKILL.md`
+- a full skill folder
+- a proposed skill design
+- an updated `agents/openai.yaml`
+- a skill that triggers incorrectly, loads too much context, or drifts from its resources
 
-- A new or edited `SKILL.md`
-- A skill directory with `references/`, `scripts/`, `assets/`, `agents/openai.yaml`, hooks, MCP files, or plugin metadata
-- A proposed skill design before implementation
-- A skill that triggers too often, too rarely, or produces inconsistent behavior
-- A complex workflow skill that needs pressure testing
-
-Do not require every skill to have scripts, references, assets, MCP, or hooks. Extra structure is justified only when it removes repeated work, reduces ambiguity, or improves reliability.
+If the user provides only a plan or excerpt, review that artifact and mark missing evidence explicitly.
 
 ## Required Workflow
 
-1. Locate the target skill artifact.
-   - If the user gave a path, inspect that path.
-   - If the user pasted only `SKILL.md`, review that content.
-   - If the user only described a planned skill, review the plan and clearly label missing evidence.
-
+1. Locate the target artifact.
+   - If the user gives a path, inspect that path.
+   - If the user pastes only `SKILL.md`, review that content.
+   - If the user provides only a plan, review the plan and label missing evidence.
 2. Inspect the discovery surface first.
-   - Check `name`, `description`, and any host-specific trigger metadata before reading the body deeply.
-   - Treat `description` as a trigger index, not a workflow summary.
-   - Identify the host schema when possible, such as Codex, Claude, a plugin system, or a project-local resolver.
-   - Do not penalize valid host-specific fields such as `triggers`, `tools`, `version`, or `mutating` just because another host would not use them.
-   - If the host schema is unknown, review behaviorally and label schema assumptions.
-
-3. Review the body as an execution protocol.
-   - Check whether it guides decisions under pressure.
-   - Check whether it avoids restating obvious model knowledge.
-   - Check whether it explains important constraints and tradeoffs.
-
-4. Check reachability evidence when the host has a resolver, dispatcher, or skill loader.
-   - Look for positive trigger examples that route to this skill.
-   - Look for negative trigger examples that do not route to this skill when a neighboring skill is a better match.
-   - If reachability cannot be tested, label it as unproven rather than assuming it works.
-
-5. Review bundled resources if present.
-   - Read only files directly needed to assess the skill.
-   - Do not require resource directories when a single-file skill is enough.
-   - Flag deeply nested references that make discovery fragile.
-
+   - Check the folder name, `name`, and `description`.
+   - Treat `description` as the primary trigger index.
+3. Check creator-specific structural rules.
+   - Frontmatter should contain only `name` and `description`.
+   - `name` should be lowercase hyphen-case.
+   - `description` should carry the trigger conditions; do not rely on a body section to explain when to use the skill.
+4. Review the body as an operating protocol.
+   - Prefer concise procedural guidance over explanation.
+   - Check whether the body stays focused on what another Codex instance needs to do the job.
+5. Review bundled resources only as needed.
+   - Read `agents/openai.yaml` if present.
+   - Read `references/`, `scripts/`, or `assets/` only when they are relevant to the review.
+   - Flag duplication between SKILL.md and bundled resources.
 6. Produce findings first.
-   - Prioritize behavior risks over style preferences.
-   - Give concrete fixes, not generic advice.
-   - Separate blockers from improvements.
+   - Prioritize trigger failures, protocol gaps, stale metadata, context bloat, and unsafe defaults.
 
 ## Review Rubric
 
-### 1. Trigger Quality
+### 1. Trigger and Metadata
 
 Pass criteria:
 
-- `name` is lowercase, short, and uses only letters, digits, and hyphens.
-- `description` starts with `Use when...`, or the frontmatter provides an equivalent trigger index such as `triggers`, `keywords`, or host-specific routing metadata.
-- `description` describes triggering conditions, symptoms, file types, tools, or user intents.
-- `description` does not summarize the skill workflow.
-- Important synonyms are included without becoming noisy.
-- The skill has clear positive and negative trigger examples when the boundary is non-obvious.
-- Host-specific routing fields, if present, are consistent with the description and body.
+- Folder name and frontmatter `name` match.
+- `name` uses lowercase letters, digits, and hyphens only.
+- Frontmatter contains only `name` and `description`.
+- `description` explains what the skill does and when it should trigger.
+- `description` includes concrete contexts, artifacts, file types, or user intents.
+- `description` does not spend tokens narrating the workflow.
 
 Red flags:
 
-- Description says what the skill will do step by step.
-- The skill has neither a trigger-oriented description nor an equivalent host-specific trigger field.
-- Description is too vague, such as "For skills" or "Helps with development".
-- Description uses first person.
-- The skill name is a noun bucket like `helper`, `assistant`, or `tools`.
-- The trigger overlaps heavily with another skill without explaining the boundary.
+- Extra frontmatter fields that the creator standard does not call for.
+- Vague descriptions such as "helps with skills".
+- Descriptions that omit the trigger boundary and only describe implementation.
+- Trigger logic hidden in a body section instead of the frontmatter.
 
 ### 2. Scope and Job Definition
 
 Pass criteria:
 
 - The skill solves one stable, reusable job.
-- It states when to use and when not to use the skill.
-- It is not a one-off session narrative.
-- Project-specific rules live in project docs unless they generalize across projects.
-- The skill does not try to be a general-purpose assistant.
-- Universal requirements are separated from conditional requirements, such as scripts, integration tests, evals, assets, or resolver entries.
+- The job is specific enough that another Codex instance can tell when to use it.
+- The skill is not a one-off project note or session artifact.
+- Project-specific facts are included only if they generalize across repeated uses.
 
 Red flags:
 
+- The skill tries to be a general-purpose assistant.
 - Multiple unrelated jobs share one skill.
-- The body contains historical notes like "in the 2026-04-20 session we learned...".
-- It includes generic best practices that the base model already knows.
-- A host-specific completeness checklist is treated as universal without explaining when each gate applies.
+- The body contains session history or maintenance notes that do not help execution.
 
-### 3. Progressive Disclosure
+### 3. Concision and Progressive Disclosure
 
 Pass criteria:
 
-- `SKILL.md` contains the core workflow, decision rules, safety rules, and resource map.
-- Large details live in directly linked `references/` files.
-- Repeated deterministic operations live in `scripts/`.
-- Output templates, icons, fonts, examples, and boilerplate live in `assets/`.
-- References are one level deep from `SKILL.md`.
-- Long reference files have a table of contents or searchable headings.
+- SKILL.md stays focused on the core workflow and decision rules.
+- Large detail lives in `references/` when needed.
+- Deterministic repeated work lives in `scripts/` when needed.
+- Output resources live in `assets/` when needed.
+- SKILL.md points directly to any important bundled resource.
+- The body avoids repeating detailed reference material.
 
 Red flags:
 
-- `SKILL.md` is a knowledge dump.
-- The skill force-loads large files when a link or instruction would do.
-- Reference content is duplicated in multiple files.
-- Important references exist but are not mentioned from `SKILL.md`.
+- SKILL.md is a knowledge dump.
+- The same information appears in both SKILL.md and a reference file.
+- The skill force-loads detail that could live in a resource file.
+- Deep or hidden resource paths make discovery fragile.
 
 ### 4. Degrees of Freedom
 
 Pass criteria:
 
-- Judgment-heavy tasks use principles, decision rules, and examples.
-- Semi-structured tasks use templates, checklists, or pseudocode.
-- Fragile or repetitive tasks use scripts, schemas, validators, or fixed commands.
-- Hard rules explain why they exist and what to do instead.
+- Judgment-heavy work uses principles and review heuristics.
+- Semi-structured work uses checklists, templates, or explicit review steps.
+- Fragile checks use concrete validation commands or deterministic artifacts.
+- Rules are specific where failure would be costly and flexible where judgment is needed.
 
 Red flags:
 
-- A fragile operation is described only in prose.
-- A judgment-heavy workflow is over-scripted.
-- The skill uses many `ALWAYS` or `NEVER` statements without rationale or boundaries.
-- The skill asks the agent to "be careful" instead of giving a verifiable process.
+- A fragile review step is left as vague prose.
+- The skill over-specifies judgment-heavy work.
+- The body relies on slogans like "be careful" without a verification step.
 
-### 5. Execution Protocol
+### 5. Resource Fit
 
 Pass criteria:
 
-- The workflow has concrete steps.
-- Decision branches say what to read, run, ask, or stop on.
-- The skill prevents common agent shortcuts and rationalizations.
-- It includes failure modes if the task is discipline-heavy.
-- It defines what evidence is required before claiming success.
-- If the host has a resolver, dispatcher, or skill loader, the workflow explains how to verify that the skill is reachable.
+- `scripts/` exist only when repeatability or deterministic reliability justifies them.
+- `references/` hold detailed material that should not live in SKILL.md.
+- `assets/` are output resources, not extra documentation.
+- The skill does not add extraneous files such as `README.md`, `INSTALLATION_GUIDE.md`, `QUICK_REFERENCE.md`, or `CHANGELOG.md`.
+- `agents/openai.yaml`, if present, matches the current SKILL.md.
 
 Red flags:
 
-- The skill is mostly motivational language.
-- It tells the agent to think deeply but gives no operational next step.
-- It has no stop conditions.
-- It has no output contract.
-- The skill is well written but has no evidence that the host can discover or invoke it.
-
-### 6. Resource and Script Quality
-
-Pass criteria:
-
-- Scripts are included only when they improve repeatability or reliability.
-- Scripts have clear inputs, outputs, exit codes, and readable errors.
-- Destructive scripts default to dry-run or require explicit confirmation.
-- Constants and defaults are named or explained.
-- Assets are files meant to be copied or used, not extra documentation.
-- `agents/openai.yaml`, if present, matches the skill and uses a default prompt that mentions `$skill-name`.
-
-Red flags:
-
-- Scripts silently swallow errors.
-- Scripts require hidden environment setup.
-- Scripts perform network, deletion, mutation, or production actions without clear safety rules.
+- Resources exist without a clear role.
 - Assets contain documentation that belongs in `references/`.
-- UI metadata over-promises compared with the skill body.
+- Extra documentation files clutter the skill.
+- `agents/openai.yaml` over-promises or has drifted from the skill body.
 
-### 7. Validation and Pressure Testing
+### 6. Execution Protocol
 
 Pass criteria:
 
-- The skill has concrete test prompts or realistic usage examples.
-- There are positive and negative trigger tests.
-- If validators, conformance tests, resolver checks, or scripts exist, review evidence prefers actual command output over manual inspection.
-- If validation commands cannot be run, the review states why and treats validation as unproven.
-- Complex discipline skills have pressure scenarios: time pressure, authority, sunk cost, or "this is simple" temptation.
-- Evaluation looks at the transcript, not only the final answer.
-- Revisions generalize from failures instead of overfitting one test.
+- The workflow tells the reviewer what to inspect, in what order, and what to conclude from missing evidence.
+- The skill distinguishes hard failures from improvement opportunities.
+- The output contract is explicit.
+- The skill says what evidence is required before declaring the reviewed skill acceptable.
 
 Red flags:
 
-- The skill has never been tried against a realistic task.
-- Test prompts reveal the expected answer.
-- The skill passes only because the test restates the rule.
-- The review claims validation passed without command output, transcript evidence, or a stated reason validation was not run.
-- There is no way to tell whether the skill improved behavior.
+- The skill is mostly principles with no sequence.
+- The skill has no stop conditions or evidence requirements.
+- The skill does not explain how to review partial artifacts.
+
+### 7. Validation Readiness
+
+Pass criteria:
+
+- The reviewed skill can be checked with realistic prompts or artifacts.
+- Trigger quality can be tested with positive and negative examples.
+- Complex skills define how to validate behavior without leaking answers.
+- The review considers whether `agents/openai.yaml` is stale and should be regenerated.
+
+Red flags:
+
+- The review has no way to tell whether the skill actually improved behavior.
+- Validation examples simply restate the rule.
+- Metadata is never checked against the live skill contents.
 
 ## Severity Guide
 
-- **Blocker**: likely to make the skill not trigger, trigger incorrectly, skip the body, perform unsafe actions, or fail its core job.
-- **High**: likely to cause inconsistent behavior, wasted context, missed verification, or bad resource selection.
-- **Medium**: makes the skill harder to maintain, test, or adapt.
-- **Low**: wording, organization, or polish that does not change core behavior.
+- **Blocker**: likely to make the skill fail to trigger, trigger broadly, violate creator rules, or mislead future users.
+- **High**: likely to waste context, create drift between metadata and behavior, or weaken validation.
+- **Medium**: likely to make the skill harder to maintain or extend.
+- **Low**: wording or organization polish that does not materially change behavior.
 
 ## Output Format
 
-Start with findings. Use this structure:
+Start with findings.
 
 ```markdown
 **Findings**
 - Blocker/High/Medium/Low: [issue]
-  Evidence: [file/section or quoted short excerpt]
+  Evidence: [file/section or short excerpt]
   Why it matters: [behavioral risk]
   Fix: [specific edit]
 
 **Scores**
-- Trigger quality: /10
+- Trigger and metadata: /10
 - Scope clarity: /10
-- Progressive disclosure: /10
+- Concision and disclosure: /10
 - Freedom matching: /10
+- Resource fit: /10 or N/A
 - Execution protocol: /10
-- Resource/script quality: /10 or N/A
 - Validation readiness: /10
 
 **Recommended Patch Plan**
@@ -223,54 +192,15 @@ Start with findings. Use this structure:
 - ...
 ```
 
-If there are no serious issues, say so clearly and list remaining test gaps.
+If there are no serious issues, say so directly and note any remaining validation gaps.
 
-## Quick Fix Patterns
+## Review Reminders
 
-Bad description:
-
-```yaml
-description: Use for skill review - checks description, structure, scripts, references, assets, and validation.
-```
-
-Better description:
-
-```yaml
-description: Use when reviewing newly written or updated agent skills, SKILL.md files, skill folders, trigger descriptions, bundled references, scripts, assets, or skill authoring plans.
-```
-
-Also acceptable when the host supports explicit trigger metadata:
-
-```yaml
-description: Turn raw features or scripts into complete agent-visible skills.
-triggers:
-  - "skillify this"
-  - "is this a skill?"
-  - "make this proper"
-```
-
-Bad prose rule:
-
-```markdown
-Always be very careful before deleting files.
-```
-
-Better operational rule:
-
-```markdown
-Before deleting files, show the exact paths and request approval. Prefer a dry-run command when the tool supports it because accidental deletion is irreversible.
-```
-
-Bad resource map:
-
-```markdown
-There are some docs in references.
-```
-
-Better resource map:
-
-```markdown
-- `references/aws.md`: read when deploying to AWS.
-- `references/gcp.md`: read when deploying to GCP.
-- `scripts/validate_config.py`: run before accepting generated config.
-```
+- Prefer findings about trigger quality, protocol quality, and validation quality over style nits.
+- Call out creator-specific violations explicitly:
+  - extra frontmatter keys
+  - body-only trigger guidance
+  - unnecessary README-style docs
+  - stale `agents/openai.yaml`
+  - duplicated knowledge between SKILL.md and bundled resources
+- Recommend scripts, references, or assets only when they reduce repeated work or increase reliability.

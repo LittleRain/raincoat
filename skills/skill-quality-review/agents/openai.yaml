@@ -1,4 +1,4 @@
 interface:
   display_name: "Skill Quality Review"
-  short_description: "Review skills for trigger, structure, and validation quality."
-  default_prompt: "Use $skill-quality-review to review this skill before I rely on it."
+  short_description: "Review a Codex skill against skill-creator rules."
+  default_prompt: "Use $skill-quality-review to review this skill against the skill-creator standard before I rely on it."
