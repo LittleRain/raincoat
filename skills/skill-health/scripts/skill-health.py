@@ -564,8 +564,8 @@ def discover_event_files(agent: str) -> list[Path]:
         ]
     if agent == "hermes":
         return [
-            home / ".hermes" / "skill-usage.jsonl",
-            home / ".codex" / "skill-usage.jsonl",
+            home / ".hermes" / "skill_usage.jsonl",
+            home / ".codex" / "skill_usage.jsonl",
         ]
     return []
 

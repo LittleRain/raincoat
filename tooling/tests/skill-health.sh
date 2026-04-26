@@ -12,6 +12,9 @@ grep -q 'short_description: "Audit local agent skills"' "$ROOT_DIR/skills/skill-
 grep -q 'Use \$skill-health' "$ROOT_DIR/skills/skill-health/agents/openai.yaml"
 grep -q '^## Usage$' "$ROOT_DIR/skills/skill-health/SKILL.md"
 grep -q 'Use `doctor` for the normal audit path' "$ROOT_DIR/skills/skill-health/SKILL.md"
+grep -q -- '--host hermes' "$ROOT_DIR/skills/skill-health/SKILL.md"
+grep -q -- '--agent hermes' "$ROOT_DIR/skills/skill-health/SKILL.md"
+grep -q '~/.hermes/skill_usage.jsonl' "$ROOT_DIR/skills/skill-health/SKILL.md"
 
 SKILLS_ROOT="$TEST_TMP/skills"
 STATE_DIR="$TEST_TMP/state"
@@ -173,6 +176,16 @@ grep -q '"usage_available": false' "$MISSING_REPORT_DIR/skill-health-report.json
 grep -q '"usage_unavailable"' "$MISSING_REPORT_DIR/skill-health-report.json"
 grep -q "Usage data unavailable" "$MISSING_REPORT_DIR/skill-health-report.en.md"
 grep -q "使用数据不可用" "$MISSING_REPORT_DIR/skill-health-report.zh.md"
+
+HERMES_STATE_DIR="$TEST_TMP/hermes-state"
+mkdir -p "$HERMES_STATE_DIR"
+
+"$ROOT_DIR/skills/skill-health/scripts/skill-health" \
+  --state-dir "$HERMES_STATE_DIR" \
+  import --agent hermes >"$TEST_TMP/hermes-import.json"
+
+grep -q '.hermes/skill_usage.jsonl' "$TEST_TMP/hermes-import.json"
+grep -q '.codex/skill_usage.jsonl' "$TEST_TMP/hermes-import.json"
 
 REVIEW_STATE_DIR="$TEST_TMP/review-state"
 mkdir -p "$REVIEW_STATE_DIR"
