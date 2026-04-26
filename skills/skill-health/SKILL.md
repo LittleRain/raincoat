@@ -33,8 +33,8 @@ usage logs, and writes Markdown plus JSON reports:
 ```bash
 SKILL_DIR=/path/to/skill-health
 "$SKILL_DIR/scripts/skill-health" doctor \
-  --host openclaw \
-  --agent openclaw \
+  --host hermes \
+  --agent hermes \
   --language zh \
   --output-dir ~/.skill-health
 ```
@@ -56,7 +56,7 @@ reusing an existing index:
 ```bash
 SKILL_DIR=/path/to/skill-health
 "$SKILL_DIR/scripts/skill-health" scan --root /path/to/skills
-"$SKILL_DIR/scripts/skill-health" import --agent openclaw --events /path/to/events.jsonl
+"$SKILL_DIR/scripts/skill-health" import --agent hermes --events ~/.hermes/skill_usage.jsonl
 "$SKILL_DIR/scripts/skill-health" report --format md --language zh
 ```
 
