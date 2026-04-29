@@ -74,6 +74,8 @@ SKILL_DIR=/path/to/skill-health
 Hermes host-side skill usage recording must follow the protocol in
 `references/hermes-usage-protocol.md`.
 
+For a host-side rollout checklist that an agent can execute, read `README.md`.
+
 Expected outputs:
 
 - `skill-health-report.en.md`
