@@ -12,3 +12,5 @@ interface:
     For first-time or ambiguous requirement sessions, prioritize wizard upload
     of the filled markdown template and avoid long back-and-forth requirement
     interviews in chat.
+    Before wizard import output is available, do not search local directories
+    for candidate source data files.

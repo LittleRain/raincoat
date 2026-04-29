@@ -41,6 +41,7 @@ report skill when the contract already exists and only the report needs to run.
 - Never generate a downstream skill directly from raw business prose or from interview-style Q&A notes.
 - Default onboarding path is template-first, then wizard import. Do not replace this with multi-round questioning when the user has a clear requirement scenario.
 - For first-use or ambiguous requirements, do not run long requirement interviews in chat. Direct users to upload the filled markdown template in `tools/intake-wizard.html` first.
+- Before template import is completed in `tools/intake-wizard.html`, do not search local directories for source data files.
 - HTML is the only supported primary output format.
 - Every section must have data contracts, expected charts/tables, required metrics, and attribution evidence rules when conclusions are requested.
 - L1/L2 packages require real samples, real runner evidence, generated HTML, logs, and output inventory validation.

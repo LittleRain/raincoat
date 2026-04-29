@@ -1,0 +1,4 @@
+interface:
+  display_name: "Skill Health"
+  short_description: "Audit local agent skills"
+  default_prompt: "Use $skill-health to audit my local agent skills and report stale, unused, overlapping, or weakly triggered skills."
