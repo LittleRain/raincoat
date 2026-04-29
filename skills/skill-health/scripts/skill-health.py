@@ -22,6 +22,8 @@ from typing import Iterable
 DEFAULT_STATE_DIR = Path.home() / ".skill-health"
 DEFAULT_REVIEW_CADENCE_DAYS = 14
 DEFAULT_SNOOZE_DAYS = 7
+DEFAULT_SCAN_SCOPE = "local_only"
+HERMES_DEFAULT_HOME = Path.home() / ".hermes"
 OUTCOME_SIGNALS = {
     "completed",
     "followup_fix_requested",
@@ -88,6 +90,7 @@ class UsageEvent:
     session_id: str
     outcome_signal: str
     source: str
+    trigger_source: str
 
 
 @dataclass
@@ -119,6 +122,22 @@ class UsageImportStatus:
     files_missing: list[str]
     imported: int
     usage_available: bool
+    usage_mode: str
+    usage_logging_status: str
+    diagnosis_code: str
+    diagnosis: str
+    resolved_hermes_home: str | None
+    usage_log_path: str | None
+    health_log_path: str | None
+
+
+@dataclass
+class UsageHealthEvent:
+    ts: str
+    code: str
+    message: str
+    agent: str
+    source: str
 
 
 @dataclass
@@ -167,10 +186,6 @@ def attach_finding_ids(findings: list[HealthFinding]) -> list[HealthFinding]:
     for finding in findings:
         finding.finding_id = finding_id_for(finding)
     return findings
-    try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError:
-        return None
 
 
 def iso_from_mtime(path: Path) -> str:
@@ -203,6 +218,8 @@ def tokenize(value: str) -> list[str]:
 
 def source_from_path(path: Path) -> str:
     text = str(path)
+    if "/.hermes/" in text:
+        return "hermes"
     if "/.codex/" in text:
         return "codex"
     if "/.agents/" in text:
@@ -212,20 +229,92 @@ def source_from_path(path: Path) -> str:
     return "custom"
 
 
-def discover_roots(host: str) -> list[Path]:
+def resolve_hermes_home() -> Path:
+    configured = os.environ.get("HERMES_HOME")
+    if configured:
+        return Path(configured).expanduser()
+    return HERMES_DEFAULT_HOME
+
+
+def expand_config_path(raw_value: str, config_path: Path) -> Path:
+    expanded = os.path.expandvars(os.path.expanduser(raw_value.strip()))
+    path = Path(expanded)
+    if not path.is_absolute():
+        path = (config_path.parent / path).resolve()
+    return path
+
+
+def parse_hermes_external_dirs(hermes_home: Path) -> list[Path]:
+    config_path = hermes_home / "config.yaml"
+    if not config_path.exists():
+        return []
+    lines = config_path.read_text(encoding="utf-8").splitlines()
+    external_dirs: list[Path] = []
+    in_skills = False
+    in_external = False
+    skills_indent = -1
+    external_indent = -1
+    for raw_line in lines:
+        line = raw_line.split("#", 1)[0].rstrip()
+        if not line.strip():
+            continue
+        indent = len(line) - len(line.lstrip(" "))
+        stripped = line.strip()
+        if stripped == "skills:":
+            in_skills = True
+            in_external = False
+            skills_indent = indent
+            external_indent = -1
+            continue
+        if in_skills and indent <= skills_indent:
+            in_skills = False
+            in_external = False
+        if in_skills and stripped == "external_dirs:":
+            in_external = True
+            external_indent = indent
+            continue
+        if in_external and indent <= external_indent:
+            in_external = False
+        if in_external and stripped.startswith("- "):
+            external_dirs.append(expand_config_path(stripped[2:], config_path))
+    return external_dirs
+
+
+def discover_roots(host: str, scan_scope: str = DEFAULT_SCAN_SCOPE) -> tuple[list[Path], dict[str, object]]:
     home = Path.home()
     if host == "openclaw":
-        return [
+        roots = [
             home / ".agents" / "skills",
             home / "WorkBuddy" / "Claw" / "skills",
         ]
+        return roots, {
+            "resolved_hermes_home": None,
+            "effective_roots": [str(root) for root in roots],
+            "scan_scope": scan_scope,
+        }
     if host == "hermes":
-        return [
-            home / ".codex" / "skills",
-            home / ".hermes" / "skills",
-            home / "Library" / "Application Support" / "Hermes" / "skills",
-        ]
-    return []
+        hermes_home = resolve_hermes_home()
+        roots = [hermes_home / "skills"]
+        if scan_scope == "local_plus_external":
+            roots.extend(parse_hermes_external_dirs(hermes_home))
+        deduped: list[Path] = []
+        seen: set[str] = set()
+        for root in roots:
+            key = str(root.resolve()) if root.exists() else str(root)
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(root)
+        return deduped, {
+            "resolved_hermes_home": str(hermes_home),
+            "effective_roots": [str(root) for root in deduped],
+            "scan_scope": scan_scope,
+        }
+    return [], {
+        "resolved_hermes_home": None,
+        "effective_roots": [],
+        "scan_scope": scan_scope,
+    }
 
 
 def adapter_statuses(roots: list[Path], host: str, explicit_roots: bool) -> list[AdapterStatus]:
@@ -303,12 +392,42 @@ def write_index(state_dir: Path, skills: list[Skill], statuses: list[AdapterStat
     (state_dir / "index.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
+def write_index_with_context(state_dir: Path, skills: list[Skill], statuses: list[AdapterStatus], context: dict[str, object]) -> None:
+    ensure_state_dir(state_dir)
+    payload = {
+        "generated_at": utc_now(),
+        "adapter_status": [asdict(status) for status in statuses],
+        "scan_context": context,
+        "skills": [asdict(skill) for skill in skills],
+    }
+    (state_dir / "index.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
 def read_adapter_status(state_dir: Path) -> list[dict[str, object]]:
     index_path = state_dir / "index.json"
     if not index_path.exists():
         return []
     data = json.loads(index_path.read_text(encoding="utf-8"))
     return data.get("adapter_status", [])
+
+
+def read_scan_context(state_dir: Path) -> dict[str, object]:
+    index_path = state_dir / "index.json"
+    if not index_path.exists():
+        return {
+            "resolved_hermes_home": None,
+            "effective_roots": [],
+            "scan_scope": DEFAULT_SCAN_SCOPE,
+        }
+    data = json.loads(index_path.read_text(encoding="utf-8"))
+    return data.get(
+        "scan_context",
+        {
+            "resolved_hermes_home": None,
+            "effective_roots": [],
+            "scan_scope": DEFAULT_SCAN_SCOPE,
+        },
+    )
 
 
 def normalize_event(raw: dict[str, object], default_agent: str, source: str) -> UsageEvent:
@@ -324,6 +443,74 @@ def normalize_event(raw: dict[str, object], default_agent: str, source: str) -> 
         session_id=str(raw.get("session_id") or raw.get("session") or "unknown"),
         outcome_signal=outcome,
         source=str(raw.get("source") or source),
+        trigger_source=str(raw.get("trigger_source") or raw.get("trigger") or "unknown"),
+    )
+
+
+def discover_health_files(agent: str) -> list[Path]:
+    if agent != "hermes":
+        return []
+    hermes_home = resolve_hermes_home()
+    return [hermes_home / "skill_usage_health.jsonl"]
+
+
+def read_latest_health_event(health_files: list[Path], default_agent: str) -> UsageHealthEvent | None:
+    latest: UsageHealthEvent | None = None
+    latest_ts: datetime | None = None
+    for health_file in health_files:
+        if not health_file.exists():
+            continue
+        with health_file.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    raw = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                event = UsageHealthEvent(
+                    ts=str(raw.get("ts") or raw.get("timestamp") or utc_now()),
+                    code=str(raw.get("code") or "unknown"),
+                    message=str(raw.get("message") or "Unknown Hermes skill usage health issue."),
+                    agent=str(raw.get("agent") or default_agent),
+                    source=str(raw.get("source") or str(health_file)),
+                )
+                event_ts = parse_timestamp(event.ts)
+                if latest is None or (event_ts and (latest_ts is None or event_ts > latest_ts)):
+                    latest = event
+                    latest_ts = event_ts
+    return latest
+
+
+def usage_diagnosis(
+    agent: str,
+    event_files: list[Path],
+    files_imported: list[str],
+    latest_health_event: UsageHealthEvent | None,
+) -> tuple[str, str, str]:
+    if latest_health_event is not None:
+        return (
+            latest_health_event.code,
+            "warning",
+            latest_health_event.message,
+        )
+    if files_imported:
+        return (
+            "available",
+            "available",
+            "Imported explicit host-emitted skill usage events.",
+        )
+    if agent == "hermes":
+        return (
+            "no_usage_log",
+            "unavailable",
+            "No Hermes skill usage events were imported. Check the current HERMES_HOME, usage log path, and Hermes host warnings.",
+        )
+    return (
+        "no_usage_log",
+        "unavailable",
+        "No local usage log files were imported.",
     )
 
 
@@ -333,6 +520,8 @@ def import_events(event_files: list[Path], state_dir: Path, agent: str) -> Usage
     existing_keys = {event_key(event) for event in read_events(state_dir)}
     files_imported: list[str] = []
     files_missing: list[str] = []
+    health_files = discover_health_files(agent)
+    latest_health_event = read_latest_health_event(health_files, agent)
     for event_file in event_files:
         if not event_file.exists():
             files_missing.append(str(event_file))
@@ -357,6 +546,10 @@ def import_events(event_files: list[Path], state_dir: Path, agent: str) -> Usage
     with events_path.open("a", encoding="utf-8") as handle:
         for event in imported:
             handle.write(json.dumps(asdict(event), ensure_ascii=False, sort_keys=True) + "\n")
+    diagnosis_code, usage_logging_status, diagnosis = usage_diagnosis(agent, event_files, files_imported, latest_health_event)
+    hermes_home = str(resolve_hermes_home()) if agent == "hermes" else None
+    usage_log_path = str(event_files[0]) if event_files else None
+    health_log_path = str(health_files[0]) if health_files else None
     return UsageImportStatus(
         agent=agent,
         files_checked=[str(path) for path in event_files],
@@ -364,6 +557,13 @@ def import_events(event_files: list[Path], state_dir: Path, agent: str) -> Usage
         files_missing=files_missing,
         imported=len(imported),
         usage_available=bool(files_imported),
+        usage_mode="explicit_events_only",
+        usage_logging_status=usage_logging_status,
+        diagnosis_code=diagnosis_code,
+        diagnosis=diagnosis,
+        resolved_hermes_home=hermes_home,
+        usage_log_path=usage_log_path,
+        health_log_path=health_log_path,
     )
 
 
@@ -382,6 +582,13 @@ def read_usage_status(state_dir: Path) -> UsageImportStatus:
             files_missing=[],
             imported=0,
             usage_available=False,
+            usage_mode="explicit_events_only",
+            usage_logging_status="unavailable",
+            diagnosis_code="no_usage_status",
+            diagnosis="No usage status has been recorded yet.",
+            resolved_hermes_home=None,
+            usage_log_path=None,
+            health_log_path=None,
         )
     try:
         return UsageImportStatus(**json.loads(status_path.read_text(encoding="utf-8")))
@@ -393,6 +600,13 @@ def read_usage_status(state_dir: Path) -> UsageImportStatus:
             files_missing=[],
             imported=0,
             usage_available=False,
+            usage_mode="explicit_events_only",
+            usage_logging_status="unavailable",
+            diagnosis_code="invalid_usage_status",
+            diagnosis="Usage status could not be parsed.",
+            resolved_hermes_home=None,
+            usage_log_path=None,
+            health_log_path=None,
         )
 
 
@@ -532,17 +746,6 @@ def review_status_payload(state_dir: Path) -> dict[str, object]:
         "dismissed_until": state.dismissed_until,
         "last_active_findings": state.last_active_findings,
     }
-    try:
-        return UsageImportStatus(**json.loads(status_path.read_text(encoding="utf-8")))
-    except (json.JSONDecodeError, TypeError):
-        return UsageImportStatus(
-            agent="unknown",
-            files_checked=[],
-            files_imported=[],
-            files_missing=[],
-            imported=0,
-            usage_available=False,
-        )
 
 
 def event_key(event: UsageEvent) -> tuple[str, str, str, str, str]:
@@ -551,7 +754,7 @@ def event_key(event: UsageEvent) -> tuple[str, str, str, str, str]:
         event.timestamp,
         event.agent,
         event.session_id,
-        event.source,
+        f"{event.source}:{event.trigger_source}",
     )
 
 
@@ -563,10 +766,8 @@ def discover_event_files(agent: str) -> list[Path]:
             home / ".agents" / "logs" / "skill-usage.jsonl",
         ]
     if agent == "hermes":
-        return [
-            home / ".hermes" / "skill_usage.jsonl",
-            home / ".codex" / "skill_usage.jsonl",
-        ]
+        hermes_home = resolve_hermes_home()
+        return [hermes_home / "skill_usage.jsonl"]
     return []
 
 
@@ -622,26 +823,37 @@ def overlap_score(left: Skill, right: Skill) -> float:
     return max(name_score, term_score, description_score)
 
 
-def build_findings(skills: list[Skill], events: list[UsageEvent], stale_days: int, usage_available: bool) -> list[HealthFinding]:
+def build_findings(skills: list[Skill], events: list[UsageEvent], stale_days: int, usage_status: UsageImportStatus) -> list[HealthFinding]:
     findings: list[HealthFinding] = []
     latest = latest_usage_by_skill(events)
     now = datetime.now(timezone.utc)
 
-    if not usage_available:
+    if not usage_status.usage_available:
         findings.append(
             HealthFinding(
                 kind="usage_unavailable",
                 severity="medium",
                 skill_name="*",
-                message="Usage data unavailable because no local usage log files were imported.",
-                recommendation="Configure host usage log paths or pass --events before treating unused_skill findings as real inactivity.",
-                evidence={"usage_available": False},
+                message="Usage data unavailable because no explicit host-emitted skill usage events were imported.",
+                recommendation="Check the Hermes/OpenClaw host usage hook, the resolved usage log path, and any host health warnings before treating inactivity findings as real.",
+                evidence={
+                    "usage_available": False,
+                    "usage_mode": usage_status.usage_mode,
+                    "usage_logging_status": usage_status.usage_logging_status,
+                    "diagnosis_code": usage_status.diagnosis_code,
+                    "diagnosis": usage_status.diagnosis,
+                    "resolved_hermes_home": usage_status.resolved_hermes_home,
+                    "usage_log_path": usage_status.usage_log_path,
+                    "health_log_path": usage_status.health_log_path,
+                    "files_checked": usage_status.files_checked,
+                    "files_missing": usage_status.files_missing,
+                },
             )
         )
 
     for skill in skills:
         latest_event = latest.get(skill.name)
-        if latest_event is None and usage_available:
+        if latest_event is None and usage_status.usage_available:
             findings.append(
                 HealthFinding(
                     kind="unused_skill",
@@ -708,6 +920,7 @@ def report_payload(
     findings: list[HealthFinding],
     usage_status: UsageImportStatus,
     adapter_status: list[dict[str, object]],
+    scan_context: dict[str, object],
     suppressed_findings: list[HealthFinding] | None = None,
     feedback_applied: int = 0,
 ) -> dict[str, object]:
@@ -719,15 +932,34 @@ def report_payload(
             "usage_events": len(events),
             "findings": len(findings),
             "usage_available": usage_status.usage_available,
+            "usage_logging_status": usage_status.usage_logging_status,
             "feedback_applied": feedback_applied,
             "findings_suppressed": len(suppressed_findings),
         },
+        "resolved_hermes_home": scan_context.get("resolved_hermes_home"),
+        "effective_roots": scan_context.get("effective_roots", []),
+        "scan_scope": scan_context.get("scan_scope", DEFAULT_SCAN_SCOPE),
         "usage_status": asdict(usage_status),
         "adapter_status": adapter_status,
         "skills": [asdict(skill) for skill in skills],
         "findings": [asdict(finding) for finding in findings],
         "suppressed_findings": [asdict(finding) for finding in suppressed_findings],
     }
+
+
+def localized_diagnosis(code: str, message: str, language: str) -> str:
+    if language == "en":
+        return message
+    mapping = {
+        "available": "已导入宿主显式产出的 skill usage events。",
+        "no_usage_log": "没有导入任何本地 usage log 文件。",
+        "hook_not_enabled": "宿主已加载 skill，但 skill usage hook 未启用。",
+        "log_path_missing": "宿主 skill usage 日志路径不存在。",
+        "log_path_unwritable": "宿主 skill usage 日志路径不可写。",
+        "session_id_missing": "宿主写 usage event 时缺少 session_id。",
+        "json_write_failed": "宿主写 usage event 时 JSON 序列化或写入失败。",
+    }
+    return mapping.get(code, message)
 
 
 def localized_message(finding: dict[str, object], language: str) -> str:
@@ -746,7 +978,11 @@ def localized_message(finding: dict[str, object], language: str) -> str:
         other = evidence.get("other_skill", "另一个 skill") if isinstance(evidence, dict) else "另一个 skill"
         return f"{skill_name} 与 {other} 存在场景重叠。"
     if kind == "usage_unavailable":
-        return "使用数据不可用，因为没有导入任何本地使用日志文件。"
+        return localized_diagnosis(
+            str(evidence.get("diagnosis_code") or "no_usage_log"),
+            str(evidence.get("diagnosis") or "No local usage log files were imported."),
+            language,
+        )
     return str(finding["message"])
 
 
@@ -763,7 +999,7 @@ def localized_recommendation(finding: dict[str, object], language: str) -> str:
     if kind == "duplicate_candidate":
         return "人工复核两个 skill 的边界，必要时合并或重写触发描述。"
     if kind == "usage_unavailable":
-        return "配置宿主使用日志路径，或通过 --events 指定日志文件，再判断 skill 是否真的未使用。"
+        return "先检查宿主 usage hook、usage log 路径和 health warning，再判断 skill 是否真的未使用。"
     return str(finding["recommendation"])
 
 
@@ -853,11 +1089,31 @@ def render_markdown(payload: dict[str, object], language: str = "en") -> str:
 
 
 def command_scan(args: argparse.Namespace) -> int:
-    roots = [Path(root).expanduser() for root in args.root] if args.root else discover_roots(args.host)
+    if args.root:
+        roots = [Path(root).expanduser() for root in args.root]
+        scan_context = {
+            "resolved_hermes_home": str(resolve_hermes_home()) if args.host == "hermes" else None,
+            "effective_roots": [str(root) for root in roots],
+            "scan_scope": "explicit_root",
+        }
+    else:
+        roots, scan_context = discover_roots(args.host, args.scan_scope)
     statuses = adapter_statuses(roots, args.host, bool(args.root))
     skills = scan_skills(roots, args.host)
-    write_index(args.state_dir, skills, statuses)
-    print(json.dumps({"indexed": len(skills), "state_dir": str(args.state_dir), "adapter_status": [asdict(status) for status in statuses]}, ensure_ascii=False))
+    write_index_with_context(args.state_dir, skills, statuses, scan_context)
+    print(
+        json.dumps(
+            {
+                "indexed": len(skills),
+                "state_dir": str(args.state_dir),
+                "adapter_status": [asdict(status) for status in statuses],
+                "resolved_hermes_home": scan_context.get("resolved_hermes_home"),
+                "effective_roots": scan_context.get("effective_roots", []),
+                "scan_scope": scan_context.get("scan_scope"),
+            },
+            ensure_ascii=False,
+        )
+    )
     return 0
 
 
@@ -865,7 +1121,23 @@ def command_import(args: argparse.Namespace) -> int:
     event_files = [Path(path).expanduser() for path in args.events] if args.events else discover_event_files(args.agent)
     status = import_events(event_files, args.state_dir, args.agent)
     write_usage_status(args.state_dir, status)
-    print(json.dumps({"imported": status.imported, "state_dir": str(args.state_dir), "usage_available": status.usage_available, "files_missing": status.files_missing}, ensure_ascii=False))
+    print(
+        json.dumps(
+            {
+                "imported": status.imported,
+                "state_dir": str(args.state_dir),
+                "usage_available": status.usage_available,
+                "usage_logging_status": status.usage_logging_status,
+                "diagnosis_code": status.diagnosis_code,
+                "diagnosis": status.diagnosis,
+                "resolved_hermes_home": status.resolved_hermes_home,
+                "usage_log_path": status.usage_log_path,
+                "health_log_path": status.health_log_path,
+                "files_missing": status.files_missing,
+            },
+            ensure_ascii=False,
+        )
+    )
     return 0
 
 
@@ -873,7 +1145,7 @@ def command_report(args: argparse.Namespace) -> int:
     skills = read_index(args.state_dir)
     events = read_events(args.state_dir)
     usage_status = read_usage_status(args.state_dir)
-    raw_findings = build_findings(skills, events, args.stale_days, usage_status.usage_available)
+    raw_findings = build_findings(skills, events, args.stale_days, usage_status)
     findings, suppressed_findings, feedback_applied = apply_feedback(raw_findings, read_feedback(args.state_dir))
     payload = report_payload(
         skills,
@@ -881,6 +1153,7 @@ def command_report(args: argparse.Namespace) -> int:
         findings,
         usage_status,
         read_adapter_status(args.state_dir),
+        read_scan_context(args.state_dir),
         suppressed_findings,
         feedback_applied,
     )
@@ -892,15 +1165,23 @@ def command_report(args: argparse.Namespace) -> int:
 
 
 def command_doctor(args: argparse.Namespace) -> int:
-    roots = [Path(root).expanduser() for root in args.root] if args.root else discover_roots(args.host)
+    if args.root:
+        roots = [Path(root).expanduser() for root in args.root]
+        scan_context = {
+            "resolved_hermes_home": str(resolve_hermes_home()) if args.host == "hermes" else None,
+            "effective_roots": [str(root) for root in roots],
+            "scan_scope": "explicit_root",
+        }
+    else:
+        roots, scan_context = discover_roots(args.host, args.scan_scope)
     statuses = adapter_statuses(roots, args.host, bool(args.root))
     skills = scan_skills(roots, args.host)
-    write_index(args.state_dir, skills, statuses)
+    write_index_with_context(args.state_dir, skills, statuses, scan_context)
     event_files = [Path(path).expanduser() for path in args.events] if args.events else discover_event_files(args.agent)
     usage_status = import_events(event_files, args.state_dir, args.agent)
     write_usage_status(args.state_dir, usage_status)
     events = read_events(args.state_dir)
-    raw_findings = build_findings(skills, events, args.stale_days, usage_status.usage_available)
+    raw_findings = build_findings(skills, events, args.stale_days, usage_status)
     findings, suppressed_findings, feedback_applied = apply_feedback(raw_findings, read_feedback(args.state_dir))
     payload = report_payload(
         skills,
@@ -908,6 +1189,7 @@ def command_doctor(args: argparse.Namespace) -> int:
         findings,
         usage_status,
         [asdict(status) for status in statuses],
+        scan_context,
         suppressed_findings,
         feedback_applied,
     )
@@ -961,6 +1243,7 @@ def build_parser() -> argparse.ArgumentParser:
     scan = subparsers.add_parser("scan", help="Scan local SKILL.md roots and write index.json.")
     scan.add_argument("--root", action="append", default=[], help="Skill root to scan. May be repeated.")
     scan.add_argument("--host", choices=["custom", "openclaw", "hermes"], default="custom")
+    scan.add_argument("--scan-scope", choices=["local_only", "local_plus_external"], default=DEFAULT_SCAN_SCOPE)
     scan.set_defaults(func=command_scan)
 
     import_cmd = subparsers.add_parser("import", help="Import local skill usage JSONL events.")
@@ -978,6 +1261,7 @@ def build_parser() -> argparse.ArgumentParser:
     doctor.add_argument("--root", action="append", default=[], help="Skill root to scan. May be repeated.")
     doctor.add_argument("--host", choices=["custom", "openclaw", "hermes"], default="custom")
     doctor.add_argument("--agent", choices=["custom", "openclaw", "hermes"], default="custom")
+    doctor.add_argument("--scan-scope", choices=["local_only", "local_plus_external"], default=DEFAULT_SCAN_SCOPE)
     doctor.add_argument("--events", action="append", default=[], help="JSONL event file to import. May be repeated.")
     doctor.add_argument("--stale-days", type=int, default=90)
     doctor.add_argument("--language", choices=["en", "zh"], default="en")

@@ -5,8 +5,8 @@ description: Use when auditing installed agent skills, finding unused or stale s
 
 # Skill Health
 
-Use the bundled CLI as the source of truth for inventory, usage import, and
-reports. Do not manually infer skill health when the CLI can inspect it.
+Use the bundled CLI as the source of truth for Hermes inventory, usage import,
+and reports. Do not manually infer skill health when the CLI can inspect it.
 
 ## Usage
 
@@ -27,17 +27,28 @@ and mark false positives. If they decline, run:
 "$SKILL_DIR/scripts/skill-health" review-snooze --days 7
 ```
 
-Use `doctor` for the normal audit path. It scans skills, imports any available
-usage logs, and writes Markdown plus JSON reports:
+Use `doctor` for the normal Hermes audit path. It scans the current Hermes
+profile skill root, imports explicit host-emitted usage logs, and writes
+Markdown plus JSON reports:
 
 ```bash
 SKILL_DIR=/path/to/skill-health
 "$SKILL_DIR/scripts/skill-health" doctor \
   --host hermes \
   --agent hermes \
+  --scan-scope local_only \
   --language zh \
   --output-dir ~/.skill-health
 ```
+
+Hermes paths are profile-aware:
+
+- `HERMES_HOME` if set
+- otherwise `~/.hermes`
+
+By default, `skill-health` scans only `<HERMES_HOME>/skills`. It does not mix in
+OpenClaw roots or Hermes `skills.external_dirs` unless `--scan-scope
+local_plus_external` is explicitly requested.
 
 Use explicit roots when auditing a repo, exported skill folder, or non-standard
 installation path:
@@ -56,9 +67,12 @@ reusing an existing index:
 ```bash
 SKILL_DIR=/path/to/skill-health
 "$SKILL_DIR/scripts/skill-health" scan --root /path/to/skills
-"$SKILL_DIR/scripts/skill-health" import --agent hermes --events ~/.hermes/skill_usage.jsonl
+"$SKILL_DIR/scripts/skill-health" import --agent hermes --events "$HERMES_HOME/skill_usage.jsonl"
 "$SKILL_DIR/scripts/skill-health" report --format md --language zh
 ```
+
+Hermes host-side skill usage recording must follow the protocol in
+`references/hermes-usage-protocol.md`.
 
 Expected outputs:
 
@@ -92,6 +106,11 @@ After the user finishes reviewing findings, run:
 ## Interpret
 
 - Treat `outcome_signal` as an observable signal, not a true satisfaction score.
+- Treat real usage as explicit Hermes/OpenClaw host-emitted skill load events
+  only.
+- For Hermes, natural invocation counts as usage only if the host actually
+  loaded the skill through the same resolver / loader path and emitted a usage
+  event.
 - If usage logs are unavailable, require a `usage_unavailable` finding. Do not
   treat missing logs as proof that every skill is unused.
 - Treat `unused_skill`, `stale_skill`, `duplicate_candidate`, and `weak_trigger`
@@ -101,6 +120,20 @@ After the user finishes reviewing findings, run:
   suppressed section for auditability.
 - Report Hermes/OpenClaw roots as adapter status. Inferred roots are candidate
   paths, not confirmed host integration.
+
+## Troubleshooting
+
+- If scan coverage looks wrong, inspect `resolved_hermes_home`,
+  `effective_roots`, and `scan_scope` in the JSON report before trusting the
+  findings.
+- If `usage_events` is 0, check `usage_log_path`, `files_checked`,
+  `files_missing`, and `usage_logging_status` before assuming the skills were
+  unused.
+- If Hermes still reports no usage after skills were loaded, check whether the
+  gateway / `skill_view` hook is still emitting events into
+  `<HERMES_HOME>/skill_usage.jsonl`.
+- If `usage_logging_status` is `warning`, check the Hermes host health event
+  stream described in `references/hermes-usage-protocol.md`.
 
 ## Privacy
 

@@ -11,10 +11,12 @@ grep -q 'display_name: "Skill Health"' "$ROOT_DIR/skills/skill-health/agents/ope
 grep -q 'short_description: "Audit local agent skills"' "$ROOT_DIR/skills/skill-health/agents/openai.yaml"
 grep -q 'Use \$skill-health' "$ROOT_DIR/skills/skill-health/agents/openai.yaml"
 grep -q '^## Usage$' "$ROOT_DIR/skills/skill-health/SKILL.md"
-grep -q 'Use `doctor` for the normal audit path' "$ROOT_DIR/skills/skill-health/SKILL.md"
+grep -q 'Use `doctor` for the normal Hermes audit path' "$ROOT_DIR/skills/skill-health/SKILL.md"
 grep -q -- '--host hermes' "$ROOT_DIR/skills/skill-health/SKILL.md"
 grep -q -- '--agent hermes' "$ROOT_DIR/skills/skill-health/SKILL.md"
-grep -q '~/.hermes/skill_usage.jsonl' "$ROOT_DIR/skills/skill-health/SKILL.md"
+grep -q 'scan-scope local_only' "$ROOT_DIR/skills/skill-health/SKILL.md"
+grep -q 'references/hermes-usage-protocol.md' "$ROOT_DIR/skills/skill-health/SKILL.md"
+test -f "$ROOT_DIR/skills/skill-health/references/hermes-usage-protocol.md"
 
 SKILLS_ROOT="$TEST_TMP/skills"
 STATE_DIR="$TEST_TMP/state"
@@ -71,6 +73,7 @@ grep -q '"name": "report-alpha"' "$STATE_DIR/index.json"
 grep -q '"host": "custom"' "$STATE_DIR/index.json"
 grep -q '"adapter_status"' "$STATE_DIR/index.json"
 grep -q '"root_status": "available"' "$STATE_DIR/index.json"
+grep -q '"scan_scope": "explicit_root"' "$STATE_DIR/index.json"
 if grep -q '"name": "your-skill-name"' "$STATE_DIR/index.json"; then
   echo "template skills should not be indexed"
   exit 1
@@ -97,6 +100,7 @@ fi
   report --stale-days 1 --format json >"$TEST_TMP/report.json"
 
 grep -q '"usage_available": true' "$TEST_TMP/report.json"
+grep -q '"scan_scope": "explicit_root"' "$TEST_TMP/report.json"
 grep -q '"kind": "duplicate_candidate"' "$TEST_TMP/report.json"
 grep -q '"skill_name": "weak-trigger"' "$TEST_TMP/report.json"
 grep -q '"kind": "weak_trigger"' "$TEST_TMP/report.json"
@@ -175,7 +179,7 @@ mkdir -p "$MISSING_STATE_DIR" "$MISSING_REPORT_DIR"
 grep -q '"usage_available": false' "$MISSING_REPORT_DIR/skill-health-report.json"
 grep -q '"usage_unavailable"' "$MISSING_REPORT_DIR/skill-health-report.json"
 grep -q "Usage data unavailable" "$MISSING_REPORT_DIR/skill-health-report.en.md"
-grep -q "使用数据不可用" "$MISSING_REPORT_DIR/skill-health-report.zh.md"
+grep -q "没有导入任何本地 usage log 文件" "$MISSING_REPORT_DIR/skill-health-report.zh.md"
 
 HERMES_STATE_DIR="$TEST_TMP/hermes-state"
 mkdir -p "$HERMES_STATE_DIR"
@@ -185,7 +189,132 @@ mkdir -p "$HERMES_STATE_DIR"
   import --agent hermes >"$TEST_TMP/hermes-import.json"
 
 grep -q '.hermes/skill_usage.jsonl' "$TEST_TMP/hermes-import.json"
-grep -q '.codex/skill_usage.jsonl' "$TEST_TMP/hermes-import.json"
+if grep -q '.codex/skill_usage.jsonl' "$TEST_TMP/hermes-import.json"; then
+  echo "hermes usage import should not inspect codex usage logs by default"
+  exit 1
+fi
+
+HERMES_HOME_DIR="$TEST_TMP/hermes-home"
+HERMES_EXTERNAL_DIR="$TEST_TMP/hermes-external"
+HERMES_PROFILE_STATE="$TEST_TMP/hermes-profile-state"
+mkdir -p "$HERMES_HOME_DIR/skills/profile-local" "$HERMES_EXTERNAL_DIR/profile-external" "$HERMES_PROFILE_STATE"
+
+cat >"$HERMES_HOME_DIR/skills/profile-local/SKILL.md" <<'SKILL'
+---
+name: profile-local
+description: Use when checking the current Hermes profile skill root.
+---
+
+# Profile Local
+SKILL
+
+cat >"$HERMES_EXTERNAL_DIR/profile-external/SKILL.md" <<'SKILL'
+---
+name: profile-external
+description: Use when checking Hermes external skill directories.
+---
+
+# Profile External
+SKILL
+
+cat >"$HERMES_HOME_DIR/config.yaml" <<EOF
+skills:
+  external_dirs:
+    - $HERMES_EXTERNAL_DIR
+EOF
+
+HERMES_HOME="$HERMES_HOME_DIR" "$ROOT_DIR/skills/skill-health/scripts/skill-health" \
+  --state-dir "$HERMES_PROFILE_STATE" \
+  scan --host hermes >"$TEST_TMP/hermes-profile-scan.json"
+
+grep -q "\"resolved_hermes_home\": \"$HERMES_HOME_DIR\"" "$TEST_TMP/hermes-profile-scan.json"
+grep -q "\"effective_roots\": \\[\"$HERMES_HOME_DIR/skills\"\\]" "$TEST_TMP/hermes-profile-scan.json"
+grep -q '"scan_scope": "local_only"' "$TEST_TMP/hermes-profile-scan.json"
+grep -q '"name": "profile-local"' "$HERMES_PROFILE_STATE/index.json"
+if grep -q '"name": "profile-external"' "$HERMES_PROFILE_STATE/index.json"; then
+  echo "local_only should not include Hermes external_dirs"
+  exit 1
+fi
+
+HERMES_HOME="$HERMES_HOME_DIR" "$ROOT_DIR/skills/skill-health/scripts/skill-health" \
+  --state-dir "$HERMES_PROFILE_STATE" \
+  scan --host hermes --scan-scope local_plus_external >"$TEST_TMP/hermes-profile-scan-external.json"
+
+grep -q "\"resolved_hermes_home\": \"$HERMES_HOME_DIR\"" "$TEST_TMP/hermes-profile-scan-external.json"
+grep -q "$HERMES_EXTERNAL_DIR" "$TEST_TMP/hermes-profile-scan-external.json"
+grep -q '"name": "profile-external"' "$HERMES_PROFILE_STATE/index.json"
+
+EXPLICIT_ROOT_STATE="$TEST_TMP/explicit-root-state"
+CUSTOM_ROOT="$TEST_TMP/custom-root"
+mkdir -p "$EXPLICIT_ROOT_STATE" "$CUSTOM_ROOT/only-custom"
+
+cat >"$CUSTOM_ROOT/only-custom/SKILL.md" <<'SKILL'
+---
+name: only-custom
+description: Use when validating explicit Hermes roots.
+---
+
+# Only Custom
+SKILL
+
+HERMES_HOME="$HERMES_HOME_DIR" "$ROOT_DIR/skills/skill-health/scripts/skill-health" \
+  --state-dir "$EXPLICIT_ROOT_STATE" \
+  doctor --host hermes --agent hermes --root "$CUSTOM_ROOT" --output-dir "$TEST_TMP/explicit-root-report" >"$TEST_TMP/explicit-root-doctor.json"
+
+grep -q '"scan_scope": "explicit_root"' "$TEST_TMP/explicit-root-report/skill-health-report.json"
+grep -q "$CUSTOM_ROOT" "$TEST_TMP/explicit-root-report/skill-health-report.json"
+if grep -q "$HERMES_HOME_DIR/skills" "$TEST_TMP/explicit-root-report/skill-health-report.json"; then
+  echo "explicit roots should not mix inferred Hermes roots"
+  exit 1
+fi
+
+FIELD_STATE="$TEST_TMP/field-state"
+FIELD_REPORT="$TEST_TMP/field-report"
+mkdir -p "$FIELD_STATE" "$FIELD_REPORT"
+
+cat >"$TEST_TMP/field-events.jsonl" <<'JSONL'
+{"skill_name":"field-a","scenario":"a","timestamp":"2026-04-20T10:00:00Z","agent":"hermes","session_id":"fa","outcome_signal":"success","source":"fixture","trigger_source":"slash"}
+{"skill":"field-b","scenario":"b","timestamp":"2026-04-20T10:01:00Z","agent":"hermes","session_id":"fb","outcome_signal":"success","source":"fixture","trigger_source":"preloaded"}
+{"name":"field-c","scenario":"c","timestamp":"2026-04-20T10:02:00Z","agent":"hermes","session_id":"fc","outcome_signal":"success","source":"fixture","trigger_source":"intent_match"}
+JSONL
+
+"$ROOT_DIR/skills/skill-health/scripts/skill-health" \
+  --state-dir "$FIELD_STATE" \
+  import --agent hermes --events "$TEST_TMP/field-events.jsonl" >"$TEST_TMP/field-import.json"
+
+"$ROOT_DIR/skills/skill-health/scripts/skill-health" \
+  --state-dir "$FIELD_STATE" \
+  report --format json >"$TEST_TMP/field-report.json"
+
+grep -q '"usage_events": 3' "$TEST_TMP/field-report.json"
+grep -q '"skill_name": "field-b"' "$FIELD_STATE/events.jsonl"
+grep -q '"skill_name": "field-c"' "$FIELD_STATE/events.jsonl"
+
+HEALTH_HOME="$TEST_TMP/hermes-health-home"
+HEALTH_STATE="$TEST_TMP/hermes-health-state"
+HEALTH_REPORT="$TEST_TMP/hermes-health-report"
+mkdir -p "$HEALTH_HOME/skills/warn-skill" "$HEALTH_STATE" "$HEALTH_REPORT"
+
+cat >"$HEALTH_HOME/skills/warn-skill/SKILL.md" <<'SKILL'
+---
+name: warn-skill
+description: Use when testing Hermes usage health warnings.
+---
+
+# Warn Skill
+SKILL
+
+cat >"$HEALTH_HOME/skill_usage_health.jsonl" <<'JSONL'
+{"ts":"2026-04-29T12:00:01Z","agent":"hermes","source":"hermes-host","code":"hook_not_enabled","message":"skill_view completed but usage hook was not active"}
+JSONL
+
+HERMES_HOME="$HEALTH_HOME" "$ROOT_DIR/skills/skill-health/scripts/skill-health" \
+  --state-dir "$HEALTH_STATE" \
+  doctor --host hermes --agent hermes --output-dir "$HEALTH_REPORT" >"$TEST_TMP/hermes-health-doctor.json"
+
+grep -q '"usage_logging_status": "warning"' "$HEALTH_REPORT/skill-health-report.json"
+grep -q '"diagnosis_code": "hook_not_enabled"' "$HEALTH_REPORT/skill-health-report.json"
+grep -q 'skill_view completed but usage hook was not active' "$HEALTH_REPORT/skill-health-report.json"
 
 REVIEW_STATE_DIR="$TEST_TMP/review-state"
 mkdir -p "$REVIEW_STATE_DIR"
