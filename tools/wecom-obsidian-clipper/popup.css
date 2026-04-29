@@ -1,0 +1,174 @@
+:root {
+  color-scheme: light;
+  font-family: "SF Pro Text", "Segoe UI", sans-serif;
+}
+
+body {
+  margin: 0;
+  min-width: 340px;
+  color: #18212f;
+  background:
+    radial-gradient(circle at top right, rgba(52, 211, 153, 0.18), transparent 34%),
+    linear-gradient(180deg, #f8fbff 0%, #eef4fa 100%);
+}
+
+main {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+header {
+  display: grid;
+  gap: 4px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 650;
+}
+
+p {
+  margin: 0;
+  color: #4f6178;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.eyebrow {
+  color: #6b7f98;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.hint {
+  color: #365172;
+  font-weight: 600;
+}
+
+label {
+  display: grid;
+  gap: 6px;
+  color: #223248;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.panel {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #d7e2ef;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(8px);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.grow {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+input,
+button {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 36px;
+  border-radius: 8px;
+  font: inherit;
+}
+
+input {
+  border: 1px solid #cfd8e6;
+  padding: 8px 10px;
+  color: #18212f;
+  background: rgba(255, 255, 255, 0.94);
+}
+
+button {
+  border: 1px solid #173d6a;
+  color: #ffffff;
+  background: linear-gradient(180deg, #205ea7 0%, #173d6a 100%);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+button.secondary {
+  width: auto;
+  min-width: 104px;
+  padding: 0 12px;
+  border-color: #cfd8e6;
+  color: #173d6a;
+  background: #ffffff;
+}
+
+button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.toggle {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  align-items: start;
+  gap: 10px;
+  color: #223248;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.toggle input {
+  width: 16px;
+  height: 16px;
+  margin: 1px 0 0;
+  min-height: 16px;
+}
+
+.steps {
+  gap: 6px;
+}
+
+kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  padding: 0 4px;
+  border: 1px solid #c8d5e5;
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: #fff;
+  color: #213047;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+#result {
+  min-height: 18px;
+  color: #365172;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+#sourceUrlValue {
+  word-break: break-all;
+}
+
+.error {
+  color: #b3261e;
+}
+
+.ok {
+  color: #0f7b48;
+}

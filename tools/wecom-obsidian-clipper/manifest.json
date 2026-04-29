@@ -1,0 +1,39 @@
+{
+  "manifest_version": 3,
+  "name": "WeCom to Obsidian",
+  "version": "0.2.0",
+  "description": "Adapt copied WeCom document content into stable Markdown.",
+  "permissions": [
+    "activeTab",
+    "clipboardRead",
+    "clipboardWrite",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://doc.weixin.qq.com/*",
+    "https://*.weixin.qq.com/*",
+    "https://docs.qq.com/*",
+    "https://*.docs.qq.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://doc.weixin.qq.com/*",
+        "https://docs.qq.com/*",
+        "https://*.docs.qq.com/*"
+      ],
+      "js": [
+        "clipboard_markdown.js",
+        "content_script.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  }
+}

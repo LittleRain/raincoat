@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>企微同步到 Obsidian</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>企微同步到 Obsidian</h1>
+        <p id="pageStatus">正在检查当前页面...</p>
+      </header>
+
+      <section class="panel">
+        <p class="eyebrow">source_url</p>
+        <p id="sourceUrlValue">-</p>
+      </section>
+
+      <section class="panel">
+        <div class="row">
+          <div class="grow">
+            <p class="eyebrow">保存位置</p>
+            <p id="directoryStatus">尚未选择文件夹</p>
+          </div>
+          <button id="pickDirectory" class="secondary" type="button">选择文件夹</button>
+        </div>
+        <p class="hint">选中内容并复制后，点击“同步到 Vault”。</p>
+      </section>
+
+      <section class="panel">
+        <label>
+          相对目录
+          <input id="relativeFolder" type="text" placeholder="Clippings/WeCom">
+        </label>
+
+        <label>
+          文件名模板
+          <input id="filenameTemplate" type="text" placeholder="{{title}} {{timestamp}}">
+        </label>
+      </section>
+
+      <section class="panel">
+        <label class="toggle">
+          <input id="enabled" type="checkbox">
+          <span>复制时自动转换为 Markdown</span>
+        </label>
+
+        <label class="toggle">
+          <input id="preserveHtml" type="checkbox">
+          <span>保留原始 `text/html` 到剪贴板</span>
+        </label>
+      </section>
+
+      <section class="panel steps">
+        <p>1. 在企微文档中选中内容。</p>
+        <p>2. 按 <kbd>Cmd</kbd>+<kbd>C</kbd> 或 <kbd>Ctrl</kbd>+<kbd>C</kbd>。</p>
+        <p>3. 打开插件并点击<strong>同步到 Vault</strong>。</p>
+      </section>
+
+      <button id="syncButton" type="button">同步到 Vault</button>
+      <section id="result" aria-live="polite"></section>
+    </main>
+
+    <script src="clipboard_markdown.js"></script>
+    <script src="vault_writer.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>
