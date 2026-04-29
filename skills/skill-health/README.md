@@ -32,6 +32,8 @@
 - `dashboard`
   - 生成本地 `skill-health-dashboard.html`
   - 用来直观看当前 Hermes skills inventory，并把最近一次 doctor findings 挂回每个 skill
+  - 默认聚合 `~/.hermes/skills` 和 `~/.hermes/profiles/*/skills`
+  - 展示每个 skill 安装在哪些 profiles；如果 usage event 带 `profile_name` 或 `profile_home`，也展示它被哪些 profiles 加载过
 
 推荐流程：
 
@@ -107,6 +109,8 @@
   "timestamp": "2026-04-29T12:00:00Z",
   "agent": "hermes",
   "session_id": "abc123",
+  "profile_name": "default",
+  "profile_home": "/Users/you/.hermes",
   "source": "hermes-host",
   "scenario": "audit local skills after repeated routing errors",
   "trigger_source": "intent_match",
@@ -120,6 +124,8 @@
 - `timestamp`
 - `agent`
 - `session_id`
+- `profile_name`
+- `profile_home`
 - `source`
 - `scenario`
 - `trigger_source`

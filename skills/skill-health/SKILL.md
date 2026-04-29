@@ -62,6 +62,12 @@ By default, `skill-health` scans only `<HERMES_HOME>/skills`. It does not mix in
 OpenClaw roots or Hermes `skills.external_dirs` unless `--scan-scope
 local_plus_external` is explicitly requested.
 
+The HTML dashboard is broader than `doctor`: when `--host hermes` is used
+without explicit roots, it aggregates the default profile root plus
+`~/.hermes/profiles/*/skills`, then shows which profiles each skill is installed
+in. If imported usage events carry `profile_name` or `profile_home`, the
+dashboard also shows which profiles actually loaded the skill.
+
 Use explicit roots when auditing a repo, exported skill folder, or non-standard
 installation path:
 

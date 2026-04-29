@@ -227,7 +227,8 @@ fi
 HERMES_HOME_DIR="$TEST_TMP/hermes-home"
 HERMES_EXTERNAL_DIR="$TEST_TMP/hermes-external"
 HERMES_PROFILE_STATE="$TEST_TMP/hermes-profile-state"
-mkdir -p "$HERMES_HOME_DIR/skills/profile-local" "$HERMES_EXTERNAL_DIR/profile-external" "$HERMES_PROFILE_STATE"
+HERMES_NAMED_HOME="$HERMES_HOME_DIR/profiles/activity-collector"
+mkdir -p "$HERMES_HOME_DIR/skills/profile-local" "$HERMES_NAMED_HOME/skills/profile-named" "$HERMES_EXTERNAL_DIR/profile-external" "$HERMES_PROFILE_STATE"
 
 cat >"$HERMES_HOME_DIR/skills/profile-local/SKILL.md" <<'SKILL'
 ---
@@ -236,6 +237,15 @@ description: Use when checking the current Hermes profile skill root.
 ---
 
 # Profile Local
+SKILL
+
+cat >"$HERMES_NAMED_HOME/skills/profile-named/SKILL.md" <<'SKILL'
+---
+name: profile-named
+description: Use when checking named Hermes profile skill roots.
+---
+
+# Profile Named
 SKILL
 
 cat >"$HERMES_EXTERNAL_DIR/profile-external/SKILL.md" <<'SKILL'
@@ -261,6 +271,10 @@ grep -q "\"resolved_hermes_home\": \"$HERMES_HOME_DIR\"" "$TEST_TMP/hermes-profi
 grep -q "\"effective_roots\": \\[\"$HERMES_HOME_DIR/skills\"\\]" "$TEST_TMP/hermes-profile-scan.json"
 grep -q '"scan_scope": "local_only"' "$TEST_TMP/hermes-profile-scan.json"
 grep -q '"name": "profile-local"' "$HERMES_PROFILE_STATE/index.json"
+if grep -q '"name": "profile-named"' "$HERMES_PROFILE_STATE/index.json"; then
+  echo "scan local_only should stay on current Hermes profile root"
+  exit 1
+fi
 if grep -q '"name": "profile-external"' "$HERMES_PROFILE_STATE/index.json"; then
   echo "local_only should not include Hermes external_dirs"
   exit 1
@@ -274,6 +288,15 @@ grep -q "\"resolved_hermes_home\": \"$HERMES_HOME_DIR\"" "$TEST_TMP/hermes-profi
 grep -q "$HERMES_EXTERNAL_DIR" "$TEST_TMP/hermes-profile-scan-external.json"
 grep -q '"name": "profile-external"' "$HERMES_PROFILE_STATE/index.json"
 
+cat >"$TEST_TMP/hermes-profile-events.jsonl" <<'JSONL'
+{"skill_name":"profile-local","scenario":"local profile load","timestamp":"2026-04-20T10:00:00Z","agent":"hermes","session_id":"hp1","outcome_signal":"success","source":"fixture","trigger_source":"slash","profile_name":"default"}
+{"skill_name":"profile-named","scenario":"named profile load","timestamp":"2026-04-20T10:02:00Z","agent":"hermes","session_id":"hp2","outcome_signal":"success","source":"fixture","trigger_source":"intent_match","profile_name":"activity-collector"}
+JSONL
+
+"$ROOT_DIR/skills/skill-health/scripts/skill-health" \
+  --state-dir "$HERMES_PROFILE_STATE" \
+  import --agent hermes --events "$TEST_TMP/hermes-profile-events.jsonl" >"$TEST_TMP/hermes-profile-import.json"
+
 HERMES_HOME="$HERMES_HOME_DIR" "$ROOT_DIR/skills/skill-health/scripts/skill-health" \
   --state-dir "$HERMES_PROFILE_STATE" \
   dashboard --host hermes --output "$TEST_TMP/hermes-dashboard.html" >"$TEST_TMP/hermes-dashboard.json"
@@ -281,6 +304,9 @@ HERMES_HOME="$HERMES_HOME_DIR" "$ROOT_DIR/skills/skill-health/scripts/skill-heal
 test -f "$TEST_TMP/hermes-dashboard.html"
 grep -q "$HERMES_HOME_DIR" "$TEST_TMP/hermes-dashboard.html"
 grep -q 'profile-local' "$TEST_TMP/hermes-dashboard.html"
+grep -q 'profile-named' "$TEST_TMP/hermes-dashboard.html"
+grep -q 'activity-collector' "$TEST_TMP/hermes-dashboard.html"
+grep -q 'default' "$TEST_TMP/hermes-dashboard.html"
 grep -q 'report_available' "$TEST_TMP/hermes-dashboard.json"
 if grep -q 'profile-external' "$TEST_TMP/hermes-dashboard.html"; then
   echo "dashboard local_only should not include Hermes external_dirs"
