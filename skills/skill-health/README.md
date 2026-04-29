@@ -22,6 +22,24 @@
 1. 成功加载 skill 后写 usage event
 2. usage event 写失败时写 health warning
 
+## 和 dashboard 的关系
+
+`skill-health` 现在有两个面向操作员的只读产物：
+
+- `doctor`
+  - 生成 health JSON / Markdown
+  - 用来判断 usage、重复、弱触发、长期未使用等问题
+- `dashboard`
+  - 生成本地 `skill-health-dashboard.html`
+  - 用来直观看当前 Hermes skills inventory，并把最近一次 doctor findings 挂回每个 skill
+
+推荐流程：
+
+1. 宿主先按本文实现 usage / health hook
+2. 跑一次 `doctor`
+3. 再生成 `dashboard`
+4. 用 HTML 页面看 inventory、roots、doctor findings 是否一致
+
 ## 宿主必须实现的行为
 
 ### 1. 只在真实 skill load 成功后写 usage

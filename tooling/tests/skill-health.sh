@@ -15,6 +15,8 @@ grep -q 'Use `doctor` for the normal Hermes audit path' "$ROOT_DIR/skills/skill-
 grep -q -- '--host hermes' "$ROOT_DIR/skills/skill-health/SKILL.md"
 grep -q -- '--agent hermes' "$ROOT_DIR/skills/skill-health/SKILL.md"
 grep -q 'scan-scope local_only' "$ROOT_DIR/skills/skill-health/SKILL.md"
+grep -q 'Use `dashboard` after `doctor`' "$ROOT_DIR/skills/skill-health/SKILL.md"
+grep -q 'skill-health-dashboard.html' "$ROOT_DIR/skills/skill-health/SKILL.md"
 grep -q 'references/hermes-usage-protocol.md' "$ROOT_DIR/skills/skill-health/SKILL.md"
 grep -q 'read `README.md`' "$ROOT_DIR/skills/skill-health/SKILL.md"
 test -f "$ROOT_DIR/skills/skill-health/references/hermes-usage-protocol.md"
@@ -22,6 +24,7 @@ test -f "$ROOT_DIR/skills/skill-health/README.md"
 grep -q 'Hermes 宿主还需要做什么' "$ROOT_DIR/skills/skill-health/README.md"
 grep -q 'record_skill_usage' "$ROOT_DIR/skills/skill-health/README.md"
 grep -q 'skill_usage_health.jsonl' "$ROOT_DIR/skills/skill-health/README.md"
+grep -q '`dashboard`' "$ROOT_DIR/skills/skill-health/README.md"
 
 SKILLS_ROOT="$TEST_TMP/skills"
 STATE_DIR="$TEST_TMP/state"
@@ -173,6 +176,28 @@ grep -q "Skill Health Report" "$REPORT_DIR/skill-health-report.en.md"
 grep -q "Skill 健康报告" "$REPORT_DIR/skill-health-report.zh.md"
 grep -q "duplicate_candidate" "$REPORT_DIR/skill-health-report.md"
 
+"$ROOT_DIR/skills/skill-health/scripts/skill-health" \
+  --state-dir "$STATE_DIR" \
+  dashboard --root "$SKILLS_ROOT" --report-json "$REPORT_DIR/skill-health-report.json" --output "$REPORT_DIR/skill-health-dashboard.html" >"$TEST_TMP/dashboard.json"
+
+test -f "$REPORT_DIR/skill-health-dashboard.html"
+grep -q 'Hermes Skills Dashboard' "$REPORT_DIR/skill-health-dashboard.html"
+grep -q 'report-alpha' "$REPORT_DIR/skill-health-dashboard.html"
+grep -q 'report-beta' "$REPORT_DIR/skill-health-dashboard.html"
+grep -q 'weak-trigger' "$REPORT_DIR/skill-health-dashboard.html"
+grep -q 'duplicate_candidate' "$REPORT_DIR/skill-health-dashboard.html"
+grep -q 'weak_trigger' "$REPORT_DIR/skill-health-dashboard.html"
+grep -q '"dashboard_path"' "$TEST_TMP/dashboard.json"
+
+NO_REPORT_DASH="$TEST_TMP/no-report-dashboard.html"
+"$ROOT_DIR/skills/skill-health/scripts/skill-health" \
+  --state-dir "$STATE_DIR" \
+  dashboard --root "$SKILLS_ROOT" --output "$NO_REPORT_DASH" >"$TEST_TMP/no-report-dashboard.json"
+
+test -f "$NO_REPORT_DASH"
+grep -q 'Doctor report not found. Dashboard shows inventory only.' "$NO_REPORT_DASH"
+grep -q 'report-alpha' "$NO_REPORT_DASH"
+
 MISSING_STATE_DIR="$TEST_TMP/missing-state"
 MISSING_REPORT_DIR="$TEST_TMP/missing-report"
 mkdir -p "$MISSING_STATE_DIR" "$MISSING_REPORT_DIR"
@@ -248,6 +273,27 @@ HERMES_HOME="$HERMES_HOME_DIR" "$ROOT_DIR/skills/skill-health/scripts/skill-heal
 grep -q "\"resolved_hermes_home\": \"$HERMES_HOME_DIR\"" "$TEST_TMP/hermes-profile-scan-external.json"
 grep -q "$HERMES_EXTERNAL_DIR" "$TEST_TMP/hermes-profile-scan-external.json"
 grep -q '"name": "profile-external"' "$HERMES_PROFILE_STATE/index.json"
+
+HERMES_HOME="$HERMES_HOME_DIR" "$ROOT_DIR/skills/skill-health/scripts/skill-health" \
+  --state-dir "$HERMES_PROFILE_STATE" \
+  dashboard --host hermes --output "$TEST_TMP/hermes-dashboard.html" >"$TEST_TMP/hermes-dashboard.json"
+
+test -f "$TEST_TMP/hermes-dashboard.html"
+grep -q "$HERMES_HOME_DIR" "$TEST_TMP/hermes-dashboard.html"
+grep -q 'profile-local' "$TEST_TMP/hermes-dashboard.html"
+grep -q 'report_available' "$TEST_TMP/hermes-dashboard.json"
+if grep -q 'profile-external' "$TEST_TMP/hermes-dashboard.html"; then
+  echo "dashboard local_only should not include Hermes external_dirs"
+  exit 1
+fi
+
+HERMES_HOME="$HERMES_HOME_DIR" "$ROOT_DIR/skills/skill-health/scripts/skill-health" \
+  --state-dir "$HERMES_PROFILE_STATE" \
+  dashboard --host hermes --scan-scope local_plus_external --output "$TEST_TMP/hermes-dashboard-external.html" >"$TEST_TMP/hermes-dashboard-external.json"
+
+test -f "$TEST_TMP/hermes-dashboard-external.html"
+grep -q 'profile-local' "$TEST_TMP/hermes-dashboard-external.html"
+grep -q 'profile-external' "$TEST_TMP/hermes-dashboard-external.html"
 
 EXPLICIT_ROOT_STATE="$TEST_TMP/explicit-root-state"
 CUSTOM_ROOT="$TEST_TMP/custom-root"

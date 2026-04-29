@@ -41,6 +41,18 @@ SKILL_DIR=/path/to/skill-health
   --output-dir ~/.skill-health
 ```
 
+Use `dashboard` after `doctor` when the user wants a local HTML view of the
+current Hermes inventory plus the latest findings:
+
+```bash
+SKILL_DIR=/path/to/skill-health
+"$SKILL_DIR/scripts/skill-health" dashboard \
+  --host hermes \
+  --scan-scope local_only \
+  --report-json ~/.skill-health/skill-health-report.json \
+  --output ~/.skill-health/skill-health-dashboard.html
+```
+
 Hermes paths are profile-aware:
 
 - `HERMES_HOME` if set
@@ -82,6 +94,7 @@ Expected outputs:
 - `skill-health-report.zh.md`
 - `skill-health-report.md` using the requested `--language`
 - `skill-health-report.json`
+- `skill-health-dashboard.html`
 - `index.json`, `events.jsonl`, and `usage-status.json` in the state directory
 - `feedback.jsonl` when the user confirms or suppresses findings
 - `review-state.json` after `doctor`, `review-snooze`, or `review-done`
