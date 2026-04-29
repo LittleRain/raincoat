@@ -89,6 +89,9 @@ class Skill:
     source: str
     modified_at: str
     trigger_terms: list[str]
+    profile_name: str = ""
+    profile_home: str = ""
+    profile_scope: str = ""
 
 
 @dataclass
@@ -101,6 +104,8 @@ class UsageEvent:
     outcome_signal: str
     source: str
     trigger_source: str
+    profile_name: str = ""
+    profile_home: str = ""
 
 
 @dataclass
@@ -156,13 +161,15 @@ class DashboardSkill:
     description: str
     category: str
     category_reason: str
-    path: str
-    root: str
     host: str
-    source: str
-    scope: str
     modified_at: str
     trigger_terms: list[str]
+    installed_profiles: list[str]
+    loaded_profiles: list[str]
+    sources: list[str]
+    roots: list[str]
+    paths: list[str]
+    copy_count: int
     findings: list[dict[str, object]]
 
 
@@ -193,10 +200,7 @@ def parse_timestamp(value: str) -> datetime | None:
     if not value:
         return None
     try:
-        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        return dt
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
         return None
 
@@ -263,6 +267,43 @@ def resolve_hermes_home() -> Path:
     if configured:
         return Path(configured).expanduser()
     return HERMES_DEFAULT_HOME
+
+
+def resolve_hermes_base_home() -> Path:
+    hermes_home = resolve_hermes_home()
+    if hermes_home.parent.name == "profiles":
+        return hermes_home.parent.parent
+    return hermes_home
+
+
+def hermes_profile_homes() -> list[Path]:
+    base_home = resolve_hermes_base_home()
+    homes = [base_home]
+    profiles_dir = base_home / "profiles"
+    if profiles_dir.exists():
+        for child in sorted(profiles_dir.iterdir()):
+            if child.is_dir():
+                homes.append(child)
+    return homes
+
+
+def hermes_profile_name(profile_home: Path) -> str:
+    base_home = resolve_hermes_base_home()
+    if profile_home == base_home:
+        return "default"
+    return profile_home.name
+
+
+def classify_skill_location(path: Path, root: Path) -> tuple[str, str, str]:
+    if "/.hermes/" not in str(path):
+        return "", "", "custom"
+    for profile_home in hermes_profile_homes():
+        skills_root = profile_home / "skills"
+        if root == skills_root:
+            return hermes_profile_name(profile_home), str(profile_home), "profile_local"
+        if str(path).startswith(str(profile_home) + os.sep):
+            return hermes_profile_name(profile_home), str(profile_home), "profile_local"
+    return "", "", "external"
 
 
 def expand_config_path(raw_value: str, config_path: Path) -> Path:
@@ -346,6 +387,33 @@ def discover_roots(host: str, scan_scope: str = DEFAULT_SCAN_SCOPE) -> tuple[lis
     }
 
 
+def discover_dashboard_roots(host: str, scan_scope: str = DEFAULT_SCAN_SCOPE) -> tuple[list[Path], dict[str, object]]:
+    if host != "hermes":
+        return discover_roots(host, scan_scope)
+    base_home = resolve_hermes_base_home()
+    homes = hermes_profile_homes()
+    roots: list[Path] = []
+    for profile_home in homes:
+        roots.append(profile_home / "skills")
+        if scan_scope == "local_plus_external":
+            roots.extend(parse_hermes_external_dirs(profile_home))
+    deduped: list[Path] = []
+    seen: set[str] = set()
+    for root in roots:
+        key = str(root.resolve()) if root.exists() else str(root)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(root)
+    return deduped, {
+        "resolved_hermes_home": str(resolve_hermes_home()),
+        "resolved_hermes_base_home": str(base_home),
+        "effective_roots": [str(root) for root in deduped],
+        "scan_scope": scan_scope,
+        "profile_homes": [str(home) for home in homes],
+    }
+
+
 def adapter_statuses(roots: list[Path], host: str, explicit_roots: bool) -> list[AdapterStatus]:
     statuses: list[AdapterStatus] = []
     source = "configured" if explicit_roots else "inferred"
@@ -383,6 +451,11 @@ def load_skill(path: Path, root: Path, host: str) -> Skill:
     name = frontmatter.get("name") or path.parent.name
     description = frontmatter.get("description", "")
     trigger_terms = tokenize(f"{name} {description}")
+    profile_name = ""
+    profile_home = ""
+    profile_scope = ""
+    if host == "hermes":
+        profile_name, profile_home, profile_scope = classify_skill_location(path, root)
     return Skill(
         name=name,
         description=description,
@@ -392,6 +465,9 @@ def load_skill(path: Path, root: Path, host: str) -> Skill:
         source=source_from_path(path),
         modified_at=iso_from_mtime(path),
         trigger_terms=trigger_terms,
+        profile_name=profile_name,
+        profile_home=profile_home,
+        profile_scope=profile_scope,
     )
 
 
@@ -412,12 +488,10 @@ def infer_category(skill: Skill) -> tuple[str, str]:
 
 
 def infer_scope(skill: Skill, scan_context: dict[str, object]) -> str:
-    hermes_home = scan_context.get("resolved_hermes_home")
-    if skill.host != "hermes" or not hermes_home:
+    if skill.host != "hermes":
         return "custom"
-    profile_root = str(Path(str(hermes_home)) / "skills")
-    if skill.root == profile_root:
-        return "profile_local"
+    if skill.profile_scope:
+        return skill.profile_scope
     return "external"
 
 
@@ -490,6 +564,11 @@ def normalize_event(raw: dict[str, object], default_agent: str, source: str) -> 
     outcome = str(raw.get("outcome_signal") or raw.get("outcome") or "unknown")
     if outcome not in OUTCOME_SIGNALS:
         outcome = "unknown"
+    profile_home = str(raw.get("profile_home") or raw.get("hermes_home") or "")
+    profile_name = str(raw.get("profile_name") or raw.get("profile") or "")
+    if not profile_name and profile_home:
+        profile_path = Path(profile_home).expanduser()
+        profile_name = hermes_profile_name(profile_path)
     return UsageEvent(
         skill_name=skill_name,
         scenario=str(raw.get("scenario") or raw.get("prompt") or "unknown"),
@@ -499,6 +578,8 @@ def normalize_event(raw: dict[str, object], default_agent: str, source: str) -> 
         outcome_signal=outcome,
         source=str(raw.get("source") or source),
         trigger_source=str(raw.get("trigger_source") or raw.get("trigger") or "unknown"),
+        profile_name=profile_name,
+        profile_home=profile_home,
     )
 
 
@@ -1084,25 +1165,55 @@ def skill_lookup(payload: dict[str, object]) -> dict[str, list[dict[str, object]
     return mapping
 
 
-def dashboard_skills(skills: list[Skill], findings_payload: dict[str, object] | None, scan_context: dict[str, object]) -> list[DashboardSkill]:
+def loaded_profiles_by_skill(events: list[UsageEvent]) -> dict[str, list[str]]:
+    profiles: dict[str, set[str]] = {}
+    for event in events:
+        if not event.profile_name:
+            continue
+        profiles.setdefault(event.skill_name, set()).add(event.profile_name)
+    return {skill_name: sorted(values) for skill_name, values in profiles.items()}
+
+
+def dashboard_skills(
+    skills: list[Skill],
+    findings_payload: dict[str, object] | None,
+    scan_context: dict[str, object],
+    events: list[UsageEvent],
+) -> list[DashboardSkill]:
     finding_map = skill_lookup(findings_payload or {})
-    rows: list[DashboardSkill] = []
+    loaded_profiles = loaded_profiles_by_skill(events)
+    grouped: dict[str, list[Skill]] = {}
     for skill in skills:
-        category, category_reason = infer_category(skill)
+        grouped.setdefault(skill.name, []).append(skill)
+
+    rows: list[DashboardSkill] = []
+    for name, grouped_skills in sorted(grouped.items(), key=lambda pair: pair[0]):
+        primary = grouped_skills[0]
+        category, category_reason = infer_category(primary)
+        descriptions = [skill.description for skill in grouped_skills if skill.description]
+        description = max(descriptions, key=len) if descriptions else primary.description
+        roots = sorted({skill.root for skill in grouped_skills})
+        paths = sorted({skill.path for skill in grouped_skills})
+        sources = sorted({skill.source for skill in grouped_skills})
+        installed_profiles = sorted({skill.profile_name for skill in grouped_skills if skill.profile_name})
+        latest_modified = max((skill.modified_at for skill in grouped_skills), default=primary.modified_at)
+        merged_terms = sorted({term for skill in grouped_skills for term in skill.trigger_terms})
         rows.append(
             DashboardSkill(
-                name=skill.name,
-                description=skill.description,
+                name=name,
+                description=description,
                 category=category,
                 category_reason=category_reason,
-                path=skill.path,
-                root=skill.root,
-                host=skill.host,
-                source=skill.source,
-                scope=infer_scope(skill, scan_context),
-                modified_at=skill.modified_at,
-                trigger_terms=skill.trigger_terms,
-                findings=finding_map.get(skill.name, []),
+                host=primary.host,
+                modified_at=latest_modified,
+                trigger_terms=merged_terms,
+                installed_profiles=installed_profiles,
+                loaded_profiles=loaded_profiles.get(name, []),
+                sources=sources,
+                roots=roots,
+                paths=paths,
+                copy_count=len(grouped_skills),
+                findings=finding_map.get(name, []),
             )
         )
     return rows
@@ -1138,8 +1249,10 @@ def dashboard_payload(
     summary = {
         "skills": len(dashboard_rows),
         "categories": summarize_counts([row.category for row in dashboard_rows]),
-        "sources": summarize_counts([row.source for row in dashboard_rows]),
-        "roots": summarize_counts([row.root for row in dashboard_rows]),
+        "sources": summarize_counts([source for row in dashboard_rows for source in row.sources]),
+        "roots": summarize_counts([root for row in dashboard_rows for root in row.roots]),
+        "installed_profiles": summarize_counts([profile for row in dashboard_rows for profile in row.installed_profiles]),
+        "loaded_profiles": summarize_counts([profile for row in dashboard_rows for profile in row.loaded_profiles]),
     }
     report_summary = report_payload_data.get("summary", {}) if report_payload_data else {}
     findings = report_payload_data.get("findings", []) if report_payload_data else []
@@ -1149,7 +1262,9 @@ def dashboard_payload(
         "inventory_summary": summary,
         "doctor_summary": report_summary,
         "resolved_hermes_home": scan_context.get("resolved_hermes_home"),
+        "resolved_hermes_base_home": scan_context.get("resolved_hermes_base_home"),
         "effective_roots": scan_context.get("effective_roots", []),
+        "profile_homes": scan_context.get("profile_homes", []),
         "scan_scope": scan_context.get("scan_scope", DEFAULT_SCAN_SCOPE),
         "report_available": report_payload_data is not None,
         "mismatch_notice": inventory_report_mismatch(skills, scan_context, report_payload_data),
@@ -1244,7 +1359,7 @@ def render_dashboard_html(payload: dict[str, object]) -> str:
     .view.active {{ display: block; }}
     .filters {{
       display: grid;
-      grid-template-columns: minmax(220px, 1.4fr) repeat(4, minmax(140px, 1fr));
+      grid-template-columns: minmax(220px, 1.4fr) repeat(5, minmax(140px, 1fr));
       gap: 10px;
       margin-bottom: 16px;
     }}
@@ -1345,6 +1460,7 @@ def render_dashboard_html(payload: dict[str, object]) -> str:
       </div>
       <div class="stats-grid">
         <div class="stat"><div class="label">Resolved HERMES_HOME</div><div class="muted" id="resolved-home"></div></div>
+        <div class="stat"><div class="label">Hermes Base Home</div><div class="muted" id="resolved-base-home"></div></div>
         <div class="stat"><div class="label">Scan Scope</div><div class="muted" id="scan-scope"></div></div>
         <div class="stat"><div class="label">Effective Roots</div><div class="muted" id="effective-roots"></div></div>
       </div>
@@ -1372,6 +1488,7 @@ def render_dashboard_html(payload: dict[str, object]) -> str:
           <select id="filter-category"><option value="">All categories</option></select>
           <select id="filter-source"><option value="">All sources</option></select>
           <select id="filter-root"><option value="">All roots</option></select>
+          <select id="filter-profile"><option value="">All installed profiles</option></select>
           <select id="filter-finding">
             <option value="">All statuses</option>
             <option value="has_findings">Has findings</option>
@@ -1384,8 +1501,9 @@ def render_dashboard_html(payload: dict[str, object]) -> str:
               <th>Name</th>
               <th>Description</th>
               <th>Category</th>
-              <th>Source</th>
-              <th>Root / Path</th>
+              <th>Profiles</th>
+              <th>Sources / Roots</th>
+              <th>Paths</th>
               <th>Modified</th>
             </tr>
           </thead>
@@ -1418,6 +1536,7 @@ def render_dashboard_html(payload: dict[str, object]) -> str:
       setText("summary-findings", data.doctor_summary.findings ?? 0);
       setText("summary-usage-status", data.doctor_summary.usage_logging_status ?? (data.report_available ? "unknown" : "not-run"));
       setText("resolved-home", data.resolved_hermes_home || "-");
+      setText("resolved-base-home", data.resolved_hermes_base_home || "-");
       setText("scan-scope", data.scan_scope);
       setText("effective-roots", (data.effective_roots || []).join("\\n"));
       if (data.mismatch_notice) {{
@@ -1435,9 +1554,17 @@ def render_dashboard_html(payload: dict[str, object]) -> str:
       const rootRows = Object.entries(data.inventory_summary.roots || {{}})
         .map(([key, value]) => `<div class="chip">${{escapeHtml(key)}}: ${{value}}</div>`)
         .join("");
+      const installedProfileRows = Object.entries(data.inventory_summary.installed_profiles || {{}})
+        .map(([key, value]) => `<div class="chip">${{escapeHtml(key)}}: ${{value}}</div>`)
+        .join("");
+      const loadedProfileRows = Object.entries(data.inventory_summary.loaded_profiles || {{}})
+        .map(([key, value]) => `<div class="chip">${{escapeHtml(key)}}: ${{value}}</div>`)
+        .join("");
       document.getElementById("overview-content").innerHTML = `
         <div class="kv"><div class="k">Doctor report</div><div>${{data.report_available ? "Loaded" : "Not found"}}</div></div>
         <div class="kv"><div class="k">Categories</div><div class="chips">${{categoryRows || '<span class="muted">No skills</span>'}}</div></div>
+        <div class="kv"><div class="k">Installed profiles</div><div class="chips">${{installedProfileRows || '<span class="muted">No profile metadata</span>'}}</div></div>
+        <div class="kv"><div class="k">Loaded profiles</div><div class="chips">${{loadedProfileRows || '<span class="muted">No profile-aware usage events</span>'}}</div></div>
         <div class="kv"><div class="k">Sources</div><div class="chips">${{sourceRows || '<span class="muted">No sources</span>'}}</div></div>
         <div class="kv"><div class="k">Roots</div><div class="chips">${{rootRows || '<span class="muted">No roots</span>'}}</div></div>
       `;
@@ -1446,8 +1573,9 @@ def render_dashboard_html(payload: dict[str, object]) -> str:
     function populateFilters() {{
       const mappings = [
         ["filter-category", [...new Set(data.skills.map((item) => item.category))].sort()],
-        ["filter-source", [...new Set(data.skills.map((item) => item.source))].sort()],
-        ["filter-root", [...new Set(data.skills.map((item) => item.root))].sort()],
+        ["filter-source", [...new Set(data.skills.flatMap((item) => item.sources || []))].sort()],
+        ["filter-root", [...new Set(data.skills.flatMap((item) => item.roots || []))].sort()],
+        ["filter-profile", [...new Set(data.skills.flatMap((item) => item.installed_profiles || []))].sort()],
       ];
       for (const [id, values] of mappings) {{
         const select = document.getElementById(id);
@@ -1465,13 +1593,23 @@ def render_dashboard_html(payload: dict[str, object]) -> str:
       const category = document.getElementById("filter-category").value;
       const source = document.getElementById("filter-source").value;
       const root = document.getElementById("filter-root").value;
+      const profile = document.getElementById("filter-profile").value;
       const finding = document.getElementById("filter-finding").value;
       return data.skills.filter((skill) => {{
-        const haystack = [skill.name, skill.description, skill.path, skill.root, ...(skill.trigger_terms || [])].join(" ").toLowerCase();
+        const haystack = [
+          skill.name,
+          skill.description,
+          ...(skill.paths || []),
+          ...(skill.roots || []),
+          ...(skill.installed_profiles || []),
+          ...(skill.loaded_profiles || []),
+          ...(skill.trigger_terms || []),
+        ].join(" ").toLowerCase();
         if (search && !haystack.includes(search)) return false;
         if (category && skill.category !== category) return false;
-        if (source && skill.source !== source) return false;
-        if (root && skill.root !== root) return false;
+        if (source && !(skill.sources || []).includes(source)) return false;
+        if (root && !(skill.roots || []).includes(root)) return false;
+        if (profile && !(skill.installed_profiles || []).includes(profile)) return false;
         if (finding === "has_findings" && !(skill.findings || []).length) return false;
         if (finding === "no_findings" && (skill.findings || []).length) return false;
         return true;
@@ -1484,6 +1622,11 @@ def render_dashboard_html(payload: dict[str, object]) -> str:
           const level = finding.severity === "high" ? "danger" : "warn";
           return `<span class="chip ${{level}}">${{escapeHtml(finding.kind)}}</span>`;
         }}).join("");
+        const installedProfileChips = (skill.installed_profiles || []).map((profile) => `<span class="chip">${{escapeHtml(profile)}}</span>`).join("");
+        const loadedProfileChips = (skill.loaded_profiles || []).map((profile) => `<span class="chip warn">${{escapeHtml(profile)}}</span>`).join("");
+        const sourceChips = (skill.sources || []).map((source) => `<span class="chip">${{escapeHtml(source)}}</span>`).join("");
+        const rootLines = (skill.roots || []).map((root) => `<div class="muted">${{escapeHtml(root)}}</div>`).join("");
+        const pathLinks = (skill.paths || []).map((path) => `<a class="file-link" href="file://${{encodeURI(path)}}" target="_blank">${{escapeHtml(path)}}</a>`).join("<br>");
         return `<tr>
           <td>
             <div><strong>${{escapeHtml(skill.name)}}</strong></div>
@@ -1493,14 +1636,21 @@ def render_dashboard_html(payload: dict[str, object]) -> str:
             <div>${{escapeHtml(skill.description || "(no description)")}}</div>
             <div class="muted" title="${{escapeHtml(skill.category_reason)}}">category rule: ${{escapeHtml(skill.category_reason)}}</div>
           </td>
-          <td><span class="chip">${{escapeHtml(skill.category)}}</span></td>
           <td>
-            <div>${{escapeHtml(skill.source)}}</div>
-            <div class="muted">${{escapeHtml(skill.scope)}}</div>
+            <span class="chip">${{escapeHtml(skill.category)}}</span>
+            <div class="muted">copies: ${{escapeHtml(skill.copy_count)}}</div>
           </td>
           <td>
-            <div class="muted">${{escapeHtml(skill.root)}}</div>
-            <a class="file-link" href="file://${{encodeURI(skill.path)}}" target="_blank">${{escapeHtml(skill.path)}}</a>
+            <div class="chips">${{installedProfileChips || '<span class="muted">none</span>'}}</div>
+            <div class="muted" style="margin-top:6px;">loaded:</div>
+            <div class="chips">${{loadedProfileChips || '<span class="muted">none</span>'}}</div>
+          </td>
+          <td>
+            <div class="chips">${{sourceChips}}</div>
+            <div style="margin-top:6px;">${{rootLines}}</div>
+          </td>
+          <td>
+            ${{pathLinks}}
           </td>
           <td>${{escapeHtml(skill.modified_at)}}</td>
         </tr>`;
@@ -1549,7 +1699,7 @@ def render_dashboard_html(payload: dict[str, object]) -> str:
     }}
 
     function bindFilters() {{
-      for (const id of ["search", "filter-category", "filter-source", "filter-root", "filter-finding"]) {{
+      for (const id of ["search", "filter-category", "filter-source", "filter-root", "filter-profile", "filter-finding"]) {{
         document.getElementById(id).addEventListener("input", renderSkills);
         document.getElementById(id).addEventListener("change", renderSkills);
       }}
@@ -1775,15 +1925,16 @@ def command_dashboard(args: argparse.Namespace) -> int:
         roots = [Path(root).expanduser() for root in args.root]
         scan_context = {
             "resolved_hermes_home": str(resolve_hermes_home()) if args.host == "hermes" else None,
+            "resolved_hermes_base_home": str(resolve_hermes_base_home()) if args.host == "hermes" else None,
             "effective_roots": [str(root) for root in roots],
             "scan_scope": "explicit_root",
         }
     else:
-        roots, scan_context = discover_roots(args.host, args.scan_scope)
+        roots, scan_context = discover_dashboard_roots(args.host, args.scan_scope)
     skills = scan_skills(roots, args.host)
     report_json_path = Path(args.report_json).expanduser() if args.report_json else Path(args.state_dir) / "skill-health-report.json"
     report_payload_data = read_report_payload(report_json_path)
-    rows = dashboard_skills(skills, report_payload_data, scan_context)
+    rows = dashboard_skills(skills, report_payload_data, scan_context, read_events(args.state_dir))
     payload = dashboard_payload(skills, rows, scan_context, report_payload_data)
     output_path = Path(args.output).expanduser()
     output_path.parent.mkdir(parents=True, exist_ok=True)

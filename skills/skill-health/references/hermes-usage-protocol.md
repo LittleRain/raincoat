@@ -34,6 +34,8 @@ Minimum event shape:
   "timestamp": "2026-04-29T12:00:00Z",
   "agent": "hermes",
   "session_id": "abc123",
+  "profile_name": "default",
+  "profile_home": "/Users/you/.hermes",
   "source": "hermes-host",
   "scenario": "audit local skills after repeated routing errors",
   "trigger_source": "intent_match",
@@ -45,6 +47,8 @@ Compatibility:
 
 - `skill-health` also accepts `skill` or `name` in place of `skill_name`
 - `ts` is accepted in place of `timestamp`
+- `profile` is accepted in place of `profile_name`
+- `hermes_home` is accepted in place of `profile_home`
 
 ## Health Event Schema
 
