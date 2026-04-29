@@ -68,6 +68,16 @@ STOPWORDS = {
     "数据",
 }
 
+CATEGORY_RULES = [
+    ("report", ("report", "weekly-report", "日报", "周报", "report.html", "html report")),
+    ("review", ("review", "审查", "评审", "qa", "质量")),
+    ("planning", ("plan", "planning", "roadmap", "方案", "规划")),
+    ("browser", ("browse", "browser", "chrome", "网页", "web")),
+    ("automation", ("automation", "cron", "workflow", "pipeline", "自动化")),
+    ("integration", ("github", "slack", "lark", "wecom", "集成", "connector")),
+    ("knowledge", ("knowledge", "memory", "search", "doc", "docs", "知识")),
+]
+
 
 @dataclass
 class Skill:
@@ -138,6 +148,22 @@ class UsageHealthEvent:
     message: str
     agent: str
     source: str
+
+
+@dataclass
+class DashboardSkill:
+    name: str
+    description: str
+    category: str
+    category_reason: str
+    path: str
+    root: str
+    host: str
+    source: str
+    scope: str
+    modified_at: str
+    trigger_terms: list[str]
+    findings: list[dict[str, object]]
 
 
 @dataclass
@@ -367,6 +393,32 @@ def load_skill(path: Path, root: Path, host: str) -> Skill:
         modified_at=iso_from_mtime(path),
         trigger_terms=trigger_terms,
     )
+
+
+def infer_category(skill: Skill) -> tuple[str, str]:
+    haystack = " ".join(
+        [
+            skill.name.lower(),
+            skill.description.lower(),
+            skill.path.lower(),
+            " ".join(skill.trigger_terms).lower(),
+        ]
+    )
+    for category, keywords in CATEGORY_RULES:
+        for keyword in keywords:
+            if keyword.lower() in haystack:
+                return category, f"matched keyword '{keyword}'"
+    return "general", "no category rule matched"
+
+
+def infer_scope(skill: Skill, scan_context: dict[str, object]) -> str:
+    hermes_home = scan_context.get("resolved_hermes_home")
+    if skill.host != "hermes" or not hermes_home:
+        return "custom"
+    profile_root = str(Path(str(hermes_home)) / "skills")
+    if skill.root == profile_root:
+        return "profile_local"
+    return "external"
 
 
 def scan_skills(roots: list[Path], host: str) -> list[Skill]:
@@ -1006,6 +1058,516 @@ def localized_recommendation(finding: dict[str, object], language: str) -> str:
     return str(finding["recommendation"])
 
 
+def read_report_payload(report_json_path: Path) -> dict[str, object] | None:
+    if not report_json_path.exists():
+        return None
+    try:
+        payload = json.loads(report_json_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    return payload
+
+
+def skill_lookup(payload: dict[str, object]) -> dict[str, list[dict[str, object]]]:
+    mapping: dict[str, list[dict[str, object]]] = {}
+    for finding in payload.get("findings", []):
+        skill_name = str(finding.get("skill_name") or "")
+        if skill_name and skill_name != "*":
+            mapping.setdefault(skill_name, []).append(finding)
+        evidence = finding.get("evidence", {})
+        if finding.get("kind") == "duplicate_candidate" and isinstance(evidence, dict):
+            other = str(evidence.get("other_skill") or "")
+            if other:
+                mapping.setdefault(other, []).append(finding)
+    return mapping
+
+
+def dashboard_skills(skills: list[Skill], findings_payload: dict[str, object] | None, scan_context: dict[str, object]) -> list[DashboardSkill]:
+    finding_map = skill_lookup(findings_payload or {})
+    rows: list[DashboardSkill] = []
+    for skill in skills:
+        category, category_reason = infer_category(skill)
+        rows.append(
+            DashboardSkill(
+                name=skill.name,
+                description=skill.description,
+                category=category,
+                category_reason=category_reason,
+                path=skill.path,
+                root=skill.root,
+                host=skill.host,
+                source=skill.source,
+                scope=infer_scope(skill, scan_context),
+                modified_at=skill.modified_at,
+                trigger_terms=skill.trigger_terms,
+                findings=finding_map.get(skill.name, []),
+            )
+        )
+    return rows
+
+
+def summarize_counts(items: list[str]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for item in items:
+        counts[item] = counts.get(item, 0) + 1
+    return dict(sorted(counts.items(), key=lambda pair: (-pair[1], pair[0])))
+
+
+def inventory_report_mismatch(skills: list[Skill], scan_context: dict[str, object], report_payload_data: dict[str, object] | None) -> str | None:
+    if report_payload_data is None:
+        return "Doctor report not found. Dashboard shows inventory only."
+    inventory_roots = {str(root) for root in scan_context.get("effective_roots", [])}
+    report_roots = {str(root) for root in report_payload_data.get("effective_roots", [])}
+    inventory_skills = {skill.name for skill in skills}
+    report_skills = {str(item.get("name")) for item in report_payload_data.get("skills", []) if isinstance(item, dict)}
+    if inventory_roots != report_roots:
+        return "Dashboard inventory and latest doctor report used different roots."
+    if inventory_skills != report_skills:
+        return "Dashboard inventory and latest doctor report contain different skill sets."
+    return None
+
+
+def dashboard_payload(
+    skills: list[Skill],
+    dashboard_rows: list[DashboardSkill],
+    scan_context: dict[str, object],
+    report_payload_data: dict[str, object] | None,
+) -> dict[str, object]:
+    summary = {
+        "skills": len(dashboard_rows),
+        "categories": summarize_counts([row.category for row in dashboard_rows]),
+        "sources": summarize_counts([row.source for row in dashboard_rows]),
+        "roots": summarize_counts([row.root for row in dashboard_rows]),
+    }
+    report_summary = report_payload_data.get("summary", {}) if report_payload_data else {}
+    findings = report_payload_data.get("findings", []) if report_payload_data else []
+    suppressed = report_payload_data.get("suppressed_findings", []) if report_payload_data else []
+    return {
+        "generated_at": utc_now(),
+        "inventory_summary": summary,
+        "doctor_summary": report_summary,
+        "resolved_hermes_home": scan_context.get("resolved_hermes_home"),
+        "effective_roots": scan_context.get("effective_roots", []),
+        "scan_scope": scan_context.get("scan_scope", DEFAULT_SCAN_SCOPE),
+        "report_available": report_payload_data is not None,
+        "mismatch_notice": inventory_report_mismatch(skills, scan_context, report_payload_data),
+        "skills": [asdict(row) for row in dashboard_rows],
+        "findings": findings,
+        "suppressed_findings": suppressed,
+    }
+
+
+def render_dashboard_html(payload: dict[str, object]) -> str:
+    dashboard_data = json.dumps(payload, ensure_ascii=False)
+    return f"""<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hermes Skills Dashboard</title>
+  <style>
+    :root {{
+      color-scheme: light;
+      --bg: #f5f7fb;
+      --surface: #ffffff;
+      --surface-muted: #f0f3f8;
+      --text: #111827;
+      --text-muted: #5b6472;
+      --line: #d6dce6;
+      --accent: #2563eb;
+      --warn: #b45309;
+      --danger: #b91c1c;
+      --success: #15803d;
+      --chip: #eef2ff;
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }}
+    .page {{
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 24px;
+    }}
+    .hero, .panel {{
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }}
+    .hero h1 {{ margin: 0 0 8px; font-size: 28px; }}
+    .muted {{ color: var(--text-muted); }}
+    .warning {{
+      background: #fff7ed;
+      border: 1px solid #fdba74;
+      color: var(--warn);
+      border-radius: 8px;
+      padding: 12px 14px;
+      margin-top: 12px;
+    }}
+    .summary-grid, .stats-grid {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+    }}
+    .stat {{
+      background: var(--surface-muted);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+    }}
+    .stat .label {{ color: var(--text-muted); font-size: 12px; margin-bottom: 8px; }}
+    .stat .value {{ font-size: 24px; font-weight: 600; }}
+    .nav {{
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }}
+    .tab {{
+      border: 1px solid var(--line);
+      background: var(--surface);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 10px 14px;
+      cursor: pointer;
+    }}
+    .tab.active {{ background: var(--accent); color: #fff; border-color: var(--accent); }}
+    .view {{ display: none; }}
+    .view.active {{ display: block; }}
+    .filters {{
+      display: grid;
+      grid-template-columns: minmax(220px, 1.4fr) repeat(4, minmax(140px, 1fr));
+      gap: 10px;
+      margin-bottom: 16px;
+    }}
+    input, select {{
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px 12px;
+      background: #fff;
+      color: var(--text);
+    }}
+    table {{
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--surface);
+    }}
+    th, td {{
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+      padding: 12px 10px;
+      font-size: 14px;
+    }}
+    th {{ color: var(--text-muted); font-weight: 600; }}
+    .chips {{ display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }}
+    .chip {{
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: var(--chip);
+      color: #3730a3;
+      font-size: 12px;
+      line-height: 1.2;
+    }}
+    .chip.warn {{ background: #fef3c7; color: #92400e; }}
+    .chip.danger {{ background: #fee2e2; color: #991b1b; }}
+    .finding-card {{
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      padding: 16px;
+      margin-bottom: 12px;
+    }}
+    .finding-card h3 {{ margin: 0 0 10px; font-size: 16px; }}
+    .finding-meta {{
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }}
+    .kv {{
+      display: grid;
+      grid-template-columns: 140px 1fr;
+      gap: 10px;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }}
+    .kv .k {{ color: var(--text-muted); }}
+    pre {{
+      white-space: pre-wrap;
+      word-break: break-word;
+      margin: 0;
+      background: var(--surface-muted);
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      font-size: 12px;
+    }}
+    .empty {{
+      padding: 16px;
+      border: 1px dashed var(--line);
+      border-radius: 8px;
+      color: var(--text-muted);
+      background: var(--surface);
+    }}
+    a.file-link {{
+      color: var(--accent);
+      text-decoration: none;
+      word-break: break-all;
+    }}
+    @media (max-width: 960px) {{
+      .filters {{ grid-template-columns: 1fr; }}
+      .kv {{ grid-template-columns: 1fr; }}
+    }}
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="hero">
+      <h1>Hermes Skills Dashboard</h1>
+      <div class="muted">Generated at {payload["generated_at"]}</div>
+      <div class="summary-grid">
+        <div class="stat"><div class="label">Skills</div><div class="value" id="summary-skills">0</div></div>
+        <div class="stat"><div class="label">Usage Events</div><div class="value" id="summary-usage">0</div></div>
+        <div class="stat"><div class="label">Findings</div><div class="value" id="summary-findings">0</div></div>
+        <div class="stat"><div class="label">Usage Status</div><div class="value" id="summary-usage-status">-</div></div>
+      </div>
+      <div class="stats-grid">
+        <div class="stat"><div class="label">Resolved HERMES_HOME</div><div class="muted" id="resolved-home"></div></div>
+        <div class="stat"><div class="label">Scan Scope</div><div class="muted" id="scan-scope"></div></div>
+        <div class="stat"><div class="label">Effective Roots</div><div class="muted" id="effective-roots"></div></div>
+      </div>
+      <div id="mismatch-notice"></div>
+    </div>
+
+    <div class="nav">
+      <button class="tab active" data-view="overview">Overview</button>
+      <button class="tab" data-view="skills">Skills</button>
+      <button class="tab" data-view="findings">Findings</button>
+    </div>
+
+    <section class="view active" id="view-overview">
+      <div class="panel">
+        <h2>Overview</h2>
+        <div id="overview-content"></div>
+      </div>
+    </section>
+
+    <section class="view" id="view-skills">
+      <div class="panel">
+        <h2>Skills</h2>
+        <div class="filters">
+          <input id="search" type="search" placeholder="Search name, description, trigger terms">
+          <select id="filter-category"><option value="">All categories</option></select>
+          <select id="filter-source"><option value="">All sources</option></select>
+          <select id="filter-root"><option value="">All roots</option></select>
+          <select id="filter-finding">
+            <option value="">All statuses</option>
+            <option value="has_findings">Has findings</option>
+            <option value="no_findings">No findings</option>
+          </select>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Description</th>
+              <th>Category</th>
+              <th>Source</th>
+              <th>Root / Path</th>
+              <th>Modified</th>
+            </tr>
+          </thead>
+          <tbody id="skills-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="view" id="view-findings">
+      <div class="panel">
+        <h2>Findings</h2>
+        <div id="findings-content"></div>
+      </div>
+    </section>
+  </div>
+  <script>
+    const data = {dashboard_data};
+
+    function escapeHtml(value) {{
+      return String(value ?? "").replace(/[&<>"']/g, (char) => ({{"&":"&amp;","<":"&lt;",">":"&gt;","\\"":"&quot;","'":"&#39;"}}[char]));
+    }}
+
+    function setText(id, value) {{
+      document.getElementById(id).textContent = value ?? "";
+    }}
+
+    function populateSummary() {{
+      setText("summary-skills", data.inventory_summary.skills);
+      setText("summary-usage", data.doctor_summary.usage_events ?? 0);
+      setText("summary-findings", data.doctor_summary.findings ?? 0);
+      setText("summary-usage-status", data.doctor_summary.usage_logging_status ?? (data.report_available ? "unknown" : "not-run"));
+      setText("resolved-home", data.resolved_hermes_home || "-");
+      setText("scan-scope", data.scan_scope);
+      setText("effective-roots", (data.effective_roots || []).join("\\n"));
+      if (data.mismatch_notice) {{
+        document.getElementById("mismatch-notice").innerHTML = `<div class="warning">${{escapeHtml(data.mismatch_notice)}}</div>`;
+      }}
+    }}
+
+    function renderOverview() {{
+      const categoryRows = Object.entries(data.inventory_summary.categories || {{}})
+        .map(([key, value]) => `<div class="chip">${{escapeHtml(key)}}: ${{value}}</div>`)
+        .join("");
+      const sourceRows = Object.entries(data.inventory_summary.sources || {{}})
+        .map(([key, value]) => `<div class="chip">${{escapeHtml(key)}}: ${{value}}</div>`)
+        .join("");
+      const rootRows = Object.entries(data.inventory_summary.roots || {{}})
+        .map(([key, value]) => `<div class="chip">${{escapeHtml(key)}}: ${{value}}</div>`)
+        .join("");
+      document.getElementById("overview-content").innerHTML = `
+        <div class="kv"><div class="k">Doctor report</div><div>${{data.report_available ? "Loaded" : "Not found"}}</div></div>
+        <div class="kv"><div class="k">Categories</div><div class="chips">${{categoryRows || '<span class="muted">No skills</span>'}}</div></div>
+        <div class="kv"><div class="k">Sources</div><div class="chips">${{sourceRows || '<span class="muted">No sources</span>'}}</div></div>
+        <div class="kv"><div class="k">Roots</div><div class="chips">${{rootRows || '<span class="muted">No roots</span>'}}</div></div>
+      `;
+    }}
+
+    function populateFilters() {{
+      const mappings = [
+        ["filter-category", [...new Set(data.skills.map((item) => item.category))].sort()],
+        ["filter-source", [...new Set(data.skills.map((item) => item.source))].sort()],
+        ["filter-root", [...new Set(data.skills.map((item) => item.root))].sort()],
+      ];
+      for (const [id, values] of mappings) {{
+        const select = document.getElementById(id);
+        for (const value of values) {{
+          const option = document.createElement("option");
+          option.value = value;
+          option.textContent = value;
+          select.appendChild(option);
+        }}
+      }}
+    }}
+
+    function filteredSkills() {{
+      const search = document.getElementById("search").value.trim().toLowerCase();
+      const category = document.getElementById("filter-category").value;
+      const source = document.getElementById("filter-source").value;
+      const root = document.getElementById("filter-root").value;
+      const finding = document.getElementById("filter-finding").value;
+      return data.skills.filter((skill) => {{
+        const haystack = [skill.name, skill.description, skill.path, skill.root, ...(skill.trigger_terms || [])].join(" ").toLowerCase();
+        if (search && !haystack.includes(search)) return false;
+        if (category && skill.category !== category) return false;
+        if (source && skill.source !== source) return false;
+        if (root && skill.root !== root) return false;
+        if (finding === "has_findings" && !(skill.findings || []).length) return false;
+        if (finding === "no_findings" && (skill.findings || []).length) return false;
+        return true;
+      }});
+    }}
+
+    function renderSkills() {{
+      const rows = filteredSkills().map((skill) => {{
+        const findingChips = (skill.findings || []).map((finding) => {{
+          const level = finding.severity === "high" ? "danger" : "warn";
+          return `<span class="chip ${{level}}">${{escapeHtml(finding.kind)}}</span>`;
+        }}).join("");
+        return `<tr>
+          <td>
+            <div><strong>${{escapeHtml(skill.name)}}</strong></div>
+            <div class="chips">${{findingChips}}</div>
+          </td>
+          <td>
+            <div>${{escapeHtml(skill.description || "(no description)")}}</div>
+            <div class="muted" title="${{escapeHtml(skill.category_reason)}}">category rule: ${{escapeHtml(skill.category_reason)}}</div>
+          </td>
+          <td><span class="chip">${{escapeHtml(skill.category)}}</span></td>
+          <td>
+            <div>${{escapeHtml(skill.source)}}</div>
+            <div class="muted">${{escapeHtml(skill.scope)}}</div>
+          </td>
+          <td>
+            <div class="muted">${{escapeHtml(skill.root)}}</div>
+            <a class="file-link" href="file://${{encodeURI(skill.path)}}" target="_blank">${{escapeHtml(skill.path)}}</a>
+          </td>
+          <td>${{escapeHtml(skill.modified_at)}}</td>
+        </tr>`;
+      }});
+      document.getElementById("skills-body").innerHTML = rows.join("") || `<tr><td colspan="6" class="empty">No skills match the current filters.</td></tr>`;
+    }}
+
+    function findingTitle(finding) {{
+      if (finding.kind === "duplicate_candidate" && finding.evidence && finding.evidence.other_skill) {{
+        return `${{finding.kind}}: ${{finding.skill_name}} ↔ ${{finding.evidence.other_skill}}`;
+      }}
+      return `${{finding.kind}}: ${{finding.skill_name}}`;
+    }}
+
+    function renderFindings() {{
+      const findings = data.findings || [];
+      if (!findings.length) {{
+        document.getElementById("findings-content").innerHTML = `<div class="empty">${{data.report_available ? "No active findings." : "Doctor report not found. Run doctor first, then reopen this dashboard."}}</div>`;
+        return;
+      }}
+      document.getElementById("findings-content").innerHTML = findings.map((finding) => `
+        <div class="finding-card">
+          <h3>${{escapeHtml(findingTitle(finding))}}</h3>
+          <div class="finding-meta">
+            <span class="chip">${{escapeHtml(finding.kind)}}</span>
+            <span class="chip ${{finding.severity === "high" ? "danger" : "warn"}}">${{escapeHtml(finding.severity)}}</span>
+            <span class="chip">${{escapeHtml(finding.feedback_status || "none")}}</span>
+          </div>
+          <div class="kv"><div class="k">Finding ID</div><div>${{escapeHtml(finding.finding_id || "")}}</div></div>
+          <div class="kv"><div class="k">Message</div><div>${{escapeHtml(finding.message || "")}}</div></div>
+          <div class="kv"><div class="k">Recommendation</div><div>${{escapeHtml(finding.recommendation || "")}}</div></div>
+          <div class="kv"><div class="k">Evidence</div><div><pre>${{escapeHtml(JSON.stringify(finding.evidence || {{}}, null, 2))}}</pre></div></div>
+        </div>
+      `).join("");
+    }}
+
+    function bindTabs() {{
+      for (const tab of document.querySelectorAll(".tab")) {{
+        tab.addEventListener("click", () => {{
+          for (const candidate of document.querySelectorAll(".tab")) candidate.classList.remove("active");
+          for (const view of document.querySelectorAll(".view")) view.classList.remove("active");
+          tab.classList.add("active");
+          document.getElementById(`view-${{tab.dataset.view}}`).classList.add("active");
+        }});
+      }}
+    }}
+
+    function bindFilters() {{
+      for (const id of ["search", "filter-category", "filter-source", "filter-root", "filter-finding"]) {{
+        document.getElementById(id).addEventListener("input", renderSkills);
+        document.getElementById(id).addEventListener("change", renderSkills);
+      }}
+    }}
+
+    populateSummary();
+    renderOverview();
+    populateFilters();
+    renderSkills();
+    renderFindings();
+    bindTabs();
+    bindFilters();
+  </script>
+</body>
+</html>
+"""
+
+
 def render_markdown(payload: dict[str, object], language: str = "en") -> str:
     summary = payload["summary"]
     findings = payload["findings"]
@@ -1208,6 +1770,28 @@ def command_doctor(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_dashboard(args: argparse.Namespace) -> int:
+    if args.root:
+        roots = [Path(root).expanduser() for root in args.root]
+        scan_context = {
+            "resolved_hermes_home": str(resolve_hermes_home()) if args.host == "hermes" else None,
+            "effective_roots": [str(root) for root in roots],
+            "scan_scope": "explicit_root",
+        }
+    else:
+        roots, scan_context = discover_roots(args.host, args.scan_scope)
+    skills = scan_skills(roots, args.host)
+    report_json_path = Path(args.report_json).expanduser() if args.report_json else Path(args.state_dir) / "skill-health-report.json"
+    report_payload_data = read_report_payload(report_json_path)
+    rows = dashboard_skills(skills, report_payload_data, scan_context)
+    payload = dashboard_payload(skills, rows, scan_context, report_payload_data)
+    output_path = Path(args.output).expanduser()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(render_dashboard_html(payload), encoding="utf-8")
+    print(json.dumps({"dashboard_path": str(output_path), "skills": len(rows), "report_available": report_payload_data is not None}, ensure_ascii=False))
+    return 0
+
+
 def command_feedback(args: argparse.Namespace) -> int:
     record = append_feedback(args.state_dir, args.finding_id, args.verdict, args.note or "")
     print(json.dumps(asdict(record), ensure_ascii=False))
@@ -1270,6 +1854,14 @@ def build_parser() -> argparse.ArgumentParser:
     doctor.add_argument("--language", choices=["en", "zh"], default="en")
     doctor.add_argument("--output-dir", default=str(DEFAULT_STATE_DIR))
     doctor.set_defaults(func=command_doctor)
+
+    dashboard = subparsers.add_parser("dashboard", help="Generate a local HTML dashboard for Hermes skill inventory and doctor findings.")
+    dashboard.add_argument("--root", action="append", default=[], help="Skill root to scan. May be repeated.")
+    dashboard.add_argument("--host", choices=["custom", "openclaw", "hermes"], default="hermes")
+    dashboard.add_argument("--scan-scope", choices=["local_only", "local_plus_external"], default=DEFAULT_SCAN_SCOPE)
+    dashboard.add_argument("--report-json", default="", help="Existing doctor JSON report to visualize. Defaults to <state-dir>/skill-health-report.json.")
+    dashboard.add_argument("--output", default=str(DEFAULT_STATE_DIR / "skill-health-dashboard.html"))
+    dashboard.set_defaults(func=command_dashboard)
 
     feedback = subparsers.add_parser("feedback", help="Record local feedback for a report finding.")
     feedback.add_argument("--finding-id", required=True)
