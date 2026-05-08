@@ -1,64 +1,146 @@
 ---
 name: trade-weekly-report
-description: 按照交易业务周报合同，读取指定 Excel/CSV 数据文件并生成交互式周报 HTML。适用于已经准备好整体、行业、流量、体裁及可选明细文件，需要产出完整交易业务周报的场景。
+version: "2.0"
+description: |
+  基于内容电商平台的交易业务周报生成。
+  触发词：交易周报、交易周数据、周报生成、内容电商报告、GMV报告、
+  行业拆解、商家拆解、流量渠道分析、内容类型分析、小店自营、
+  控比、买家数趋势、GPM分析、天马推荐、商城feed
+  触发场景：(1)用户提供数据文件路径 (2)要求生成周报 (3)周报数据分析
+level: L1
+base_dir: /Users/raincai/.workbuddy/skills/trade-weekly-report
 ---
 
-# Trade Weekly Report
+# Trade Weekly Report Skill
 
-## 目的
+## 任务目标
 
-根据 skill 内置的业务口径、栏目合同和输入合同，读取指定数据文件，生成最终交互式 HTML 周报。
+基于内容电商平台（类似 TikTok Shop）的交易数据，生成结构化 HTML 周报。
+**周报共 22 图表 + 19 表格**，严格按照业务需求文档的图表数量和行业口径输出。
 
-这个 skill 的定位是“执行交易业务周报生成”，不是“补需求”或“重定义分析口径”。
+## 数据源
 
-## 输入
+| 文档 | 文件名格式 | 用途 |
+|------|-----------|------|
+| 文档1 | `整体.xlsx` | S1 核心数据趋势 |
+| 文档2 | `行业.xlsx` | S2 行业拆解、S3 商家拆解、S4 小店行业流量 |
+| 文档3 | `商品明细.xlsx` | S3 商品 Top20 |
+| 文档4 | `流量.xlsx` | S4 渠道流量分析 |
+| 文档5 | `内容类型.xlsx` | S5 成交体裁分析 |
+| 文档6 | `商家标签.xlsx` | 商家行业归属（关联 S2/S3/S5） |
 
-- 一个输入目录，目录中放置本次周报所需 Excel 或 CSV 文件
-- 输入文件命名与字段要求见：
-  [input_inventory.md](./examples/input_inventory.md)
+> **注意**：流量.xlsx 无商家ID字段，小店分行业流量概况改用行业.xlsx 数据。
 
-## 工作流
+## 行业分类口径
 
-1. 读取 skill 内置的栏目合同、输入合同和行业分类口径
-2. 扫描输入目录中的 Excel 或 CSV 文件
-3. 按文件名模式匹配整体、行业、流量、体裁、可选明细和头部 UP 文件
-4. 基于周五到周四的周口径完成聚合、分类和归因分析
-5. 按固定栏目顺序生成交互式 HTML
-6. 输出 `report.html` 和执行日志
+### 小店行业（通过 merchant_id 关联商家标签）
 
-## 输出
+| 行业 | 关联规则 |
+|------|----------|
+| 南征 | owner_ld = 南征 |
+| allen | owner_ld = allen |
+| 孙悟饭 | owner_ld = 孙悟饭 |
+| 加林 | owner_ld = 加林 |
+| 小店其他 | owner_ld ∈ {其他, NULL} 或未匹配 |
 
-- 主产物：`report.html`
-- 辅助产物：`run.log`
+### 自营行业（通过经营一级类目名称）
 
-## 约束
+| 行业 | 分类规则 |
+|------|----------|
+| ACG自营-南征 | 经营一级类目 ∈ {硬周, 虚拟卡券, 出版物} |
+| ACG自营-allen | 经营一级类目 ∈ {软周, 赏类} |
+| 自营-其他 | 其余所有 |
 
-- 禁止修改 skill 中定义的栏目顺序和核心行业口径
-- 禁止推断未声明的指标公式或归因逻辑
-- 禁止输出非 HTML 格式作为主产物
-- 缺少核心输入文件时，应明确报错或降级，而不是伪造结果
+## 指标定义
+
+| 指标 | 公式 |
+|------|------|
+| GMV | 支付销售额（字段：GMV）|
+| 小店对自营控比 | 小店 GMV / 自营 GMV |
+| 买家数 | 支付订单买家数（周期内去重）|
+| 订单数 | 支付订单数 |
+| CTR | 商详曝光PV / 商品曝光PV |
+| CVR | 支付订单数 / 商品曝光PV |
+| GPM | GMV / 商品曝光PV × 1000 |
+| 贡献率 | (商家本周GMV - 商家上周GMV) / 该分类本周涨跌GMV |
+
+## 输出结构（22图 + 19表）
+
+### S1 核心数据趋势
+- 4 业务线 × 7 指标卡（GMV/买家数/订单数/曝光PV/CTR/CVR/GPM + 小店控比）
+- 图1：各业务线 GMV 周趋势（柱状图）
+- 图2：小店对自营控比 周趋势（折线图）
+- 图3：各业务线 买家数 周趋势（柱状图）
+- 图4：各业务线 CTR 周趋势（折线图）
+- 图5：各业务线 CVR 周趋势（折线图）
+- 图6：各业务线 GPM 周趋势（折线图）
+- 表1：各业务线 GMV 周数据汇总（4周）
+- 表2：小店/自营 月度 MTD + YOY
+
+### S2 行业拆解
+- 图7：整体（小店+自营）各行业 GMV 周变化（折线图）
+- 表3：整体行业+分类层级数据表（GMV/买家数/订单数/GPM + 周环比）
+- 图8：小店各行业 GMV 周变化（折线图）
+- 表4：小店行业+分类层级数据表
+- 图9：自营各行业 GMV 周变化（折线图）
+- 表5：自营行业+分类层级数据表
+- 表6：分行业 MTD + YOY
+
+### S3 小店商家拆解
+- 图10：Top10 商家 GMV 周趋势（折线图）
+- 表7：整体 Top20 商家明细（含行业/分类/贡献率）
+- 表8-12：南征/allen/孙悟饭/加林/小店其他 各行业 Top20 商家明细
+- 表13：商品明细 Top20
+
+### S4 流量渠道
+- 图11：整体/小店/自营 曝光PV 周趋势（柱状图）
+- 图12：小店曝光PV占比 周趋势（折线图）
+- 表14：流量汇总（小店 vs 自营）
+- 表15：小店核心渠道 Top10
+- 表16：自营核心渠道 Top10
+- 表17：小店分行业流量概况（来源 行业.xlsx）
+- 图13：天马推荐商品卡 小店/自营 曝光PV（柱状图）
+- 表18：天马推荐商品卡 周维度数据
+- 图14：商城首页feed 小店/自营 曝光PV（柱状图）
+- 表19：商城首页feed 周维度数据
+
+### S5 内容类型
+- 图15：整体成交结构（饼图）
+- 图16：小店成交结构（饼图）
+- 图17：自营成交结构（饼图）
+- 图18-22：小店分行业（南征/allen/孙悟饭/加林/小店其他）成交体裁（饼图）
 
 ## 执行方式
 
-### 方式 1：作为脚本执行
-
 ```bash
-bash skills/trade-weekly-report/scripts/run-report.sh \
-  --input-dir /path/to/input \
-  --output-dir /path/to/output \
-  --run-id trade-weekly-2026w14
+# 方式1：直接调用 Python 脚本
+python3 ~/.workbuddy/skills/trade-weekly-report/scripts/generate_report.py \
+  --data-dir /path/to/data \
+  --output trade-weekly-report.html
+
+# 方式2：使用 Shell 脚本（内置依赖检查）
+bash ~/.workbuddy/skills/trade-weekly-report/scripts/run-report.sh /path/to/data output.html
 ```
 
-### 方式 2：作为 agent skill 调用
+## AI 执行流程
 
-调用这个 skill 时，应明确要求：
+当用户触发此 skill 时：
 
-- 按 trade-weekly-report 的内置合同生成周报
-- 输入数据来自指定目录中的 Excel/CSV
-- 最终输出一个 `report.html`
+1. **确认数据目录**：询问或从上下文推断 6 个数据文件的存放目录
+2. **确认输出路径**：默认在工作区目录生成 `trade-weekly-report.html`
+3. **执行脚本**：调用 `generate_report.py --data-dir <dir> --output <path>`
+4. **预览报告**：启动本地服务器，用 `preview_url` 预览结果
+5. **投递附件**：调用 `deliver_attachments` 将 HTML 发送给用户
 
-## 参考资料
+## 样式规范
 
-- [input_inventory.md](./examples/input_inventory.md)
-- [html-contract.md](./assets/html-contract.md)
-- [report-outline.md](./assets/report-outline.md)
+- 使用 `assets/base-report.css` 内联样式（暗色主题）
+- 图表使用 Chart.js 4.x via CDN
+- 颜色惯例：上涨绿色，下跌红色（中国股市惯例）
+- 数字格式：GMV 超过1万显示 "万"，超过1亿显示 "亿"
+
+## 踩坑经验
+
+- 商家标签.xlsx 字段名变更（2026-04-17）：`merchant_id/owner_ld/owner_cate` → `商家id/行业负责人/行业`，脚本已自动兼容新旧版本
+- 行业.xlsx 无 GPM 字段：需要由 `GMV / 商品曝光PV * 1000` 计算，脚本中 `add_gpm()` 函数负责此逻辑
+- 商家ID 类型不一致：商家标签里 `商家id` 为整型，行业.xlsx `商家ID` 有时为字符串，merge 前需统一 `.astype(str)`
