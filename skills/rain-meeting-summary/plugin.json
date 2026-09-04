@@ -1,0 +1,16 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "rain-meeting-summary",
+  "version": "1.0.0",
+  "description": "分析企业微信「记录面聊」或会议纪要的逐字转写，输出结构化纪要、行动项待办与关键决策记录",
+  "author": { "name": "raincai" },
+  "extensions": {
+    "bitto": {
+      "schemaVersion": 1,
+      "displayName": "企微面聊纪要分析",
+      "kind": "skill",
+      "autoLoad": { "skills": true, "mcp": false },
+      "auth": { "type": "none" }
+    }
+  }
+}
