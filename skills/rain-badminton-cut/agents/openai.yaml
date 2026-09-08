@@ -1,0 +1,4 @@
+interface:
+  display_name: "Rain Badminton Cut"
+  short_description: "Cut complete badminton rally highlights locally"
+  default_prompt: "Analyze this badminton match video, propose three complete-rally highlight plans, and create an HTML review page before rendering the selected montage."

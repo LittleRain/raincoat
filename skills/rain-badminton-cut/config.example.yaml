@@ -1,0 +1,28 @@
+analyzer:
+  provider: minimax-cli
+  command: mmx
+  vision_command: "mmx vision describe"
+  frame_interval_seconds: 2.0
+  max_evidence_frames: 24
+rally:
+  pre_roll_seconds: 4
+  post_roll_seconds: 6
+  candidate_window_seconds: 30
+  candidate_step_seconds: 24
+  min_duration_seconds: 3
+  max_duration_seconds: 90
+  completeness_threshold: 0.80
+scoring:
+  rally_length: 0.25
+  estimated_shot_count: 0.20
+  movement_intensity: 0.20
+  attack_defense_switch: 0.15
+  net_play: 0.10
+  audio_energy: 0.10
+output:
+  review_html: true
+  resolution: original
+  video_codec: h264
+  audio_codec: aac
+  max_file_size_mb: null
+  output_dir: ./rain-badminton-output
