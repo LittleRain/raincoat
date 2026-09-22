@@ -474,6 +474,52 @@ if r.returncode != 0:
 open(os.path.join(out_dir, "emitted-command.out"), "w", encoding="utf-8").write(cmd + "\n")
 PY
 
+# ------------------------------------------------------------------ 一键去重要真能落盘
+
+# 这是唯一会把「一个真实目录换成软链」的路径，三条硬约束都得在真环境里验：
+# 干跑一个字节不动、落盘后原副本进回收站、再点一次不会把正本自己干掉。
+DUP_COPY="$FIXTURE/agentb/skills/alpha-report"
+CANON="$FIXTURE/agenta/skills/alpha-report"
+LEDGER="$FAKE_HOME/.skill-panel/ledger.json"
+
+if [ ! -d "$DUP_COPY" ] || [ -L "$DUP_COPY" ]; then
+  echo "fixture 前提不成立：$DUP_COPY 应当是实体目录"
+  exit 1
+fi
+
+LEDGER_BEFORE=$(cat "$LEDGER" 2>/dev/null || echo "")
+"$PYTHON" "$SCAN" resolve --names alpha-report >"$TEST_TMP/resolve-dry.out"
+
+grep -q '干跑预览' "$TEST_TMP/resolve-dry.out" || {
+  echo "resolve 缺省不是干跑"
+  exit 1
+}
+if [ -L "$DUP_COPY" ]; then
+  echo "干跑就把目录换成了快捷方式"
+  exit 1
+fi
+[ -d "$DUP_COPY" ] || { echo "干跑动了副本目录"; exit 1; }
+[ "$LEDGER_BEFORE" = "$(cat "$LEDGER" 2>/dev/null || echo "")" ] || {
+  echo "干跑写了台账"
+  exit 1
+}
+
+"$PYTHON" "$SCAN" resolve --names alpha-report --yes >"$TEST_TMP/resolve.out"
+
+[ -L "$DUP_COPY" ] || { echo "落盘后副本没变成快捷方式"; exit 1; }
+[ -f "$DUP_COPY/SKILL.md" ] || { echo "快捷方式读不到内容"; exit 1; }
+[ -d "$CANON" ] && [ ! -L "$CANON" ] || { echo "正本被动过了"; exit 1; }
+
+TRASHED=$(find "$FAKE_HOME/.skill-panel/trash" -name alpha-report -type d 2>/dev/null | head -1)
+[ -n "$TRASHED" ] || { echo "被换掉的副本没进回收站"; exit 1; }
+[ -f "$TRASHED/SKILL.md" ] || { echo "回收站里的副本内容不全"; exit 1; }
+
+grep -q 'resolve-conflict' "$LEDGER" || { echo "台账没记这次去重"; exit 1; }
+
+# 连点第二下必须是空操作 —— 否则第二次会把正本自己换掉
+"$PYTHON" "$SCAN" resolve --names alpha-report --yes >"$TEST_TMP/resolve-again.out"
+[ -d "$CANON" ] && [ ! -L "$CANON" ] || { echo "重复执行把正本弄没了"; exit 1; }
+
 # ------------------------------------------------------------------ 单元测试
 
 for suite in test_skillctl.py; do

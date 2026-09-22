@@ -30,9 +30,10 @@ de-duplication and the evidence, not the directory walk.
 2. **Look.** Open the generated `skill-panel.html` (self-contained, no server) or
    ask for a specific skill with `check` / `state`.
 3. **Decide.** `install` produces a migration command; `plan` produces a
-   conflict-resolution package.
-4. **Act, if asked.** `disable` / `enable` / `uninstall` are the only operations
-   that touch skill content, and they require `--yes` to write.
+   conflict-resolution package; `resolve` deduplicates directly.
+4. **Act, if asked.** `disable` / `enable` / `uninstall` / `resolve` are the only
+   operations that touch skill content, and they require `--yes` to write. The
+   page's buttons drive the same implementations over loopback.
 
 ```bash
 python3 scripts/skillctl.py scan                 # inventory + validate + generate the page
@@ -41,6 +42,7 @@ python3 scripts/skillctl.py state <skill>        # per-agent enable/disable stat
 python3 scripts/skillctl.py install <skill> [--to <agent>]
 python3 scripts/skillctl.py agents               # the adapter table and each native toggle
 python3 scripts/skillctl.py plan [--names a,b] [--grades auto,semi,manual]
+python3 scripts/skillctl.py resolve [--names a,b] [--semi] [--yes]
 python3 scripts/skillctl.py restore              # list the trash
 python3 scripts/skillctl.py serve --open         # loopback-only, lets the page's buttons act
 ```
@@ -53,7 +55,7 @@ command says there is no scan, check that both commands resolved the same root.
 ## Read-only by default
 
 `scan`, `check`, `state`, `install`, `agents` and `plan` never modify anything.
-The write commands are `disable`, `enable`, `uninstall` — and each of them:
+The write commands are `disable`, `enable`, `uninstall`, `resolve` — and each of them:
 
 - prints the exact diff (file, key, old value) and writes nothing unless `--yes`
   is passed;

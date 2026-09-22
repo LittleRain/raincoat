@@ -1127,6 +1127,137 @@ class PlanPackageTests(unittest.TestCase):
                             "生成时间又变回快照时间了（差一次 scan，按它找 trash 会对不上）")
 
 
+class ResolveConflictTests(unittest.TestCase):
+    """一键去重：留一份作正本，其余副本换成指向它的快捷方式。
+
+    这是条会动真实目录的写路径，所以每条约束都要有对应用例：干跑一个字节不动、
+    落盘后原副本在回收站、台账留痕、重复点不会把正本自己干掉、需人工的档不碰。
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.addCleanup(skillctl.set_artifact_root, None)
+        self._orig_base = skillctl.BASE
+        skillctl.BASE = self.tmp
+        self.addCleanup(setattr, skillctl, "BASE", self._orig_base)
+        self._env = os.environ.pop("SKILL_PANEL_OUT", None)
+        if self._env is not None:
+            self.addCleanup(os.environ.__setitem__, "SKILL_PANEL_OUT", self._env)
+        skillctl.set_artifact_root(os.path.join(self.tmp, "art"))
+
+        self.canon = Path(self.tmp) / "rootsA" / "dup"
+        self.other = Path(self.tmp) / "rootsB" / "dup"
+        for d in (self.canon, self.other):
+            d.mkdir(parents=True)
+            (d / "SKILL.md").write_text("---\nname: dup\n---\n\nsame\n", encoding="utf-8")
+
+    def _doc(self, grade="auto", canonical=None, rewrite=None, nature="duplicate"):
+        return {"generated_at": "2020-01-01T00:00:00+08:00", "host": "test",
+                "entities": [], "skipped": [], "agent_stats": [],
+                "conflicts": [{
+                    "name": "dup", "kind": "identical", "count": 2,
+                    "entities": [{"real_path": str(self.canon), "agents": ["agenta"]},
+                                 {"real_path": str(self.other), "agents": ["agentb"]}],
+                    "nature": nature, "liveness": "live", "version_drift": [],
+                    "prescription": {
+                        "grade": grade,
+                        "canonical": str(canonical if canonical is not None else self.canon),
+                        "canonical_why": "fixture", "needs_diff": False,
+                        "rewrite": (rewrite if rewrite is not None else
+                                    [{"path": str(self.other), "agents": ["agentb"],
+                                      "link_count": 0}]),
+                    },
+                }]}
+
+    def _run(self, doc=None, dry_run=True, **kw):
+        return skillctl.resolve_conflict(doc or self._doc(), None, dry_run=dry_run, **kw)
+
+    def test_dry_run_touches_nothing(self):
+        log, ops, groups, skipped, warns = self._run()
+        self.assertTrue(ops, "干跑应当给出 ops 计划")
+        self.assertEqual(len(groups), 1)
+        self.assertFalse(self.other.is_symlink(), "干跑把目录换成软链了")
+        self.assertEqual(len(list((self.other).iterdir())), 1, "干跑动了原副本")
+        self.assertFalse(os.path.exists(skillctl.trash_root()), "干跑建了回收站")
+        self.assertFalse(os.path.exists(skillctl.ledger_path()), "干跑写了台账")
+        self.assertEqual([o["kind"] for o in ops], ["move", "symlink"])
+
+    def test_apply_swaps_copy_for_a_link_and_keeps_it_in_trash(self):
+        log, ops, groups, skipped, warns = self._run(dry_run=False)
+        self.assertTrue(self.other.is_symlink(), "原副本没换成快捷方式")
+        self.assertEqual(os.path.realpath(self.other), os.path.realpath(self.canon))
+        self.assertTrue((self.other / "SKILL.md").is_file(),
+                        "换完之后通过软链读不到内容")
+        self.assertTrue(self.canon.is_dir() and not self.canon.is_symlink(),
+                        "正本不该被动")
+        # 原副本进了回收站，不是被删掉
+        trashed = list(Path(skillctl.trash_root()).rglob("dup"))
+        self.assertEqual(len(trashed), 1, f"回收站里没有原副本：{trashed}")
+        self.assertTrue((trashed[0] / "SKILL.md").is_file())
+        # 台账留痕
+        led = json.loads(Path(skillctl.ledger_path()).read_text(encoding="utf-8"))
+        self.assertEqual([a["action"] for a in led["actions"]], ["resolve-conflict"])
+        self.assertEqual(led["actions"][0]["groups"][0]["name"], "dup")
+
+    def test_second_run_is_a_no_op(self):
+        self._run(dry_run=False)
+        log, ops, groups, skipped, warns = self._run(dry_run=False)
+        self.assertFalse(ops, "重复点不该再产生动作")
+        self.assertEqual(groups, [])
+        self.assertTrue(any("已经是快捷方式" in s["why"] for s in skipped), skipped)
+        self.assertTrue(self.canon.is_dir(), "重复执行把正本弄没了")
+
+    def test_manual_grade_is_never_touched(self):
+        log, ops, groups, skipped, warns = self._run(self._doc(grade="manual"))
+        self.assertFalse(ops)
+        self.assertFalse(self.other.is_symlink())
+        self.assertEqual(skipped[0]["name"], "dup")
+
+    def test_semi_needs_the_explicit_flag(self):
+        doc = self._doc(grade="semi")
+        _, ops, _, _, _ = self._run(doc)
+        self.assertFalse(ops, "半自动档默认不该被处理")
+        _, ops2, groups2, _, _ = self._run(doc, allow_semi=True)
+        self.assertTrue(ops2 and groups2, "显式 allow_semi 之后应当处理")
+
+    def test_missing_canonical_is_refused_with_a_reason(self):
+        doc = self._doc(canonical=Path(self.tmp) / "nope" / "dup")
+        log, ops, groups, skipped, warns = self._run(doc)
+        self.assertFalse(ops)
+        self.assertTrue(any("候选正本" in w for w in warns), warns)
+
+    def test_conflict_whose_copies_are_gone_is_skipped(self):
+        shutil.rmtree(self.other)
+        log, ops, groups, skipped, warns = self._run()
+        self.assertFalse(ops)
+        self.assertTrue(any("不存在" in w for w in warns), warns)
+
+    def test_cli_resolve_is_dry_run_without_yes(self):
+        """CLI 也走同一条路径：不带 --yes 只预览，报告里要带下次怎么执行。"""
+        self._write_snapshot()
+        args = argparse.Namespace(names=None, semi=False, yes=False)
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(skillctl.do_resolve(args), 0)
+        text = out.getvalue()
+        self.assertIn("干跑预览", text)
+        self.assertIn("--yes", text)
+        self.assertFalse(self.other.is_symlink(), "不带 --yes 就动手了")
+
+    def _write_snapshot(self):
+        path = Path(skillctl.artifact_json())
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(self._doc()), encoding="utf-8")
+        (Path(self.tmp) / "agents.json").write_text(
+            json.dumps({"agents": [{"id": "agenta", "label": "A",
+                                    "roots": [{"path": str(Path(self.tmp) / "rootsA"),
+                                               "kind": "user_skills"}]}]}),
+            encoding="utf-8")
+        for name in ("rules.json", "overrides.json"):
+            shutil.copy(SKILL_DIR / name, Path(self.tmp) / name)
+
+
 class ArtifactLayoutTests(unittest.TestCase):
     """通用代码与本地产物必须分家：代码在 skill 目录里，产物在 $HOME/.skill-panel。
 

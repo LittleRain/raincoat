@@ -1764,6 +1764,17 @@ def apply_ops(ops, dry_run=True):
                     raise RuntimeError(f"目标已存在，拒绝覆盖：{dst}")
                 shutil.move(src, dst)
                 log.append(f"[move] 完成 {src.replace(HOME, '~')} → {dst.replace(HOME, '~')}")
+        elif k == "symlink":
+            # lexists 而不是 exists —— 断链的软链同样占着这个名字，也要拦。
+            dst, target = op["dst"], op["target"]
+            if dry_run:
+                log.append(f"[link] {dst.replace(HOME, '~')} → {target.replace(HOME, '~')}")
+            else:
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                if os.path.lexists(dst):
+                    raise RuntimeError(f"目标已存在，拒绝覆盖：{dst}")
+                os.symlink(target, dst)
+                log.append(f"[link] 完成 {dst.replace(HOME, '~')} → {target.replace(HOME, '~')}")
     return log
 
 
@@ -1832,6 +1843,75 @@ def uninstall_entity(doc, agents_cfg, name, agent_id, force=False, dry_run=True)
         })
         save_ledger(led)
     return log, warns, ops
+
+
+def resolve_conflict(doc, agents_cfg, names=None, allow_semi=False, dry_run=True):
+    """把重复冲突真正落盘：留一份作正本，其余换成指向它的快捷方式。
+
+    跟 `plan` 的分工：plan 只出清单和脚本给人复核，一个字节都不动；这里直接改，
+    但同样干跑优先 —— 页面按钮先取一份差量，用户点头之后才落盘。
+
+    只碰 nature=duplicate 且还有副本在用的组。半自动（正文一致但文件集不同）默认
+    不动，得显式 allow_semi；需人工的永远不碰 —— 留哪份是人的取舍，不该由工具代劳。
+    """
+    grades = ("auto", "semi") if allow_semi else ("auto",)
+    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+    groups, ops, skipped, warnings = [], [], [], []
+    for c in doc.get("conflicts") or []:
+        if c.get("nature") != "duplicate" or c.get("liveness") == "dormant":
+            continue
+        if names and c["name"] not in names:
+            continue
+        p = c.get("prescription") or {}
+        grade = p.get("grade")
+        if grade not in grades:
+            skipped.append({"name": c["name"], "why": "正文已分叉，需人工定夺"
+                            if grade == "manual" else f"级别 {grade} 不在本次范围"})
+            continue
+        canon = p.get("canonical")
+        if not canon or not os.path.isdir(canon) or os.path.islink(canon):
+            warnings.append(f"{c['name']}：候选正本 {pretty_path(canon or '(空)')} 不可用"
+                            f"（不存在／不是目录／本身还是个快捷方式），跳过。")
+            continue
+        targets = []
+        for r in p.get("rewrite") or []:
+            src = r.get("path")
+            if not src or src == canon:
+                continue
+            if os.path.islink(src):
+                skipped.append({"name": c["name"],
+                                "why": f"{pretty_path(src)} 已经是快捷方式"})
+                continue
+            if not os.path.lexists(src):
+                warnings.append(f"{c['name']}：{pretty_path(src)} 不存在，跳过。")
+                continue
+            targets.append((src, (r.get("agents") or ["?"])[0]))
+        if not targets:
+            continue
+        for src, agent_id in targets:
+            safe = re.sub(r"[^A-Za-z0-9_.\-]", "_", c["name"])[:60]
+            dst = os.path.join(trash_root(), f"conflict-{ts}-{agent_id}", safe)
+            ops.append({"kind": "move", "src": src, "dst": dst,
+                        "desc": f"移入回收站（不删除）：{pretty_path(dst)}"})
+            ops.append({"kind": "symlink", "dst": src, "target": canon,
+                        "desc": f"原位建快捷方式指向正本 {pretty_path(canon)}"})
+        groups.append({"name": c["name"], "grade": grade, "canonical": canon,
+                       "from": [{"path": s, "agent": a} for s, a in targets],
+                       "trash": os.path.join(trash_root(), f"conflict-{ts}")})
+    if not ops:
+        return [], [], groups, skipped, warnings
+    log = apply_ops(ops, dry_run=dry_run)
+    if not dry_run:
+        led = load_ledger()
+        led["actions"].append({
+            "at": datetime.now().isoformat(timespec="seconds"),
+            "action": "resolve-conflict",
+            "groups": [{"name": g["name"], "canonical": g["canonical"],
+                        "from": [f["path"] for f in g["from"]]} for g in groups],
+        })
+        save_ledger(led)
+        log.append(f"已记入 {pretty_path(ledger_path())}")
+    return log, ops, groups, skipped, warnings
 
 
 def do_set_state(doc, agents_cfg, name, agent_id, action, dry_run=True, state="off"):
@@ -2240,6 +2320,43 @@ def build_plan(doc, agents_cfg, names=None, include_grades=("auto",)):
             "auto": auto, "semi": semi, "manual": manual}
 
 
+def do_resolve(args):
+    """一键去重。页面上的按钮和这里走的是同一条实现路径。"""
+    doc, agents_cfg = _load_all()
+    if not doc:
+        print(missing_snapshot_hint(), file=sys.stderr)
+        return 1
+    names = None
+    if getattr(args, "names", None):
+        names = {x.strip() for x in args.names.split(",") if x.strip()}
+    dry = not getattr(args, "yes", False)
+    log, ops, groups, skipped, warnings = resolve_conflict(
+        doc, agents_cfg, names=names,
+        allow_semi=bool(getattr(args, "semi", False)), dry_run=dry)
+    if not groups:
+        print("没有可自动处理的重复冲突。")
+    else:
+        print("干跑预览（一个字节都没动）：" if dry else "已执行：")
+        for ln in log:
+            print(f"  {ln}")
+        print()
+        for g in groups:
+            print(f"  {g['name']}　正本留在 {pretty_path(g['canonical'])}")
+            for f in g["from"]:
+                print(f"    {pretty_path(f['path'])} → 改为快捷方式"
+                      f"（原副本在 {pretty_path(g['trash'])}）")
+        if dry:
+            picked_names = ",".join(g["name"] for g in groups)
+            print()
+            print(f"确认无误后加 --yes 重跑："
+                  f"skillctl.py resolve --names {picked_names} --yes")
+    for s in skipped:
+        print(f"[跳过] {s['name']}：{s['why']}", file=sys.stderr)
+    for w in warnings:
+        print(f"[注意] {w}", file=sys.stderr)
+    return 0
+
+
 KIND_LABEL = {"identical": "逐字一致", "meta-only": "仅元数据不同",
               "same-body-diff-files": "正文一致·文件集不同", "divergent": "正文已不一致"}
 
@@ -2539,6 +2656,15 @@ def make_handler(docbox, agents_cfg, token, html_path):
                                         f"清单  {r['md']}",
                                         f"脚本  {r['sh']}  —— 默认干跑，改 DRY_RUN=0 才真跑"],
                                 "md": r["md"], "sh": r["sh"]})
+                elif action == "resolve-conflict":
+                    names = set(req.get("names") or []) or None
+                    log, ops, groups, skipped, warns = resolve_conflict(
+                        doc, agents_cfg, names=names,
+                        allow_semi=bool(req.get("allow_semi")),
+                        dry_run=not apply_now)
+                    self._json({"ok": True, "ops": ops, "log": log,
+                                "groups": groups, "skipped": skipped,
+                                "warnings": warns, "dry_run": not apply_now})
                 elif action == "rescan":
                     do_scan(argparse.Namespace(no_html=False))
                     self._json({"ok": True, "log": ["已重新扫描，刷新页面查看最新结果"]})
@@ -2626,6 +2752,13 @@ def main():
     p.add_argument("--auto-only", action="store_true", help="只纳入可自动处理的组")
     p.add_argument("--grades", help="逗号分隔的处理级别，可选 auto/semi/manual（缺省 auto,semi）")
     p.set_defaults(func=do_plan)
+    p = sub.add_parser("resolve", parents=[common],
+                       help="把可自动的重复冲突落盘（留一份，其余换成快捷方式）")
+    p.add_argument("--names", help="逗号分隔的冲突名，缺省全部可自动组")
+    p.add_argument("--semi", action="store_true",
+                   help="连半自动组一起处理（正文一致但文件集不同）")
+    p.add_argument("--yes", action="store_true", help="真正执行（缺省为干跑预览）")
+    p.set_defaults(func=do_resolve)
     p = sub.add_parser("serve", help="起本地直连服务，页面按钮可直接执行", parents=[common])
     p.add_argument("--port", type=int, default=8799)
     p.add_argument("--open", action="store_true", help="自动打开浏览器")

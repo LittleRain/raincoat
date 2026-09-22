@@ -141,6 +141,7 @@ details.rule .desc{color:var(--tx3);font-size:12px;margin:2px 0 8px}
 .conf.open .conf-b{display:block}
 .rx{border:1px solid var(--border);border-radius:6px;padding:10px 12px;margin-top:8px;background:var(--surface2)}
 .rx .rxt{font-size:12.5px;font-weight:600;margin-bottom:4px}
+.rx .rxacts{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:9px;padding-top:9px;border-top:1px dashed var(--border)}
 .grade{font-size:11px;font-family:var(--mono);padding:1px 6px;border-radius:4px}
 .gr-auto{background:var(--ok-bg);color:var(--ok)}
 .gr-semi{background:var(--warn-bg);color:var(--warn)}
@@ -282,7 +283,7 @@ tr.sel td{background:var(--accent-bg)}
 
   <section id="s4">
     <h2><span class="num">04</span>重复与冲突</h2>
-    <p class="sub">同名不等于重复。先分清<b>同名异物</b>（不同来源恰好重名，硬合并会出事）与<b>真重复</b>（同一份被复制到多处），再看两边是否还都在生效。每组都带处方：留哪一份、为什么、能不能自动做。<b>「脚本可自动」说的是方案包里那一组脚本能无人值守跑完，不是页面上有个按钮</b> —— 去重要把一个真实目录换成快捷方式，统一走「生成处理方案包 → 看干跑 → <span class="mono">DRY_RUN=0</span> 执行」。</p>
+    <p class="sub">同名不等于重复。先分清<b>同名异物</b>（不同来源恰好重名，硬合并会出事）与<b>真重复</b>（同一份被复制到多处），再看两边是否还都在生效。每组都带处方：留哪一份、为什么、能不能自动做。<b>「脚本可自动」和「半自动」的组可以直接在页面上处理</b> —— 留一份作正本、其余换成指向它的快捷方式，原副本先移进回收站（不删除，随时可还原）。需人工的组不给按钮：正文已真实分叉，留哪份是你的取舍。</p>
     <div class="triage" id="triage"></div>
     <div class="card pad" style="margin-bottom:12px">
       <div class="row">
@@ -355,7 +356,8 @@ tr.sel td{background:var(--accent-bg)}
 <div id="bulkbar">
   <span id="bulkText"></span>
   <button class="btn" id="bulkClear">清空</button>
-  <button class="btn pri" id="bulkPlan">生成方案包</button>
+  <button class="btn" id="bulkPlan">生成方案包</button>
+  <button class="btn pri" id="bulkResolve">一键去重</button>
 </div>
 
 <script>
@@ -826,9 +828,13 @@ function renderConf(){
             <div style="color:var(--tx3);margin-top:2px">理由：${esc(p.canonical_why||'')}</div>
             ${p.rewrite&&p.rewrite.length?`<div style="color:var(--tx3);margin-top:3px">其余 ${p.rewrite.length} 份改为指向它的快捷方式：${p.rewrite.map(r=>`<span class="mono">${esc(sh(r.path))}</span>`).join('、')}</div>`:''}
           </div>`:''}
-          ${p.grade==='auto'?`<div class="note">内容逐字一致，方案包里的脚本能自己跑完这一组，不需要你逐条判断。页面不提供一键执行 —— 去重要把一个真实目录换成快捷方式，统一走「生成处理方案包 → 先看干跑 → 改 <span class="mono">DRY_RUN=0</span> 执行」。</div>`:''}
-          ${p.grade==='semi'?`<div class="note">脚本已备好，但默认不执行。先跑方案包里的对比命令看清差在哪，确认没有你要保留的独有文件，再加 <span class="mono">CONFIRM_SEMI=1</span> 重跑。</div>`:''}
-          ${p.grade==='manual'?`<div class="note">正文已真实分叉，留哪份是你自己的取舍。方案包只给对比命令，不会动手。</div>`:''}
+          ${p.grade==='auto'?`<div class="note">内容逐字一致，去重不会带来任何行为差异。${SRV?'点「一键去重」会先给你看干跑差量，确认之后才落盘。':'当前是只读模式，点按钮会把对应命令复制给你。'}</div>`:''}
+          ${p.grade==='semi'?`<div class="note">正文一致但文件集不同。先跑对比命令看清差在哪，确认没有你要保留的独有文件再动手 —— 这一档不会被批量操作带走，只能单独点。</div>`:''}
+          ${p.grade==='manual'?`<div class="note">正文已真实分叉，留哪份是你自己的取舍。方案包只给对比命令，页面也不给按钮。</div>`:''}
+          ${canPick&&(p.grade==='auto'||p.grade==='semi')?`<div class="rxacts">
+            <button class="btn ${p.grade==='auto'?'pri':''}" data-resolve="${esc(c.name)}">一键去重</button>
+            <span style="font-size:11.5px;color:var(--tx3)">正本留在 <span class="mono">${esc(sh(p.canonical||'—'))}</span>，其余 ${(p.rewrite||[]).length} 份换成指向它的快捷方式</span>
+          </div>`:''}
         </div>
       </div>
     </div>`;
@@ -846,6 +852,9 @@ function renderConf(){
       renderBulk();
     };
   });
+  $('#confList').querySelectorAll('button[data-resolve]').forEach(b=>{
+    b.onclick = ev => { ev.stopPropagation(); resolveNow([b.dataset.resolve]); };
+  });
   renderBulk();
 }
 function renderBulk(){
@@ -857,6 +866,14 @@ function renderBulk(){
   const semi = picked.filter(c=>c.prescription.grade==='semi').length;
   const man  = picked.filter(c=>c.prescription.grade==='manual').length;
   $('#bulkText').innerHTML = `已选 <b>${state.sel.size}</b> 组　脚本可自动 ${auto}　半自动 ${semi}　需人工 ${man}`;
+  // 批量只带「可自动」的组。半自动单独点 —— 那是要人先看文件差异的一档，
+  // 顺手被批量带走就等于把该有人看一眼的步骤省掉了。
+  const rb = $('#bulkResolve');
+  if(rb){
+    rb.disabled = auto === 0;
+    rb.textContent = auto ? `一键去重（${auto} 组）` : '一键去重';
+    rb.title = auto ? '' : '选中的组里没有「可自动」档；半自动/需人工请逐组处理';
+  }
 }
 
 /* ---------- view 5 ---------- */
@@ -1128,12 +1145,18 @@ async function doApply(){
   if(!ACT || !SRV) return;
   $('#aGo').disabled = true;
   $('#aMsg').textContent = '执行中…';
-  const r = await callServer({action:ACT.kind, name:ACT.name, agent:ACT.agentId, apply:true});
-  $('#aGo').disabled = false;
-  if(!r.ok){ $('#aMsg').textContent = ''; $('#aBody').innerHTML += `<div class="note danger">执行失败：${esc(r.error||'')}</div>`; return; }
-  $('#aMsg').innerHTML = '<span style="color:var(--ok)">已执行</span>';
-  $('#aBody').innerHTML += `<div class="note ok">已执行：<br><span class="mono">${esc((r.log||[]).join('\n'))}</span></div>`;
-  $('#aGo').style.display = 'none';
+    const payload = {action:ACT.kind, name:ACT.name, agent:ACT.agentId, apply:true};
+    if(ACT.names) payload.names = ACT.names;
+    if(ACT.allowSemi) payload.allow_semi = true;
+    const r = await callServer(payload);
+    $('#aGo').disabled = false;
+    if(!r.ok){ $('#aMsg').textContent = ''; $('#aBody').innerHTML += `<div class="note danger">执行失败：${esc(r.error||'')}</div>`; return; }
+    $('#aMsg').innerHTML = '<span style="color:var(--ok)">已执行</span>';
+    $('#aBody').innerHTML += `<div class="note ok">已执行：<br><span class="mono">${esc((r.log||[]).join('\n'))}</span></div>`;
+    if(ACT.kind==='resolve-conflict' && (r.groups||[]).length){
+      $('#aBody').innerHTML += `<div class="note">想还原：把 <span class="mono">${esc(sh(r.groups[0].trash))}</span> 里的目录移回原位，再删掉留在原位置的快捷方式。</div>`;
+    }
+    $('#aGo').style.display = 'none';
   setTimeout(()=>{ rescan(); }, 900);
 }
 async function rescan(){
@@ -1160,10 +1183,75 @@ function planNow(){
   callServer({action:'plan', names, grades:useGrades}).then(r=>{
     t.disabled = false; t.textContent = '生成处理方案包';
     if(!r.ok){ alert(r.error||'生成失败'); return; }
-    alert('已生成：\n' + (r.log||[]).join('\n'));
-  });
-}
-
+      alert('已生成：\n' + (r.log||[]).join('\n'));
+    });
+  }
+  /* 一键去重：留一份作正本，其余副本换成指向它的快捷方式。
+     跟 disable/uninstall 同一条规矩 —— 先干跑给差量，点「确认执行」才落盘。
+     只读模式下退化成复制命令，跟页面上其它按钮一致。 */
+  function resolveNow(names){
+    const groups = DOC.conflicts.filter(c=>names.includes(c.name));
+    const autos = groups.filter(c=>((c.prescription||{}).grade)==='auto').map(c=>c.name);
+    const semis = groups.filter(c=>((c.prescription||{}).grade)==='semi').map(c=>c.name);
+    // 单组点进来的，意图明确，半自动那一档也认；批量只带走「可自动」。
+    const use = (names.length===1 && semis.length===1) ? semis : autos;
+    if(!use.length){ alert('这些组里没有可自动处理的。半自动和需人工的组请逐组点开看。'); return; }
+    openActResolve(use, use.length===1 && semis.length===1);
+  }
+  function openActResolve(names, allowSemi){
+    ACT = {kind:'resolve-conflict', names, allowSemi:!!allowSemi, ops:null};
+    $('#aTitle').textContent = names.length===1 ? `一键去重：${names[0]}` : `一键去重：${names.length} 组`;
+    $('#aSub').textContent = '留一份作正本，其余副本换成指向它的快捷方式';
+    $('#aGo').textContent = '确认执行';
+    $('#aGo').className = 'btn pri';
+    $('#aMsg').textContent = '';
+    if(!SRV){ renderActResolveOffline(names, allowSemi); return; }
+    $('#aGo').style.display = 'none';
+    $('#aBody').innerHTML = '<div class="empty">正在做干跑检查…</div>';
+    $('#act').classList.add('open'); $('#mask').classList.add('on');
+    callServer({action:'resolve-conflict', names, allow_semi:!!allowSemi, apply:false})
+      .then(r=>renderActResolve(r));
+  }
+  function renderActResolve(r){
+    if(!r.ok){
+      $('#aBody').innerHTML = `<div class="note danger"><b>已拒绝：</b>${esc(r.error||'未知错误')}</div>`;
+      $('#aGo').style.display = 'none';
+      return;
+    }
+    const groups = r.groups||[], skipped = r.skipped||[], warns = r.warnings||[];
+    let html = '<div style="font-size:12px;color:var(--tx3);margin:0 0 6px">干跑预览（还没有改动任何文件）</div>';
+    html += groups.length
+      ? `<div class="cmd">${esc((r.log||[]).join('\n'))}</div>`
+        + groups.map(g=>`<div class="note ok"><b>${esc(g.name)}</b>　正本留在 <span class="mono">${esc(sh(g.canonical))}</span>`
+          + g.from.map(f=>`<div style="margin-top:3px">${esc(sh(f.path))} → 改为快捷方式</div>`).join('')
+          + `<div style="margin-top:3px;color:var(--tx3)">原副本移入 <span class="mono">${esc(sh(g.trash))}</span>（不删除，可还原）</div></div>`).join('')
+      : '<div class="note">没有可处理的组。</div>';
+    html += warns.map(w=>`<div class="note warn">${esc(w)}</div>`).join('');
+    html += skipped.map(s=>`<div class="note">跳过 <b>${esc(s.name)}</b>：${esc(s.why)}</div>`).join('');
+    $('#aBody').innerHTML = html;
+    ACT.ops = r.ops||[];
+    ACT.preview = (r.log||[]).join('\n');
+    $('#aGo').style.display = groups.length ? '' : 'none';
+    $('#aCopy').textContent = '复制命令';
+    $('#aMsg').textContent = groups.length ? '确认后才会真正执行' : '';
+  }
+  function renderActResolveOffline(names, allowSemi){
+    const cmd = CLI(`resolve --names "${names.join(',')}"${allowSemi?' --semi':''}`);
+    $('#aBody').innerHTML = `
+      <div class="note">当前是<b>只读模式</b>，页面不会改动任何文件。下面这条命令需要你自己粘到终端跑（默认干跑，加 <span class="mono">--yes</span> 才真执行）。</div>
+      <dl class="kv" style="margin-top:12px">
+        <dt>处理组</dt><dd class="mono">${esc(names.join(', '))}</dd>
+        <dt>做法</dt><dd>留一份作正本，其余换成指向它的快捷方式</dd>
+        <dt>回收站</dt><dd class="mono">${esc(sh(DOC.paths.trash))}</dd>
+      </dl>
+      <div class="cmd">${esc(cmd)}</div>
+      <div class="note" style="margin-top:12px">想点一下就生效，在终端启动直连服务：<br><span class="mono">${esc(CLI('serve --open'))}</span></div>`;
+    ACT.cmd = cmd;
+    $('#aGo').style.display = 'none';
+    $('#aCopy').textContent = '复制命令';
+    $('#act').classList.add('open'); $('#mask').classList.add('on');
+  }
+  
 /* ---------- utils ---------- */
 function copy(txt, sel, done){
   const el = $(sel);
@@ -1216,6 +1304,13 @@ $('#iAgent').onchange = () => { if($('#iOut').querySelector('.cmd')) doGen(); };
 $('#btnPlan').onclick = planNow;
 $('#bulkClear').onclick = () => { state.sel.clear(); renderConf(); };
 $('#bulkPlan').onclick = planNow;
+$('#bulkResolve').onclick = () => {
+  const autos = DOC.conflicts
+    .filter(c=>state.sel.has(c.name) && ((c.prescription||{}).grade)==='auto')
+    .map(c=>c.name);
+  if(!autos.length){ alert('选中的组里没有「可自动」档的冲突。半自动的请逐组点开处理。'); return; }
+  openActResolve(autos, false);
+};
 $('#btnRescan').onclick = rescan;
 $('#dClose').onclick = closeDrawer;
 $a = $('#aClose'); $a.onclick = closeAct;
