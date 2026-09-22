@@ -216,7 +216,14 @@ skill-panel/
 └── ledger.json                    # 每次真实写操作的留痕
 ```
 
-仓库级测试在 `tooling/tests/skill-panel.sh`：它自建一棵 fixture 技能树（含一对逐字一致的副本、一对已分叉的副本、一条共享池软链、三类必现 FAIL），所以不依赖本机上装了哪些 agent，也不碰你真实的配置文件。
+仓库级测试在 `tooling/tests/skill-panel.sh`：它自建一棵 fixture 技能树（含一对逐字一致的副本、一对已分叉的副本、一条共享池软链、三类必现 FAIL），所以不依赖本机上装了哪些 agent。
+
+测试会把 `HOME` 整个换成临时目录再跑，因此既不动你真实的 agent 配置，也不会往你真实的 `~/.skill-panel/ledger.json` 里灌测试记录。这条隔离本身也有断言兜着——漏掉就会直接报「写操作没有落到隔离的 HOME 下」，而不是静默污染。
+
+```bash
+bash tooling/tests/skill-panel.sh                        # 端到端
+python3 -m unittest discover -s skills/skill-panel/tests # 单元测试
+```
 
 ## 已知空白 / 待确认
 

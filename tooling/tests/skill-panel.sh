@@ -14,6 +14,11 @@ FAKE_HOME="$TEST_TMP/home"
 cp -R "$ROOT_DIR/skills/skill-panel" "$SKILL_DIR"
 mkdir -p "$FAKE_HOME" "$TEST_TMP/state"
 
+# 写操作的台账（ledger.json）与回收站（trash/）都落在 $HOME/.skill-panel/ 下。
+# 这里把 HOME 整个换掉，否则跑一次测试就会把 fakeagent 的记录写进跑测人真实的
+# 台账里。必须在任何 skillctl.py 调用之前导出。
+export HOME="$FAKE_HOME"
+
 # ------------------------------------------------------------------ fixture
 # 一棵完全合成的小树：同一份东西的两个副本 + 一条软链、一对已分叉的副本、
 # 三类必现的 FAIL。这样测试不依赖本机上装了哪些 agent。
@@ -293,6 +298,13 @@ assert doc["skillOverrides"]["switchable"] == "off", doc
 print("disable wrote the native toggle")
 PY
 
+# 台账必须落在隔离出来的 HOME 里。少了这条，HOME 隔离一旦回归就是静默污染
+# 跑测人自己的 ~/.skill-panel/ledger.json，测试仍然全绿。
+test -f "$FAKE_HOME/.skill-panel/ledger.json" || {
+  echo "写操作没有落到隔离的 HOME 下，检查脚本是否导出了 HOME"
+  exit 1
+}
+
 # 快照没见过刚落盘的改动 —— 必须主动说清，而不是让人以为工具没生效
 "$PYTHON" "$SCAN" state switchable >"$TEST_TMP/state-stale.out" 2>&1
 grep -q '上一次 scan' "$TEST_TMP/state-stale.out"
@@ -318,7 +330,7 @@ grep -q '总状态：启用' "$TEST_TMP/state-enabled.out"
 
 # ------------------------------------------------------------------ 卸载进回收站
 
-HOME="$FAKE_HOME" "$PYTHON" "$SCAN" uninstall switchable --agent fakeagent --yes >"$TEST_TMP/uninstall.out"
+"$PYTHON" "$SCAN" uninstall switchable --agent fakeagent --yes >"$TEST_TMP/uninstall.out"
 
 test ! -d "$FIXTURE/fakeagent/skills/switchable"
 TRASHED=$(find "$FAKE_HOME/.skill-panel/trash" -maxdepth 2 -name switchable | head -1)
