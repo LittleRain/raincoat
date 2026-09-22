@@ -18,15 +18,46 @@
   },
 
   "_toggle_spec": {
-    "_comment": "每个 agent 的「启用 / 禁用」原生开关。实测发现四个 agent 四种机制、两种粒度，无法统一，所以照样做成声明式适配：能用原生开关的走原生，没有的降级为文件级。",
+    "_comment": "每个 agent 的「启用 / 禁用」原生开关。实测发现四个 agent 四种机制、两种粒度，无法统一，所以照样做成声明式适配：能用原生开关的走原生，没有的降级为文件级。写新 agent 时，这一节里没列到的键不要用 —— tests/test_skillctl.py 会断言「用到的键都在这里」。",
     "granularity": "skill | plugin | none —— 开关能作用到的最细粒度",
     "writer": "json_nested（改 JSON 里的嵌套键）| toml_section（改 TOML 段落字段）| cli（调 agent 自带命令）| filemove（降级：移动目录）",
+    "file": "开关所在的配置文件，支持 ~ 展开（json_nested / toml_section 都必填）",
     "container": "json_nested 用：从根到容器的键路径",
     "value_mode": "scalar（值直接写在容器里）| object_field（容器下每个键对应一个对象，改它的某个字段）",
-    "value_field": "value_mode=object_field 时要改的字段名",
+    "value_field": "value_mode=object_field 时要改的字段名（缺省 enabled）",
     "set": "state -> 写入值 的映射。on 用 null 表示「删除该键」",
     "key_rule": "fm_name_or_dirname | dirname | plugin_at_marketplace —— 生成开关键的规则",
+    "plugin_key_fallback": "plugin_at_marketplace 但拿不到市场插件键时的退路；写 dirname 表示退回用目录名",
+    "section": "toml_section 用：段落名（缺省 plugins）",
+    "field": "toml_section 用：段落里要改的字段名（缺省 enabled）",
+    "cli": "writer=cli 用：{\"bin\": 命令名, \"disable\": [参数…], \"enable\": [参数…]}。参数里的 {plugin} 会被替换成插件键",
+    "plugin": "同一个 agent 另有插件级开关时，用同构的子声明并列写在这里（粒度/落点/取值规则同上）",
+    "fallback": "原生开关不可用时的降级落点，写成同构的子声明（json_nested 那种）；cli 写失败时也会走它",
+    "state_readers": "只读的状态来源，声明式列出 [{\"file\": …, \"container\": […], \"key_rule\": …}]。用于「开关落点不止一处」的 agent",
+    "state_labels": "state -> 展示用中文名 的映射，只影响页面与终端文案",
+    "file_level": "{\"verified\": true/false} —— 文件级隐藏（移动目录）这条路是否实测过",
     "evidence": "该机制的实证来源"
+  },
+
+  "_agent_spec": {
+    "_comment": "agent 条目自身的键。加新 agent 只写这些；roots[] 里的键见 _root_spec。",
+    "id": "必填，唯一。子命令 --agent 用它寻址",
+    "label": "必填，展示名",
+    "roots": "必填，非空数组，见 _root_spec",
+    "supports_symlink": "true / false / null（未证实）。决定安装指令给 ln -s 还是回退 cp -R",
+    "symlink_evidence": "软链支持的实测依据，写给下一个维护者看",
+    "install_hint": "安装目标目录的展示用提示，install 子命令会打印",
+    "note": "该 agent 的自由备注，随 agents 子命令一起打印",
+    "prefer_as_target": "true 表示迁移时更愿意把实体放在它这儿（页面排序用）",
+    "toggle": "原生开关声明，见 _toggle_spec；没有原生开关就不写这一节"
+  },
+
+  "_top_level_spec": {
+    "_comment": "根级的三张附表。都以 _ 开头的键是文档，代码不当数据读。",
+    "agents": "agent 数组，见 _agent_spec",
+    "install_manifests": "各 agent 的已安装插件清单路径（如 installed_plugins.json），用来把市场安装与本地自建区分开、并去重多版本缓存",
+    "builtin_libraries": "[{\"path\": …, \"for_agent\": …, \"reason\": …}] —— App 随包分发的技能库。只建名称索引、不扫描，否则会与本机副本产生成批假冲突",
+    "excluded": "[{\"path\": …, \"reason\": …}] —— 明确排除、并在 agents 子命令里列出的目录（附排除理由）"
   },
 
   "agents": [

@@ -9,6 +9,9 @@ skillctl.py — 本地 skill 面板（扫描家底 + 跨 agent 校验 + 迁移�
   2. 软链是一等公民。按 realpath 归一化，「条目(entry)」与「唯一实体(entity)」是两个概念。
   3. 校验必须带证据（文件:行号），否则等于没校验。
   4. 判定结果可被 overrides.json 人工纠正。
+  5. 只依赖标准库，且必须能在 Python 3.9 上直接跑 —— 别人机器上的 python3 很可能
+     就是系统自带的 3.9，注解里不许出现 PEP 604 的 `X | Y`（3.10+ 才有）。
+     tests/test_skillctl.py 的 PythonFloorTests 钉住这条。
 
 目录约定：本脚本位于 <skill_root>/scripts/，配置与产物都在 <skill_root> 下 ——
   agents.json / rules.json / overrides.json  声明式配置
@@ -41,6 +44,7 @@ import subprocess
 import sys
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
+from typing import Optional
 
 # 本脚本住在 <skill_root>/scripts/，配置（agents.json 等）、assets/ 与产物都在上一级。
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -186,7 +190,7 @@ def validate_rules_config(cfg) -> None:
         raise ConfigError("rules.json 配置错误：\n  - " + "\n  - ".join(errors))
 
 
-def read_text(path: str, limit: int | None = None) -> str:
+def read_text(path: str, limit: Optional[int] = None) -> str:
     try:
         if limit is not None and os.path.getsize(path) > limit * 4:
             with open(path, "r", encoding="utf-8", errors="ignore") as f:
@@ -949,7 +953,10 @@ def build_entities(entries, agents_cfg, rules_cfg, overrides, manifest_index,
                 ov = overrides["by_entity"][key]
                 break
         override_applied = []
+        override_note = None
         if ov:
+            if ov.get("note"):
+                override_note = ov["note"]
             if ov.get("type"):
                 etype = ov["type"]
                 tevidence = "人工覆盖：" + tevidence
@@ -1017,7 +1024,8 @@ def build_entities(entries, agents_cfg, rules_cfg, overrides, manifest_index,
             "name": name, "real_path": real_path,
             "fm_name": fm.get("name"),
             "type": etype, "type_evidence": tevidence, "auto_created": auto_created,
-            "overrides_applied": override_applied, "market_meta": market_meta,
+            "overrides_applied": override_applied, "override_note": override_note,
+            "market_meta": market_meta,
             "root_kind": root_kind, "root_label": primary["root_label"],
             "nested_level": primary.get("nested_level", "plain"),
             "plugin_meta": primary.get("plugin_meta"),
@@ -1977,6 +1985,14 @@ def do_check(args):
         print(f"  引用: 直接持有 {', '.join(e['entity_agents']) or '-'}"
               f" | 软链 {', '.join(e['link_agents']) or '-'}")
         print(f"  体量: {e['file_count']} 文件 / {human_bytes(e['total_bytes'])}")
+        # overrides.json 里写了什么，这里就得回报什么 —— 否则「人工覆盖表」是单向的
+        if e.get("override_note") or e.get("overrides_applied"):
+            bits = []
+            if e.get("overrides_applied"):
+                bits.append("生效: " + ", ".join(e["overrides_applied"]))
+            if e.get("override_note"):
+                bits.append("说明: " + e["override_note"])
+            print("  人工覆盖 → " + "  |  ".join(bits))
         if e["description"]:
             print(f"  描述: {e['description'][:160]}")
         if not e["checks"]:
@@ -2302,6 +2318,29 @@ def do_agents(args):
 SERVE_HTML_MARKER = "/*__SERVER__*/null"
 
 
+def allowed_origins(port):
+    """直连服务允许跨域读取的来源白名单 —— 只有本机回环的几个写法。
+
+    为什么不是 `*`：`GET /` 会把本次会话的令牌内联进页面再返回。若响应带
+    `Access-Control-Allow-Origin: *`，用户浏览的任意网页都能跨域 fetch 这个回环地址、
+    从响应体里读出令牌，再带令牌 POST `apply=true` 触发禁用/卸载。
+    页面本身就是从这个回环地址发出的（同源），所以只放行回环来源就够用。
+    """
+    return {f"http://127.0.0.1:{port}",
+            f"http://localhost:{port}",
+            f"http://[::1]:{port}"}
+
+
+def origin_allowed(origin, port):
+    """这个来源能不能跨域读响应体 —— 只看它是不是本机回环。
+
+    刻意做成「由调用方传 port」的纯函数，而不是读挂在 server 上的白名单属性：
+    属性式的写法一旦漏挂（比如忘了在 serve 里赋值）就是静默地谁都不放行，
+    而这里端口直接取自真实监听端口，挂不挂都不影响判定。
+    """
+    return bool(origin) and origin in allowed_origins(port)
+
+
 def make_handler(docbox, agents_cfg, token, html_path):
     import http.server
     import socketserver
@@ -2326,9 +2365,17 @@ def make_handler(docbox, agents_cfg, token, html_path):
             sys.stderr.write("[skillctl] " + (fmt % a) + "\n")
 
         def _cors(self):
-            self.send_header("Access-Control-Allow-Origin", "*")
-            self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Skillctl-Token")
-            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            """只回显本机回环来源；其它来源一律不给跨域读的许可。
+
+            这里的判断是「读得到读不到」的边界，不是权限边界 —— 令牌校验仍然只在
+            do_POST 里做（见 allowed_origins 的说明）。
+            """
+            origin = self.headers.get("Origin")
+            if origin_allowed(origin, self.server.server_address[1]):
+                self.send_header("Access-Control-Allow-Origin", origin)
+                self.send_header("Vary", "Origin")
+                self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Skillctl-Token")
+                self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 
         def _json(self, obj, code=200):
             body = json.dumps(obj, ensure_ascii=False).encode("utf-8")
@@ -2355,6 +2402,8 @@ def make_handler(docbox, agents_cfg, token, html_path):
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.send_header("Content-Length", str(len(body)))
+                # 这一份 HTML 内联了本次会话的令牌，不许落进任何缓存
+                self.send_header("Cache-Control", "no-store")
                 self._cors()
                 self.end_headers()
                 self.wfile.write(body)

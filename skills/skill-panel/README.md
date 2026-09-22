@@ -16,6 +16,8 @@
 
 只需要 Python 3.9+，全部用标准库，无第三方依赖。默认的 `agents.json` 里带 macOS 的 App 路径（`/Applications/*.app/...`）；换到别的系统，这些通配符只是匹配不到东西，其余 agent 照常工作。
 
+版本下限是**被测出来的**，不是写在文档里的承诺：别人机器上的 `python3` 很可能就是系统自带的那一个（macOS 至今是 3.9.6），所以 `tests/test_skillctl.py` 里有一条 AST 断言，注解里一旦出现 3.10 才有的 `X | Y`（PEP 604）就直接失败 —— 那种写法会在 import 阶段抛 `TypeError`，整条命令连错误提示都给不出。
+
 ## 快速开始
 
 ```bash
@@ -140,6 +142,8 @@ python3 scripts/skillctl.py serve --open
 2. **不真删。** 卸载 = 移进 `~/.skill-panel/trash/<时间戳>-<agent>/<名称>`。`restore` 能列出来，手动 `mv` 回去即可。
 3. **留痕。** 每次真实写操作记进 `~/.skill-panel/ledger.json`（时间、动作、skill、agent、逐条差量）。
 
+`serve` 的令牌边界单独说一句：页面里内联了本次会话的一次性令牌，所以响应**只对本机回环来源**开放跨域读取（`http://127.0.0.1:<port>` / `http://localhost:<port>` / `http://[::1]:<port>` 三种写法回显，其余一律不回显 `Access-Control-Allow-Origin`），并带 `Cache-Control: no-store`。写死在 `*` 上等于把令牌交给用户浏览的任意网页 —— 对方跨域读出令牌后就能带 `apply=true` 触发禁用/卸载。放行与否只看真实监听端口，不依赖任何需要记得挂上的白名单属性。
+
 卸载前会算**影响面**：如果一个实体被别的 agent 用快捷方式引用着，直接删会让那些引用断链，工具会拦下来并告诉你被谁引用；确认要删得加 `--force`，此时它会把连带要清理的快捷方式一并列出来。
 
 内置技能（App 自带）不允许卸载 —— 卸了也会被升级覆盖回来，属于假动作。
@@ -151,6 +155,8 @@ python3 scripts/skillctl.py serve --open
 `agents.json` 里最要紧的一条：写入方式按 `writer` 分派，而 **JSON 是默认分支** —— 把 `"json_nested"` 拼成 `"json_nestd"`，不报错的话就会按 JSON 去写，改到不知哪个文件的键上。所以 `writer`、`kind`、`granularity`、`value_mode` 取值非法，agent `id` 重复，JSON 级开关缺 `container` / `file`，`toml_section` 缺 `section` / `field`，`cli` 缺 `bin` —— 全部逐条列出问题后以退出码 2 结束。
 
 `rules.json` 同理：`level` 只能是 `fail` / `warn`，`id` 不能重复，`label` 与 `detector` 不能为空。另有一条测试保证每个 `detector` 在 `skillctl.py` 里**真有对应的实现** —— 规则表里写了、代码里没有的规则等于撒谎。
+
+`agents.json` 的四张自说明表（`_agent_spec` / `_root_spec` / `_toggle_spec` / `_top_level_spec`）由测试守着：**用到的键必须都在表里有说明**。建新 agent 的人只会读这张表、不会读代码，所以「代码在用、表里没写」与「表里写了、代码没实现」是同一类缺陷的两面。`overrides.json` 同理 —— 样例里出现的键，代码必须真的读它，否则用户照着填、以为生效了，实际被静默忽略（`note` 就是补上这一条时接通的）。
 
 ## 退出码
 
@@ -240,6 +246,8 @@ python3 -m unittest discover -s skills/skill-panel/tests # 单元测试
 
 ## 已知空白 / 待确认
 
+- **产物写在 skill 自己的目录里**（`data/skills.json`、`skill-panel.html`、`plan-*`）。作为用户 skills 目录安装（`~/.workbuddy/skills/skill-panel`）没有影响；若装到只读位置（App 自带的内置库）会直接写失败，若装到会被整目录替换的市场插件缓存（`plugins/cache/<市场>/<插件>/<版本>/skills/…`）则升级后产物消失。当前版本没有 `--out` 这类开关，要固定到别处得自己加。
+- **本机绝对路径规则只认 `/Users/` 与 `/home/`**（本机用户名取自 `$HOME` 的目录名）。在 Windows 上这条规则静默不生效 —— `C:\Users\…` 之类的死路径不会被报出来，其余功能不受影响。
 - **Bitto 是否支持软链：未知。** Bitto 自身用软链管理运行时版本，说明技术栈软链友好；但 skill / plugin 目录下未观测到任何软链。安装指令自动回退为复制。确认后改 `agents.json` 的 `supports_symlink`。
 - **AutoClaw 是否读项目级目录：未知。** 官方 `AGENTS.md` 只声明了托管目录一个，未发现项目级证据，默认按无处理。
 - **`~/.qwen/skills`、`~/.iflow/skills` 各有 1 条，默认未纳入**（疑为残留）。要纳入就加进 `agents.json`。

@@ -12,6 +12,7 @@
 """
 
 import argparse
+import ast
 import contextlib
 import importlib.util
 import io
@@ -19,10 +20,14 @@ import json
 import os
 import re
 import shutil
+import socketserver
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
@@ -722,6 +727,223 @@ class ExportPortabilityTests(unittest.TestCase):
                 env=dict(os.environ, SKILL_PANEL_NESTED_SELFTEST="1"))
             self.assertEqual(proc.returncode, 0,
                              f"改名后的副本里测试挂了：\n{proc.stderr[-2000:]}")
+
+
+# ---------------------------------------------------------- Python 版本下限
+
+def _annotation_expressions(tree):
+    """产出这棵树里所有注解表达式（参数、返回值、变量注解）。"""
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            args = (list(node.args.posonlyargs) + list(node.args.args)
+                    + list(node.args.kwonlyargs))
+            for extra in (node.args.vararg, node.args.kwarg):
+                if extra is not None:
+                    args.append(extra)
+            for a in args:
+                if a.annotation is not None:
+                    yield a.annotation
+            if node.returns is not None:
+                yield node.returns
+        elif isinstance(node, ast.AnnAssign) and node.annotation is not None:
+            yield node.annotation
+
+
+class PythonFloorTests(unittest.TestCase):
+    """SKILL.md 与 README 都承诺 Python 3.9+，所以代码必须真能在 3.9 上跑。
+
+    回归用例：`def read_text(path: str, limit: int | None = None)` 里的 `int | None`
+    是 PEP 604 写法，3.10 才有。注解在 def 时求值，于是 import 阶段就炸：
+
+        TypeError: unsupported operand type(s) for |: 'type' and 'NoneType'
+
+    别人机器上的 `python3` 很可能就是系统自带的那一个（macOS 至今是 3.9.6），
+    所以这不是学术问题 —— 同事 clone 下来第一条命令就跑不起来。
+    用 AST 钉住，比在文档里写「请用 3.10」可靠：这条测试在任何版本上都跑得动。
+    """
+
+    def test_no_pep604_unions_in_annotations(self):
+        offenders = []
+        for path in sorted(SKILL_DIR.rglob("*.py")):
+            parts = path.relative_to(SKILL_DIR).parts
+            if "__pycache__" in parts:
+                continue
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            for ann in _annotation_expressions(tree):
+                for sub in ast.walk(ann):
+                    if isinstance(sub, ast.BinOp) and isinstance(sub.op, ast.BitOr):
+                        rel = path.relative_to(SKILL_DIR)
+                        offenders.append(f"{rel}:{sub.lineno}")
+        self.assertEqual(offenders, [],
+                         "注解里出现 PEP 604 的 `X | Y`（3.10+），3.9 会在 import 期抛 TypeError；"
+                         f"改用 typing.Optional / typing.Union：{offenders}")
+
+    def test_runtime_unions_in_assignments_are_absent(self):
+        """`ALIAS = int | None` 这类运行期求值的联合，同样是 3.9 的 TypeError。"""
+        offenders = []
+        for path in sorted(SKILL_DIR.rglob("*.py")):
+            parts = path.relative_to(SKILL_DIR).parts
+            if "__pycache__" in parts:
+                continue
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Assign):
+                    continue
+                for sub in ast.walk(node.value):
+                    if isinstance(sub, ast.BinOp) and isinstance(sub.op, ast.BitOr) \
+                            and isinstance(sub.left, ast.Name) \
+                            and sub.left.id in ("int", "str", "float", "bool", "list", "dict", "tuple", "set"):
+                        rel = path.relative_to(SKILL_DIR)
+                        offenders.append(f"{rel}:{sub.lineno}")
+        self.assertEqual(offenders, [], f"运行期类型联合在 3.9 上会抛 TypeError：{offenders}")
+
+
+# ---------------------------------------------------------- 直连服务的来源边界
+
+class ServeOriginTests(unittest.TestCase):
+    """直连服务不能把带令牌的页面交给任意来源。
+
+    `GET /` 的响应体内联了本次会话的令牌。响应头若写死
+    `Access-Control-Allow-Origin: *`，用户浏览的任意网页都能跨域 fetch 这个回环地址、
+    从响应体里读出令牌，再带令牌 POST `apply=true` 触发禁用/卸载 —— 令牌校验此时
+    形同虚设。页面本来就从同一个回环地址发出（同源），所以只放行回环来源即可。
+    """
+
+    def test_whitelist_is_loopback_only(self):
+        origins = skillctl.allowed_origins(8000)
+        self.assertIn("http://127.0.0.1:8000", origins)
+        self.assertIn("http://localhost:8000", origins)
+        for bad in ("*", "null", "https://evil.example", "http://evil.example:8000",
+                    "http://192.168.1.5:8000", "http://127.0.0.1:8001"):
+            with self.subTest(origin=bad):
+                self.assertNotIn(bad, origins)
+
+    def test_origin_allowed_is_loopback_only(self):
+        for good in ("http://127.0.0.1:9000", "http://localhost:9000", "http://[::1]:9000"):
+            with self.subTest(origin=good):
+                self.assertTrue(skillctl.origin_allowed(good, 9000))
+        for bad in (None, "", "*", "null", "https://evil.example",
+                    "http://evil.example:9000", "http://192.168.1.5:9000",
+                    "http://127.0.0.1:9001"):
+            with self.subTest(origin=bad):
+                self.assertFalse(skillctl.origin_allowed(bad, 9000))
+
+    def _serve(self, token="TOKEN-abc123"):
+        """起一个真实的回环服务。
+
+        刻意**不**给 server 挂任何白名单属性 —— 判定必须由真实监听端口推出来。
+        回归用例：曾经靠在 do_serve 里给 server 挂 allowed_origins，漏挂一次就成了
+        「谁都不放行」的静默故障；单元测试当时自己也挂上了属性，所以照样全绿。
+        """
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        page = Path(tmp) / "page.html"
+        page.write_text("<html>const SRV = /*__SERVER__*/null;</html>", encoding="utf-8")
+        handler = skillctl.make_handler({"doc": {}, "mtime": 0}, {"agents": []}, token, str(page))
+        # 请求日志走 stderr，会把测试输出淹掉；这里只静音测试用的这一份
+        handler = type("QuietHandler", (handler,), {"log_message": lambda *a, **k: None})
+        srv = socketserver.ThreadingTCPServer(("127.0.0.1", 0), handler)
+        srv.daemon_threads = True
+        thread = threading.Thread(target=srv.serve_forever, daemon=True)
+        thread.start()
+        self.addCleanup(srv.server_close)
+        self.addCleanup(srv.shutdown)
+        return srv, srv.server_address[1], token
+
+    def _get(self, port, origin=None):
+        req = urllib.request.Request(f"http://127.0.0.1:{port}/")
+        if origin is not None:
+            req.add_header("Origin", origin)
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return resp.headers, resp.read().decode("utf-8")
+
+    def test_foreign_origin_cannot_read_the_token_page(self):
+        srv, port, token = self._serve()
+        headers, body = self._get(port, origin="https://evil.example")
+        # 页面确实带令牌 —— 所以「读不到」才是这条测试的重点
+        self.assertIn(token, body)
+        self.assertIsNone(headers.get("Access-Control-Allow-Origin"),
+                          "外部来源拿到了跨域读许可，等于把会话令牌交出去")
+        self.assertIn("no-store", headers.get("Cache-Control", ""),
+                      "带令牌的页面不许被缓存")
+
+    def test_absent_origin_gets_no_cors_grant(self):
+        srv, port, _ = self._serve()
+        headers, _ = self._get(port)
+        self.assertIsNone(headers.get("Access-Control-Allow-Origin"))
+
+    def test_loopback_origin_still_works(self):
+        srv, port, token = self._serve()
+        for origin in (f"http://127.0.0.1:{port}", f"http://localhost:{port}"):
+            with self.subTest(origin=origin):
+                headers, body = self._get(port, origin=origin)
+                self.assertEqual(headers.get("Access-Control-Allow-Origin"), origin)
+                self.assertIn(token, body)
+
+    def test_write_still_requires_the_token(self):
+        srv, port, _ = self._serve()
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{port}/api/action", method="POST",
+            data=json.dumps({"action": "uninstall", "name": "x", "agent": "y",
+                             "apply": True}).encode("utf-8"),
+            headers={"Content-Type": "application/json", "X-Skillctl-Token": "wrong"})
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            urllib.request.urlopen(req, timeout=10)
+        self.assertEqual(caught.exception.code, 403)
+
+
+# ---------------------------------------------------------- 配置表的自说明
+
+def _documented_keys(spec):
+    return {k for k in (spec or {}) if not k.startswith("_")}
+
+
+class ConfigDocsTests(unittest.TestCase):
+    """声明式表的每个键都得有说明。
+
+    同事扩展 agents.json 时只能读这张表（不懂代码），所以「代码在用、表里没写」
+    与「表里写了、代码没实现」是同一类缺陷的两面。
+    """
+
+    def test_every_agent_key_is_documented(self):
+        used = {k for a in AGENTS["agents"] for k in a}
+        missing = sorted(used - _documented_keys(AGENTS.get("_agent_spec")))
+        self.assertEqual(missing, [], f"_agent_spec 里缺这些键的说明：{missing}")
+
+    def test_every_toggle_key_is_documented(self):
+        used = set()
+
+        def walk(spec):
+            used.update(k for k in spec if not k.startswith("_"))
+            # plugin / fallback 与父声明同构，它们的子键也要一起被说明
+            for sub in ("plugin", "fallback"):
+                if isinstance(spec.get(sub), dict):
+                    walk(spec[sub])
+
+        for agent in AGENTS["agents"]:
+            walk(agent.get("toggle") or {})
+        missing = sorted(used - _documented_keys(AGENTS.get("_toggle_spec")))
+        self.assertEqual(missing, [], f"_toggle_spec 里缺这些键的说明：{missing}")
+
+    def test_every_root_key_is_documented(self):
+        used = {k for a in AGENTS["agents"] for r in a["roots"] for k in r}
+        missing = sorted(used - _documented_keys(AGENTS.get("_root_spec")))
+        self.assertEqual(missing, [], f"_root_spec 里缺这些键的说明：{missing}")
+
+    def test_every_top_level_key_is_documented(self):
+        used = {k for k in AGENTS if not k.startswith("_")}
+        missing = sorted(used - _documented_keys(AGENTS.get("_top_level_spec")))
+        self.assertEqual(missing, [], f"_top_level_spec 里缺这些键的说明：{missing}")
+
+    def test_override_example_keys_are_actually_read(self):
+        """overrides.json 的样例里写了的键，代码必须真的读它。
+
+        写了没人读 = 用户照着填、以为生效了，实际静默忽略。
+        """
+        for key in OVERRIDES["_example"]["some-skill"]:
+            with self.subTest(key=key):
+                self.assertRegex(SOURCE, rf'(ov\.get\("{key}"\)|"{key}" in ov)',
+                                 f"overrides.json 的样例里有 {key}，但代码从没读过它")
 
 
 if __name__ == "__main__":
