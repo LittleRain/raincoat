@@ -74,6 +74,27 @@ class LayoutTests(unittest.TestCase):
     def test_engine_lives_in_scripts_dir(self):
         self.assertEqual(SCRIPT.parent.name, "scripts")
 
+    def test_entry_dir_is_where_the_entry_script_actually_is(self):
+        """页面上的命令全是 `cd <ENTRY_DIR> && python3 skillctl.py …`。
+
+        这里曾经指着 skill 根，页面上每条命令都是死链
+        （can't open file '<skill>/skillctl.py'）。
+        """
+        self.assertEqual(Path(skillctl.ENTRY_DIR).resolve(), SCRIPT.parent.resolve())
+        self.assertTrue(Path(skillctl.ENTRY_DIR, "skillctl.py").is_file())
+
+    def test_dashboard_commands_are_built_in_one_place(self):
+        """命令必须只经过模板里的 CLI() 拼装。
+
+        各处自己拼 `cd ${TOOL} && ${PY} skillctl.py` 的时代出过一次错
+        （TOOL 指向 skill 根），修完把入口收敛成一个函数，这条守着别再散回去。
+        """
+        lines = TEMPLATE.read_text(encoding="utf-8").splitlines()
+        offenders = [f"{i}: {ln.strip()[:90]}"
+                     for i, ln in enumerate(lines, 1)
+                     if "skillctl.py" in ln and "const CLI =" not in ln and "CLI(" not in ln]
+        self.assertEqual(offenders, [], "这些地方绕过了 CLI() 自己拼命令，容易再拼错目录")
+
     def test_template_lives_in_assets_and_keeps_injection_marker(self):
         self.assertTrue(TEMPLATE.is_file(), "缺 assets/dashboard_template.html")
         self.assertIn("/*__SKILL_DATA__*/null", TEMPLATE.read_text(encoding="utf-8"))
@@ -947,6 +968,60 @@ class ConfigDocsTests(unittest.TestCase):
             with self.subTest(key=key):
                 self.assertRegex(SOURCE, rf'(ov\.get\("{key}"\)|"{key}" in ov)',
                                  f"overrides.json 的样例里有 {key}，但代码从没读过它")
+
+
+# ---------------------------------------------------------- 页面给出的命令
+
+class DashboardCommandTests(unittest.TestCase):
+    """页面上的命令必须照抄就能跑。
+
+    曾经把 tool_dir 注入成 skill 根，于是页面上每条可复制命令都是
+    `python3 <skill>/skillctl.py …` → can't open file。页面打得开、命令跑不通，
+    只断言「常量对」是拦不住的：得真跑一遍 scan、再从生成的页面里把值读出来。
+    夹具刻意做成一只假 skill，避免测试去走真实 HOME。
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.addCleanup(skillctl.set_artifact_root, None)
+        self._orig_base = skillctl.BASE
+        skillctl.BASE = self.tmp
+        self.addCleanup(setattr, skillctl, "BASE", self._orig_base)
+        skillctl.set_artifact_root(os.path.join(self.tmp, "art"))
+
+        root = Path(self.tmp) / "roots"
+        (root / "alpha").mkdir(parents=True)
+        (root / "alpha" / "SKILL.md").write_text(
+            "---\nname: alpha\ndescription: Use when exercising the panel.\n---\n\n# Alpha\n",
+            encoding="utf-8")
+        (Path(self.tmp) / "agents.json").write_text(json.dumps({"agents": [
+            {"id": "fake", "label": "Fake",
+             "roots": [{"path": str(root), "kind": "user_skills"}]}]}), encoding="utf-8")
+        for name in ("rules.json", "overrides.json"):
+            shutil.copy(SKILL_DIR / name, Path(self.tmp) / name)
+        # 模板是生成页面的源，BASE 一换就得跟着搬
+        (Path(self.tmp) / "assets").mkdir()
+        shutil.copy(SKILL_DIR / "assets" / "dashboard_template.html",
+                    Path(self.tmp) / "assets" / "dashboard_template.html")
+
+    def _scan_and_read_doc(self):
+        with contextlib.redirect_stdout(io.StringIO()):
+            skillctl.do_scan(argparse.Namespace(no_html=False))
+        page = Path(skillctl.artifact_html()).read_text(encoding="utf-8")
+        head = "const DOC = "
+        i = page.index(head)
+        return json.loads(page[i + len(head):page.index("\n", i)].strip().rstrip(";"))
+
+    def test_page_advertises_a_runnable_entry_path(self):
+        doc = self._scan_and_read_doc()
+        entry = Path(doc["tool_dir"], "skillctl.py")
+        self.assertTrue(entry.is_file(),
+                        f"页面里的 tool_dir 指不到入口脚本：{doc['tool_dir']}")
+
+    def test_python_interpreter_in_the_page_is_this_one(self):
+        doc = self._scan_and_read_doc()
+        self.assertTrue(Path(doc["python_bin"]).is_file(), doc["python_bin"])
 
 
 # ---------------------------------------------------------- 通用代码 vs 本地产物

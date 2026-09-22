@@ -438,6 +438,42 @@ grep -q "$SKILL_DIR/data/skills.json" "$TEST_TMP/legacy.out" || {
 }
 rm -rf "$SKILL_DIR/data"
 
+# ------------------------------------------------------------------ 页面给出的命令要真能跑
+
+# 页面上所有可复制命令都是 `cd <tool_dir> && <python> skillctl.py …`。
+# 曾经 tool_dir 被写成 skill 根，用户照抄就是 can't open file '<skill>/skillctl.py'。
+# 所以这里不做字符串断言，而是把页面里的 tool_dir/python_bin 解出来、原地跑一次。
+"$PYTHON" - "$DASH" "$TEST_TMP" <<'PY'
+import json
+import os
+import subprocess
+import sys
+
+dash, out_dir = sys.argv[1], sys.argv[2]
+html = open(dash, encoding="utf-8").read()
+head = "const DOC = "
+i = html.index(head)
+doc = json.loads(html[i + len(head):html.index("\n", i)].strip().rstrip(";"))
+
+entry = os.path.join(doc["tool_dir"], "skillctl.py")
+if not os.path.isfile(entry):
+    raise SystemExit(f"页面里的 tool_dir 指不到入口脚本：{doc['tool_dir']}")
+
+# 直接用页面上的拼法执行，连 cd 与 python 路径都照抄
+cmd = f'cd "{doc["tool_dir"]}" && "{doc["python_bin"]}" skillctl.py plan --grades auto'
+r = subprocess.run(["bash", "-lc", cmd], capture_output=True, text=True)
+if r.returncode != 0:
+    raise SystemExit(f"页面给出的命令跑不通：{cmd}\n{r.stdout}{r.stderr}")
+
+# 只读模式那几处展示用的命令同样要能跑
+r = subprocess.run(["bash", "-lc",
+                    f'cd "{doc["tool_dir"]}" && "{doc["python_bin"]}" skillctl.py agents'],
+                   capture_output=True, text=True)
+if r.returncode != 0:
+    raise SystemExit(f"页面给出的 agents 命令跑不通\n{r.stdout}{r.stderr}")
+open(os.path.join(out_dir, "emitted-command.out"), "w", encoding="utf-8").write(cmd + "\n")
+PY
+
 # ------------------------------------------------------------------ 单元测试
 
 for suite in test_skillctl.py; do

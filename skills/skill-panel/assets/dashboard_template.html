@@ -282,7 +282,7 @@ tr.sel td{background:var(--accent-bg)}
 
   <section id="s4">
     <h2><span class="num">04</span>重复与冲突</h2>
-    <p class="sub">同名不等于重复。先分清<b>同名异物</b>（不同来源恰好重名，硬合并会出事）与<b>真重复</b>（同一份被复制到多处），再看两边是否还都在生效。每组都带处方：留哪一份、为什么、能不能自动做。</p>
+    <p class="sub">同名不等于重复。先分清<b>同名异物</b>（不同来源恰好重名，硬合并会出事）与<b>真重复</b>（同一份被复制到多处），再看两边是否还都在生效。每组都带处方：留哪一份、为什么、能不能自动做。<b>「脚本可自动」说的是方案包里那一组脚本能无人值守跑完，不是页面上有个按钮</b> —— 去重要把一个真实目录换成快捷方式，统一走「生成处理方案包 → 看干跑 → <span class="mono">DRY_RUN=0</span> 执行」。</p>
     <div class="triage" id="triage"></div>
     <div class="card pad" style="margin-bottom:12px">
       <div class="row">
@@ -364,6 +364,9 @@ const SRV = /*__SERVER__*/null;
 const E = DOC.entities, AG = DOC.agent_stats, RM = DOC.rule_meta, RH = DOC.rule_hits;
 const NAME2E = {}; E.forEach(e => NAME2E[e.name] = e);
 const PY = DOC.python_bin, TOOL = DOC.tool_dir;
+// 页面里所有「可复制命令」都从这儿出，别再各处自己拼 cd 与路径：
+// TOOL 是入口脚本所在的目录（scripts/），拼错写成 skill 根的话页面上每条命令都是死链。
+const CLI = (sub) => `cd ${TOOL} && ${PY} skillctl.py${sub ? ' ' + sub : ''}`;
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -377,7 +380,7 @@ function fbytes(n){
 const sh = p => String(p||'').replace(/^\/Users\/[^/]+/, '~');
 const TYPELABEL = {builtin:'内置', market:'市场安装', local:'本地自建'};
 const KIND = {identical:'逐字一致','meta-only':'仅元数据不同','same-body-diff-files':'正文一致·文件集不同',divergent:'正文已不一致'};
-const GRADELABEL = {auto:'可自动',semi:'半自动',manual:'需人工',none:'无需处理'};
+const GRADELABEL = {auto:'脚本可自动',semi:'半自动',manual:'需人工',none:'无需处理'};
 const STATE = {
   on:{t:'启用',c:'st-on',d:'#3EA96B', k:'on'},
   model_off:{t:'仅手动可用',c:'st-model',d:'#E0A800', k:'model_off'},
@@ -459,7 +462,7 @@ function renderHead(){
     : `<div class="srvbar srv-off"><span class="dot" style="background:#9A9AA5"></span>
         <b>只读模式</b>：操作按钮只会生成命令，需要你自己粘到终端执行。
         想点一下就生效，在终端跑
-        <span class="mono">${esc(PY)} skillctl.py serve --open</span>
+        <span class="mono">${esc(CLI('serve --open'))}</span>
         <button class="mini" id="btnCopyServe">复制</button></div>`;
   $('#hero').innerHTML = [
     ['注册记录', s.entries, '', '条目(entry)'],
@@ -479,13 +482,13 @@ function renderHead(){
   ].map(([k,v,c,t])=>`<div class="tile" ${t?`title="${esc(t)}"`:''}><div class="k">${k}</div><div class="v ${c}">${fnum(v)}</div></div>`).join('');
   $('#foot').innerHTML =
     `数据规模 ${fbytes(s.total_bytes)} · 失效快捷方式 ${s.broken_links} · 非 skill 载体剔除 ${DOC.skipped.length}<br>` +
-    `重扫：<span class="mono">cd ${esc(TOOL)} && ${esc(PY)} skillctl.py scan</span><br>` +
-    `直连：<span class="mono">${esc(PY)} skillctl.py serve --open</span> · ` +
-    `单条详情：<span class="mono">skillctl.py state &lt;名称&gt;</span> · ` +
-    `处理方案包：<span class="mono">skillctl.py plan</span><br>` +
+    `重扫：<span class="mono">${esc(CLI('scan'))}</span><br>` +
+    `直连：<span class="mono">${esc(CLI('serve --open'))}</span> · ` +
+    `单条详情：<span class="mono">${esc(CLI('state <名称>'))}</span> · ` +
+    `处理方案包：<span class="mono">${esc(CLI('plan'))}</span><br>` +
     `回收站：<span class="mono">${esc(sh(DOC.paths.trash))}</span>（卸载只移到这里，不删除）`;
   const b2 = $('#btnRescan2'); if(b2) b2.onclick = rescan;
-  const cb = $('#btnCopyServe'); if(cb) cb.onclick = () => copy(`${PY} skillctl.py serve --open`, '#btnCopyServe', '已复制');
+  const cb = $('#btnCopyServe'); if(cb) cb.onclick = () => copy(CLI('serve --open'), '#btnCopyServe', '已复制');
 }
 
 /* ---------- view 1 ---------- */
@@ -823,6 +826,7 @@ function renderConf(){
             <div style="color:var(--tx3);margin-top:2px">理由：${esc(p.canonical_why||'')}</div>
             ${p.rewrite&&p.rewrite.length?`<div style="color:var(--tx3);margin-top:3px">其余 ${p.rewrite.length} 份改为指向它的快捷方式：${p.rewrite.map(r=>`<span class="mono">${esc(sh(r.path))}</span>`).join('、')}</div>`:''}
           </div>`:''}
+          ${p.grade==='auto'?`<div class="note">内容逐字一致，方案包里的脚本能自己跑完这一组，不需要你逐条判断。页面不提供一键执行 —— 去重要把一个真实目录换成快捷方式，统一走「生成处理方案包 → 先看干跑 → 改 <span class="mono">DRY_RUN=0</span> 执行」。</div>`:''}
           ${p.grade==='semi'?`<div class="note">脚本已备好，但默认不执行。先跑方案包里的对比命令看清差在哪，确认没有你要保留的独有文件，再加 <span class="mono">CONFIRM_SEMI=1</span> 重跑。</div>`:''}
           ${p.grade==='manual'?`<div class="note">正文已真实分叉，留哪份是你自己的取舍。方案包只给对比命令，不会动手。</div>`:''}
         </div>
@@ -852,7 +856,7 @@ function renderBulk(){
   const auto = picked.filter(c=>c.prescription.grade==='auto').length;
   const semi = picked.filter(c=>c.prescription.grade==='semi').length;
   const man  = picked.filter(c=>c.prescription.grade==='manual').length;
-  $('#bulkText').innerHTML = `已选 <b>${state.sel.size}</b> 组　可自动 ${auto}　半自动 ${semi}　需人工 ${man}`;
+  $('#bulkText').innerHTML = `已选 <b>${state.sel.size}</b> 组　脚本可自动 ${auto}　半自动 ${semi}　需人工 ${man}`;
 }
 
 /* ---------- view 5 ---------- */
@@ -991,7 +995,7 @@ function closeDrawer(){ $('#drawer').classList.remove('open'); closeAct(); }
 /* ---------- 操作层 ---------- */
 let ACT = null;
 function cliLine(action, name, agentId){
-  const base = `cd ${TOOL} && ${PY} skillctl.py`;
+  const base = CLI();
   if(action==='install') return `${base} install "${name}" --to ${agentId}`;
   if(action==='plan') return `${base} plan`;
   return `${base} ${action} "${name}" --agent ${agentId} --yes`;
@@ -1067,7 +1071,7 @@ function renderActOffline(kind, name, agentId, e, agent){
       <dt>落点</dt><dd class="mono">${esc(sh(agent.toggle_store||'—'))}</dd>
     </dl>
     <div class="cmd">${esc(cmd)}</div>
-    <div class="note" style="margin-top:12px">想点一下就生效，在终端启动直连服务：<br><span class="mono">${esc(PY)} skillctl.py serve --open</span></div>`;
+    <div class="note" style="margin-top:12px">想点一下就生效，在终端启动直连服务：<br><span class="mono">${esc(CLI('serve --open'))}</span></div>`;
   ACT.cmd = cmd;
   $('#aGo').style.display = 'none';
   $('#aCopy').textContent = '复制命令';
@@ -1133,7 +1137,7 @@ async function doApply(){
   setTimeout(()=>{ rescan(); }, 900);
 }
 async function rescan(){
-  if(!SRV){ copy(`cd ${TOOL} && ${PY} skillctl.py scan`, '#btnRescan', '已复制'); return; }
+  if(!SRV){ copy(CLI('scan'), '#btnRescan', '已复制'); return; }
   const t = $('#btnRescan'); t.disabled = true; t.textContent = '扫描中…';
   const r = await callServer({action:'rescan'});
   t.disabled = false; t.textContent = '重扫';
@@ -1146,8 +1150,8 @@ function planNow(){
   const useGrades = grades.length ? grades : ['auto','semi'];
   if(!SRV){
     const cmd = names.length
-      ? `cd ${TOOL} && ${PY} skillctl.py plan --names "${names.join(',')}" --grades ${useGrades.join(',')}`
-      : `cd ${TOOL} && ${PY} skillctl.py plan --grades ${useGrades.join(',')}`;
+      ? CLI(`plan --names "${names.join(',')}" --grades ${useGrades.join(',')}`)
+      : CLI(`plan --grades ${useGrades.join(',')}`);
     alert('当前是只读模式，已复制命令，请自行执行：\n\n' + cmd);
     copy(cmd, '#btnPlan', '已复制');
     return;

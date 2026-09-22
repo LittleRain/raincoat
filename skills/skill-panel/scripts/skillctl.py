@@ -59,6 +59,9 @@ from typing import Optional
 
 # 本脚本住在 <skill_root>/scripts/，配置（agents.json 等）、assets/ 与产物都在上一级。
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# 入口脚本所在的目录。页面里所有「可复制命令」都是 `cd <此处> && python3 skillctl.py …`，
+# 所以必须是 scripts/ 而不是 skill 根 —— 写错的话页面上每条命令都是死链（曾如此）。
+ENTRY_DIR = os.path.dirname(os.path.abspath(__file__))
 HOME = os.path.expanduser("~")
 CURRENT_USER = os.path.basename(HOME)
 
@@ -1973,7 +1976,7 @@ def do_scan(args):
     doc = {
         "generated_at": datetime.now(tz).isoformat(timespec="seconds"),
         "host": CURRENT_USER, "schema_version": 1,
-        "tool_dir": BASE, "python_bin": sys.executable,
+        "tool_dir": ENTRY_DIR, "python_bin": sys.executable,
         "stats": stats, "agent_stats": agent_stats,
         "rule_meta": rule_meta,
         "rule_hits": dict(sorted(rule_hits.items(), key=lambda x: -x[1])),
