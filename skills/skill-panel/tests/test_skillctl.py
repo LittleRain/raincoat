@@ -1038,6 +1038,95 @@ def _minimal_entity(name):
     }
 
 
+class PlanPackageTests(unittest.TestCase):
+    """方案包里的时间戳必须自洽：文件名、脚本里的 TRASH、清单内文说的是同一刻。
+
+    曾经清单印的是快照时间，而文件名用的是当下时间 —— 差着一次 scan 的距离。
+    照着清单里的时间去 trash 目录找，永远对不上号。所以这里不比对常量，而是真跑一次
+    plan、把生成的 md 打开读。
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.addCleanup(skillctl.set_artifact_root, None)
+        self._orig_base = skillctl.BASE
+        skillctl.BASE = self.tmp
+        self.addCleanup(setattr, skillctl, "BASE", self._orig_base)
+        self._env = os.environ.pop("SKILL_PANEL_OUT", None)
+        if self._env is not None:
+            self.addCleanup(os.environ.__setitem__, "SKILL_PANEL_OUT", self._env)
+
+        skillctl.set_artifact_root(os.path.join(self.tmp, "art"))
+        root = Path(self.tmp) / "roots"
+        root.mkdir()
+        (Path(self.tmp) / "agents.json").write_text(json.dumps({"agents": [
+            {"id": "fake", "label": "Fake",
+             "roots": [{"path": str(root), "kind": "user_skills"}]}]}), encoding="utf-8")
+        for name in ("rules.json", "overrides.json"):
+            shutil.copy(SKILL_DIR / name, Path(self.tmp) / name)
+
+    # 快照时间刻意做得跟「现在」明显不同，否则时间戳写错了也可能碰巧撞对
+    SNAPSHOT_AT = "2020-01-02T03:04:05+08:00"
+
+    def _write_snapshot(self):
+        doc = {
+            "generated_at": self.SNAPSHOT_AT, "host": "testhost",
+            "entities": [], "conflicts": [{
+                "name": "twin", "kind": "identical", "count": 2,
+                "entities": [{"real_path": "/virtual/a/twin", "agents": ["agenta"]},
+                             {"real_path": "/virtual/b/twin", "agents": ["agentb"]}],
+                "nature": "duplicate", "liveness": "live", "version_drift": [],
+                "prescription": {
+                    "grade": "auto", "canonical": "/virtual/a/twin",
+                    "canonical_why": "fixture", "needs_diff": False,
+                    "rewrite": [{"path": "/virtual/b/twin", "agents": ["agentb"],
+                                 "link_count": 0}],
+                },
+            }], "skipped": [], "agent_stats": [],
+        }
+        path = Path(skillctl.artifact_json())
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(doc), encoding="utf-8")
+
+    def _run_plan(self):
+        self._write_snapshot()
+        args = argparse.Namespace(names=None, auto_only=False, grades="auto")
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(skillctl.do_plan(args), 0)
+        md = sorted(Path(skillctl.artifact_root()).glob("plan-*.md"))
+        sh = sorted(Path(skillctl.artifact_root()).glob("plan-*.sh"))
+        self.assertEqual(len(md), 1, f"应恰好产出一份清单，实际 {[p.name for p in md]}")
+        self.assertEqual(len(sh), 1)
+        return md[0], sh[0]
+
+    def test_manifest_time_matches_the_filename_stamp(self):
+        md, sh = self._run_plan()
+        stamp = md.stem[len("plan-"):]
+        want = (f"{stamp[0:4]}-{stamp[4:6]}-{stamp[6:8]}"
+                f"T{stamp[9:11]}:{stamp[11:13]}:{stamp[13:15]}")
+        got = re.search(r"生成时间：(\S+)", md.read_text(encoding="utf-8")).group(1)
+        self.assertTrue(got.startswith(want),
+                        f"清单写「生成时间：{got}」，文件名却是 {stamp} —— "
+                        f"照清单去 trash 找会对不上")
+
+    def test_script_trash_dir_carries_the_same_stamp(self):
+        md, sh = self._run_plan()
+        stamp = md.stem[len("plan-"):]
+        self.assertEqual(sh.stem[len("plan-"):], stamp)
+        self.assertIn(f"TRASH=\"{skillctl.trash_root()}/plan-{stamp}\"",
+                      sh.read_text(encoding="utf-8"))
+
+    def test_snapshot_time_is_reported_separately(self):
+        """快照时间要单独标出来，不能顶替生成时间，也不能悄悄丢掉。"""
+        md, _ = self._run_plan()
+        text = md.read_text(encoding="utf-8")
+        self.assertIn(f"基于快照：{self.SNAPSHOT_AT}", text)
+        got = re.search(r"生成时间：(\S+)", text).group(1)
+        self.assertNotEqual(got, self.SNAPSHOT_AT,
+                            "生成时间又变回快照时间了（差一次 scan，按它找 trash 会对不上）")
+
+
 class ArtifactLayoutTests(unittest.TestCase):
     """通用代码与本地产物必须分家：代码在 skill 目录里，产物在 $HOME/.skill-panel。
 

@@ -2135,7 +2135,10 @@ def build_plan(doc, agents_cfg, names=None, include_grades=("auto",)):
       plan-<时间戳>.md  —— 给人看的清单：留哪份、为什么、会影响谁
       plan-<时间戳>.sh  —— 给机器跑的脚本：默认 DRY_RUN=1，什么都不改
     """
-    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+    # 时间戳要三处一致：文件名、脚本里的 TRASH/CANON_TS、清单里的「生成时间」。
+    # 清单曾经印的是快照时间，跟文件名差着一次 scan 的距离，按清单去 trash 找会对不上。
+    now = datetime.now(timezone(timedelta(hours=8)))
+    ts = now.strftime("%Y%m%d-%H%M%S")
     picked = []
     for c in doc.get("conflicts") or []:
         if c["nature"] != "duplicate" or c["liveness"] == "dormant":
@@ -2147,7 +2150,8 @@ def build_plan(doc, agents_cfg, names=None, include_grades=("auto",)):
         picked.append(c)
     md = [f"# Skill 冲突处理方案",
           f"",
-          f"生成时间：{doc['generated_at']}　主机：{doc['host']}",
+          f"生成时间：{now.isoformat(timespec='seconds')}　主机：{doc['host']}",
+          f"基于快照：{doc['generated_at']}（清单内容取自这份快照；重新扫描后请重新生成）",
           f"范围：{len(picked)} 组（仅含真重复且仍有副本在生效的冲突）",
           f"",
           f"> 脚本默认干跑，不会动任何文件。确认清单无误后把 `DRY_RUN=1` 改成 `DRY_RUN=0` 再执行。",
