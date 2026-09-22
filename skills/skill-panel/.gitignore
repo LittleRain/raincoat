@@ -1,0 +1,9 @@
+# scan 的产物：快照、仪表盘、plan 包、字节码
+# 这些文件含本机路径与命中的凭据原文，绝不能进任何仓库。
+# 忽略规则放在 skill 根下（而不是仓库根），这样导出成独立仓库时跟着一起走。
+data/
+skill-panel.html
+plan-*.md
+plan-*.sh
+__pycache__/
+*.pyc

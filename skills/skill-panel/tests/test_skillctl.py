@@ -11,11 +11,17 @@
 在 tooling/tests/skill-panel.sh 里跑。
 """
 
+import argparse
+import contextlib
 import importlib.util
+import io
 import json
 import os
 import re
+import shutil
+import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -40,6 +46,11 @@ RULES = load_json("rules.json")
 OVERRIDES = load_json("overrides.json")
 
 CONFIG_FILES = ("agents.json", "rules.json", "overrides.json")
+
+# 目录名契约：住在 raincoat 的 skills/ 下时强制「目录名 == 技能名」；
+# 导出成独立仓库后目录名由目标仓库决定（可能被改叫别的），
+# 这时只要求两份清单彼此一致 —— 否则导出副本必然挂测试。
+INSIDE_SKILLS_DIR = SKILL_DIR.parent.name == "skills"
 
 
 # ------------------------------------------------------------------ 目录契约
@@ -67,17 +78,31 @@ class LayoutTests(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertTrue((SKILL_DIR / name).is_file(), f"缺 {name}")
 
-    def test_skill_json_shape_and_name_matches_directory(self):
+    def test_skill_json_shape(self):
         meta = load_json("skill.json")
         for key in ("name", "title", "description", "version",
                     "status", "visibility", "entry", "tags", "author"):
             with self.subTest(key=key):
                 self.assertIn(key, meta)
-        self.assertEqual(meta["name"], SKILL_DIR.name)
         self.assertIn(meta["status"], ("draft", "beta"))
         self.assertIn(meta["visibility"], ("incubating", "internal"))
         self.assertEqual(meta["entry"], "SKILL.md")
         self.assertTrue(meta["tags"])
+
+    def test_manifests_agree_on_the_skill_name(self):
+        """两份清单必须说同一个名字 —— 这才是本 skill 自己的不变量。"""
+        fm, _, _ = skillctl.parse_frontmatter(
+            (SKILL_DIR / "SKILL.md").read_text(encoding="utf-8"))
+        self.assertEqual(fm.get("name"), load_json("skill.json")["name"])
+
+    def test_directory_name_matches_manifest_inside_raincoat(self):
+        """住在 raincoat 的 skills/ 下时，目录名必须等于技能名。
+
+        导出成独立仓库后目录名由目标仓库决定，所以这条只在 skills/ 布局下成立。
+        """
+        if not INSIDE_SKILLS_DIR:
+            self.skipTest("不在 raincoat 的 skills/ 布局下（导出副本），目录名不参与断言")
+        self.assertEqual(load_json("skill.json")["name"], SKILL_DIR.name)
 
     def test_no_absolute_personal_paths_in_tracked_sources(self):
         """换个人 clone 下来就得能跑，所以本 skill 自己的文件里不该有 /Users/<某人>。
@@ -109,7 +134,7 @@ class DocumentationTests(unittest.TestCase):
     def test_skill_md_frontmatter_has_name_and_trigger_description(self):
         text = (SKILL_DIR / "SKILL.md").read_text(encoding="utf-8")
         fm, _, _ = skillctl.parse_frontmatter(text)
-        self.assertEqual(fm.get("name"), SKILL_DIR.name)
+        self.assertEqual(fm.get("name"), load_json("skill.json")["name"])
         description = fm.get("description") or ""
         self.assertGreater(len(description), 80, "description 太短，agent 判断不了触发时机")
         self.assertIn("Use when", description)
@@ -283,7 +308,7 @@ def sample_secret_line():
 
 
 # 生成物不在交付面内，扫它们必然假阳性：仪表盘的职责就是把命中凭据的**原文**印出来当证据，
-# 所以它含有凭据是设计如此。清单与仓库 .gitignore 里 skill-panel 的那几条一一对应。
+# 所以它含有凭据是设计如此。清单与 skills/skill-panel/.gitignore 里的条目一一对应。
 GENERATED_DIRS = ("data", "__pycache__")
 GENERATED_FILES = ("skill-panel.html",)
 GENERATED_PREFIXES = ("plan-",)
@@ -363,13 +388,14 @@ class SecretLiteralTests(unittest.TestCase):
     def test_generated_skip_list_matches_gitignore(self):
         """自检跳过的生成物必须与 .gitignore 对齐，否则两边各自漂移。
 
-        放宽了跳过范围就等于给凭据开后门；收窄了则会误报。只在仓库内跑这条。
+        放宽了跳过范围就等于给凭据开后门；收窄了则会误报。
+        忽略规则就在本 skill 根下（不是仓库根），这样导出成独立仓库时跟着走；
+        也正因为只有这一份，这条测试才真的钉得住 —— 包括在导出副本里。
         """
-        gitignore = SKILL_DIR.parent.parent / ".gitignore"
-        if not gitignore.is_file():
-            self.skipTest("不在仓库内，跳过 .gitignore 对齐检查")
-        lines = [l.strip() for l in gitignore.read_text(encoding="utf-8").splitlines()
-                 if l.strip().startswith("skills/skill-panel/")]
+        gitignore = SKILL_DIR / ".gitignore"
+        self.assertTrue(gitignore.is_file(),
+                        "本 skill 应自带 .gitignore，否则导出后生成物无人拦截")
+        lines = [l.strip() for l in gitignore.read_text(encoding="utf-8").splitlines()]
         for entry in GENERATED_DIRS + GENERATED_FILES + GENERATED_PREFIXES:
             with self.subTest(entry=entry):
                 self.assertTrue(any(entry in l for l in lines),
@@ -589,6 +615,113 @@ class StaleSnapshotTests(unittest.TestCase):
     def test_missing_scan_artifact_is_not_reported_as_stale(self):
         stale, _ = skillctl.stale_toggle_source(self.config(), str(self.root / "nope.json"))
         self.assertFalse(stale)
+
+
+# ---------------------------------------------------------- 快照缺失的退出码
+
+class SnapshotExitCodeTests(unittest.TestCase):
+    """没有扫描产物时必须是非零退出。
+
+    包装脚本、CI、`&&` 链都靠退出码判断，返回 0 会被读成「成功」。
+    数退出码时别写成 `cmd | head` —— 那样拿到的是 head 的退出码，永远 0。
+    """
+
+    def setUp(self):
+        self._orig_base = skillctl.BASE
+        self._tmp = tempfile.mkdtemp()
+        skillctl.BASE = self._tmp
+        # 只缺扫描快照，配置照旧 —— 否则先撞上「agents.json 缺失」，测不到这条。
+        for name in CONFIG_FILES:
+            shutil.copy(SKILL_DIR / name, Path(self._tmp) / name)
+        self.assertFalse((Path(self._tmp) / "data" / "skills.json").exists())
+
+    def tearDown(self):
+        skillctl.BASE = self._orig_base
+        shutil.rmtree(self._tmp, ignore_errors=True)
+
+    def _call(self, func, **kwargs):
+        with contextlib.redirect_stderr(io.StringIO()):
+            return func(argparse.Namespace(**kwargs))
+
+    def test_snapshot_dependent_commands_return_one(self):
+        cases = {
+            "check": lambda: self._call(skillctl.do_check, name="anything"),
+            "state": lambda: self._call(skillctl.do_state, name="anything"),
+            "install": lambda: self._call(skillctl.do_install, name="anything"),
+            "plan": lambda: self._call(skillctl.do_plan, grades=None,
+                                       auto_only=False, names=None),
+            "serve": lambda: self._call(skillctl.do_serve, port=8799, open=False),
+            "disable": lambda: self._call(skillctl.do_disable, name="anything",
+                                          agent="fakeagent", yes=False),
+            "uninstall": lambda: self._call(skillctl.do_uninstall, name="anything",
+                                            agent="fakeagent", yes=False, force=False),
+        }
+        for name, call in cases.items():
+            with self.subTest(cmd=name):
+                self.assertEqual(call(), 1, f"{name} 在无快照时应返回 1")
+
+    def test_bare_invocation_is_a_usage_error(self):
+        """不带子命令不是成功。帮助走 stderr，stdout 保持干净。"""
+        saved = sys.argv
+        sys.argv = ["skillctl.py"]
+        try:
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+                code = skillctl.main()
+        finally:
+            sys.argv = saved
+        self.assertEqual(code, 2)
+        self.assertIn("usage", err.getvalue().lower())
+
+    def test_explicit_help_still_exits_zero(self):
+        saved = sys.argv
+        sys.argv = ["skillctl.py", "--help"]
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                with self.assertRaises(SystemExit) as caught:
+                    skillctl.main()
+        finally:
+            sys.argv = saved
+        self.assertEqual(caught.exception.code, 0)
+
+
+# ---------------------------------------------------------- 导出成独立仓库
+
+def _generated_only(directory, names):
+    """导出副本里只去掉生成物。
+
+    不能用 ignore_patterns("*.html") —— assets/dashboard_template.html 是模板**源**，
+    少了它整个仪表盘就生成不出来。
+    """
+    skipped = []
+    for name in names:
+        if name in ("data", "__pycache__") or name.startswith("plan-"):
+            skipped.append(name)
+        elif name == "skill-panel.html" and Path(directory) == SKILL_DIR:
+            skipped.append(name)
+    return set(skipped)
+
+
+class ExportPortabilityTests(unittest.TestCase):
+    """导出成独立仓库后目录名由目标仓库决定，测试不能因此挂。
+
+    回归用例：以前两处断言拿 SKILL_DIR.name 当基准，导出目录一改名就挂 2 个。
+    """
+
+    def test_own_suite_passes_in_a_differently_named_copy(self):
+        if os.environ.get("SKILL_PANEL_NESTED_SELFTEST") == "1":
+            self.skipTest("防递归：内层副本不再自我复制")
+        if not INSIDE_SKILLS_DIR:
+            self.skipTest("只从仓库内的原件发起自检")
+        with tempfile.TemporaryDirectory() as tmp:
+            dest = Path(tmp) / "renamed-export"
+            shutil.copytree(SKILL_DIR, dest, ignore=_generated_only)
+            proc = subprocess.run(
+                [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-q"],
+                cwd=dest, capture_output=True, text=True,
+                env=dict(os.environ, SKILL_PANEL_NESTED_SELFTEST="1"))
+            self.assertEqual(proc.returncode, 0,
+                             f"改名后的副本里测试挂了：\n{proc.stderr[-2000:]}")
 
 
 if __name__ == "__main__":

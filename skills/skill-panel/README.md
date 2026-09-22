@@ -152,6 +152,16 @@ python3 scripts/skillctl.py serve --open
 
 `rules.json` 同理：`level` 只能是 `fail` / `warn`，`id` 不能重复，`label` 与 `detector` 不能为空。另有一条测试保证每个 `detector` 在 `skillctl.py` 里**真有对应的实现** —— 规则表里写了、代码里没有的规则等于撒谎。
 
+## 退出码
+
+| 码 | 含义 |
+|---|---|
+| 0 | 正常完成（`disable` / `uninstall` 的干跑也算正常完成） |
+| 1 | 前提不满足：没有扫描产物、找不到这个 skill。**先跑 scan** 属于这一类，所以包装脚本不会把它读成成功 |
+| 2 | 参数或配置错：子命令参数缺失、`agents.json` / `rules.json` 校验不过 |
+
+约定是「没有真的做事就不返回 0」，这样 `&&` 链和 CI 能直接依赖退出码。测试里有一条专门钉住无快照时各命令都返回 1。数退出码时别写成 `cmd | head` —— 那拿到的是 `head` 的码。
+
 ## 同名冲突：先分诊，再处方
 
 样例机器上的 48 组同名冲突里，**真正需要处理的只有一部分**，所以先按两个维度分诊：
@@ -199,6 +209,7 @@ skill-panel/
 ├── agents.json                    # agent 适配表（含各 agent 的 toggle 落点声明）
 ├── rules.json                     # 校验规则表
 ├── overrides.json                 # 人工覆盖表
+├── .gitignore                     # 生成物的忽略规则（放这里是为了导出成独立仓库时跟着走）
 ├── scripts/skillctl.py            # 引擎（扫描 / 校验 / 状态 / 安装 / 写操作 / 直连服务），纯标准库
 ├── assets/dashboard_template.html # 页面模板，`/*__SKILL_DATA__*/null` 是数据注入点
 ├── references/
@@ -219,6 +230,8 @@ skill-panel/
 仓库级测试在 `tooling/tests/skill-panel.sh`：它自建一棵 fixture 技能树（含一对逐字一致的副本、一对已分叉的副本、一条共享池软链、三类必现 FAIL），所以不依赖本机上装了哪些 agent。
 
 测试会把 `HOME` 整个换成临时目录再跑，因此既不动你真实的 agent 配置，也不会往你真实的 `~/.skill-panel/ledger.json` 里灌测试记录。这条隔离本身也有断言兜着——漏掉就会直接报「写操作没有落到隔离的 HOME 下」，而不是静默污染。
+
+这个仓库级脚本**不随导出走**（`tooling/` 在技能目录之外），所以独立仓库里只剩单元测试。单元测试不要求目录名等于技能名——它只在仓库的 `skills/` 布局下才强制这一点，导出后目录叫什么都行（有一条测试专门钉住这个回退）。
 
 ```bash
 bash tooling/tests/skill-panel.sh                        # 端到端

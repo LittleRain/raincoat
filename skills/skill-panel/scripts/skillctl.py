@@ -2505,8 +2505,10 @@ def main():
     args = ap.parse_args()
     fn = getattr(args, "func", None)
     if not fn:
-        ap.print_help()
-        return 0
+        # 不带子命令是用法错误，不能返回 0 —— 否则 `skillctl.py && 下一步`
+        # 会一路往下走。帮助写 stderr，保持 stdout 干净。
+        ap.print_help(sys.stderr)
+        return 2
     try:
         return fn(args) or 0
     except ConfigError as error:

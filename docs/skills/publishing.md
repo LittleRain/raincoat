@@ -82,12 +82,25 @@ git push origin --delete <feature-branch>
 
 ## Export Expectations
 
-The future export script should:
+`tooling/scripts/export-skill.sh [--loose] <skill-name> <destination-dir>` exports
+**the files git would commit** for that skill:
 
-- copy the skill directory into a clean destination
-- preserve `SKILL.md`, `README.md`, `skill.json`, `scripts/`, `assets/`, and
-  `examples/`
-- optionally generate repository boilerplate files
+- run it from a git work tree. It lists `git ls-files --cached --others
+  --exclude-standard` under `skills/<skill-name>`, so anything `.gitignore` covers
+  (scan output, generated dashboards, `plan-*` packages, `__pycache__`) is left
+  behind, and the count of what was skipped is printed.
+- a skill's own `.gitignore` is copied and **appended to**, never overwritten. Put
+  a skill's generated-artifact rules in `skills/<skill>/.gitignore` rather than the
+  repository root, otherwise they do not travel with the export.
+- outside a git work tree the script refuses to run, because it cannot tell
+  generated files from source. `--loose` is the explicit escape hatch: a fixed
+  build-junk exclude list and a warning, no `.gitignore` semantics.
+- repository boilerplate (`.DS_Store`, `dist`, `coverage`, `.env*`) is added to the
+  destination `.gitignore`; anything else — `LICENSE`, CI config — is up to step 4.
+
+Known gap: `tooling/tests/<skill>.sh` lives outside the skill directory, so the
+repo-level end-to-end test does not travel with the export. Only the skill's own
+`tests/` do.
 
 ## Versioning
 
