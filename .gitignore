@@ -17,3 +17,10 @@ skills/**/input/
 
 # generated local report artifact
 skills/gongfang-weekly-report/output/report.html
+
+# skill-panel local scan output, generated dashboard and plan packages
+skills/skill-panel/data/
+skills/skill-panel/skill-panel.html
+skills/skill-panel/plan-*.md
+skills/skill-panel/plan-*.sh
+skills/skill-panel/**/__pycache__/

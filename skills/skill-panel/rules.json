@@ -1,0 +1,161 @@
+{
+  "_comment": "校验规则表。加规则只改这里；detector 必须是 skillctl.py 里已实现的检测器名。阈值也在这里调。",
+  "_levels": {
+    "fail": "阻塞跨 agent 迁移，必须先修",
+    "warn": "质量/健壮性提示，不阻塞迁移"
+  },
+
+  "thresholds": {
+    "oversize_text_bytes": 204800,
+    "short_description_chars": 30,
+    "evidence_max_per_rule": 5,
+    "text_read_budget_bytes": 400000
+  },
+
+  "rules": [
+    {
+      "id": "missing-skill-md",
+      "level": "fail",
+      "kind": "structure",
+      "detector": "missing_skill_md",
+      "label": "缺少 SKILL.md",
+      "desc": "目录内没有 SKILL.md，任何 agent 都读不到这个 skill"
+    },
+    {
+      "id": "empty-dir",
+      "level": "fail",
+      "kind": "structure",
+      "detector": "empty_dir",
+      "label": "空壳目录",
+      "desc": "目录内没有任何文件，只剩空文件夹"
+    },
+    {
+      "id": "missing-frontmatter",
+      "level": "fail",
+      "kind": "structure",
+      "detector": "missing_frontmatter",
+      "label": "无 frontmatter",
+      "desc": "SKILL.md 开头没有 YAML frontmatter，agent 无法解析元数据"
+    },
+    {
+      "id": "missing-name",
+      "level": "fail",
+      "kind": "structure",
+      "detector": "missing_name",
+      "label": "缺 name 字段",
+      "desc": "frontmatter 里没有 name，skill 可能无法被正确索引"
+    },
+    {
+      "id": "missing-description",
+      "level": "fail",
+      "kind": "structure",
+      "detector": "missing_description",
+      "label": "缺 description 字段",
+      "desc": "frontmatter 里没有 description，agent 无法判断何时该调用它"
+    },
+    {
+      "id": "secret-literal",
+      "level": "fail",
+      "kind": "portability",
+      "detector": "regex_lines",
+      "label": "疑似凭据硬编码",
+      "desc": "检出疑似 token / secret / api_key 字面量。迁到别的 agent 等于把凭据复制一份，且极易随 skill 外流",
+      "patterns": [
+        "sk-[A-Za-z0-9]{16,}",
+        "ghp_[A-Za-z0-9]{20,}",
+        "github_pat_[A-Za-z0-9_]{20,}",
+        "AKIA[0-9A-Z]{12,}",
+        "AIza[0-9A-Za-z_\\-]{30,}",
+        "(?:token|secret|passwd|password|api[_-]?key|access[_-]?key)\\s*[:=]\\s*[\"']?[A-Za-z0-9_\\-/+=]{16,}"
+      ],
+      "allow_patterns": [
+        "\\$\\{?[A-Z_]+\\}?",
+        "<[A-Z_]+>",
+        "(?i)\\byour[-_a-z]*\\b|\\bchangeme\\b|x{3,}|\\bfake\\b|\\bdummy\\b|\\bsample\\b|\\bplaceholder\\b|\\bredacted\\b|\\bexample\\b",
+        "=\\s*[A-Za-z_][A-Za-z0-9_.]*\\s*\\(",
+        "\\b(?:os\\.environ|getenv|read_\\w+|load_\\w+|fetch_\\w+|settings\\.|config\\[|cfg\\[|ENV\\[)"
+      ]
+    },
+    {
+      "id": "foreign-abs-path",
+      "level": "fail",
+      "kind": "portability",
+      "detector": "foreign_abs_path",
+      "label": "指向外部用户/机器的绝对路径",
+      "desc": "写死了非本机用户的绝对路径，本机根本不存在，迁到任何 agent 都跑不通"
+    },
+    {
+      "id": "broken-symlink",
+      "level": "fail",
+      "kind": "structure",
+      "detector": "broken_symlink",
+      "label": "软链断裂",
+      "desc": "软链指向的目标已不存在"
+    },
+    {
+      "id": "broken-script-ref",
+      "level": "fail",
+      "kind": "structure",
+      "detector": "broken_script_ref",
+      "label": "引用的脚本文件不存在",
+      "desc": "文档里引用了 scripts/ 下的文件但磁盘上没有，迁移过去会直接报错"
+    },
+    {
+      "id": "local-abs-path",
+      "level": "warn",
+      "kind": "portability",
+      "detector": "local_abs_path",
+      "label": "写死本机 home 绝对路径",
+      "desc": "同机同用户可用，但换机/换用户即失效，且会阻碍后续迁移。建议改成相对路径或环境变量"
+    },
+    {
+      "id": "oversize-text",
+      "level": "warn",
+      "kind": "hygiene",
+      "detector": "oversize_text",
+      "label": "文本体量偏大",
+      "desc": "文本超过阈值。注意：体积大不等于差，业务重资产项目（报表、数据产物）常常很大，仅作提示"
+    },
+    {
+      "id": "short-description",
+      "level": "warn",
+      "kind": "hygiene",
+      "detector": "short_description",
+      "label": "description 过短",
+      "desc": "description 太短，agent 难以判断触发时机。建议写清「做什么 + 什么时候用」"
+    },
+    {
+      "id": "plugin-root-skill-md",
+      "level": "fail",
+      "kind": "structure",
+      "detector": "plugin_root_skill_md",
+      "label": "插件根 SKILL.md（bitto 会拒载）",
+      "desc": "SKILL.md 直接放在插件根、没有 skills/ 子目录。bitto 的插件装载校验会拒绝该插件（实测：plugins/rain-meeting-summary 装载失败）。正确形态是 skills/<name>/SKILL.md"
+    },
+    {
+      "id": "missing-plugin-json",
+      "level": "warn",
+      "kind": "structure",
+      "detector": "missing_plugin_json",
+      "label": "plugins 载体缺 plugin.json",
+      "desc": "bitto 这类以 plugins/ 为载体的 agent 依赖 plugin.json 清单，缺失可能导致不被识别"
+    },
+    {
+      "id": "name-dir-mismatch",
+      "level": "warn",
+      "kind": "portability",
+      "detector": "name_dir_mismatch",
+      "label": "frontmatter name 与目录名不一致",
+      "desc": "bitto 装载器会对此发出警告：name 与父目录名必须一致。技能仍可加载，不阻塞迁移，但每次装载都会带告警。注：成批的「目录名 = 前缀 + name」（如 gstack-review → name: review）属于上游仓库统一加前缀，非缺陷；不需要时可把本条 enabled 改为 false"
+    },
+    {
+      "id": "symlink-target-unknown",
+      "level": "warn",
+      "kind": "portability",
+      "scope": "install",
+      "detector": "symlink_target_unknown",
+      "label": "目标 agent 软链支持未知",
+      "desc": "源实体被其他 agent 以软链引用，但目标 agent 是否支持软链未经验证。安装时建议回退为复制"
+    }
+  ]
+}

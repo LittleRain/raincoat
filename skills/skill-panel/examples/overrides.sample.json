@@ -1,0 +1,11 @@
+{
+  "_comment": "示例：overrides.json 的 by_entity 怎么写。key 用 skill 的实体名（目录名）即可；如遇同名冲突，可写完整 realpath。改完重跑 scan 即生效。",
+  "by_entity": {
+    "some-skill": {
+      "type": "local",
+      "auto_created": true,
+      "note": "这是我手工改过的说明",
+      "ignore_rules": ["local-abs-path", "oversize-text"]
+    }
+  }
+}

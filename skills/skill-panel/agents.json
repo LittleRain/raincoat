@@ -1,0 +1,250 @@
+{
+  "_comment": "agent 适配表。加新 agent / 新根目录只改这里，不用动代码。path 支持 * 通配，每个匹配到的目录即一个 skill。",
+  "_root_spec": {
+    "path": "根目录，支持 ~ 展开与 * 通配",
+    "kind": "user_skills | shared_pool | market | builtin | plugins",
+    "nested": "子目录名（如 skills）。声明后容器自身与内嵌子目录【并列展开】，不做二选一 —— bitto 实测两种形态都会被装载",
+    "dedupe": "manifest = 只保留安装清单里记录的版本（用于带多版本的市场缓存）",
+    "store_meta": "技能目录内的安装记录文件名（如 _store_meta.json）。读到 source=store 即判为「市场安装」，并附上 skillId / version / installedAt 作为可验证证据",
+    "evidence": "覆盖该根下条目的类型判定说明文案（默认按 kind 生成）",
+    "label": "展示用"
+  },
+  "_kind_meaning": {
+    "user_skills": "用户自持 skills 目录",
+    "shared_pool": "被多个 agent 软链引用的共享池",
+    "market": "从市场安装的插件",
+    "builtin": "agent 自带的系统内置",
+    "plugins": "agent 以 plugins/ 为载体的自建插件（如 bitto）"
+  },
+
+  "_toggle_spec": {
+    "_comment": "每个 agent 的「启用 / 禁用」原生开关。实测发现四个 agent 四种机制、两种粒度，无法统一，所以照样做成声明式适配：能用原生开关的走原生，没有的降级为文件级。",
+    "granularity": "skill | plugin | none —— 开关能作用到的最细粒度",
+    "writer": "json_nested（改 JSON 里的嵌套键）| toml_section（改 TOML 段落字段）| cli（调 agent 自带命令）| filemove（降级：移动目录）",
+    "container": "json_nested 用：从根到容器的键路径",
+    "value_mode": "scalar（值直接写在容器里）| object_field（容器下每个键对应一个对象，改它的某个字段）",
+    "value_field": "value_mode=object_field 时要改的字段名",
+    "set": "state -> 写入值 的映射。on 用 null 表示「删除该键」",
+    "key_rule": "fm_name_or_dirname | dirname | plugin_at_marketplace —— 生成开关键的规则",
+    "evidence": "该机制的实证来源"
+  },
+
+  "agents": [
+    {
+      "id": "workbuddy",
+      "label": "WorkBuddy",
+      "supports_symlink": true,
+      "symlink_evidence": "实测 61 条目中含 1 个软链，可解析",
+      "install_hint": "~/.workbuddy/skills/",
+      "roots": [
+        { "path": "~/.workbuddy/skills", "kind": "user_skills", "label": "用户 skills" },
+        { "path": "~/.workbuddy/plugins/cache/*/*/*/skills/*", "kind": "market", "dedupe": "manifest", "label": "市场插件" },
+        { "path": "/Applications/WorkBuddy.app/Contents/Resources/app.asar.unpacked/resources/plugins/workbuddy-builtin/skills/*", "kind": "builtin", "label": "App 内置" }
+      ],
+      "toggle": {
+        "granularity": "skill",
+        "writer": "json_nested",
+        "file": "~/.workbuddy/settings.json",
+        "container": ["skillOverrides"],
+        "value_mode": "scalar",
+        "key_rule": "fm_name_or_dirname",
+        "set": { "off": "off", "model_off": "user-invocable-only", "on": null },
+        "state_labels": {
+          "on": "启用",
+          "model_off": "仅手动可用",
+          "off": "已禁用"
+        },
+        "plugin": {
+          "granularity": "plugin",
+          "writer": "json_nested",
+          "file": "~/.workbuddy/settings.json",
+          "container": ["enabledPlugins"],
+          "value_mode": "scalar",
+          "key_rule": "plugin_at_marketplace",
+          "set": { "on": true, "off": false }
+        },
+        "evidence": "客户端源码确认：单项关闭→skillOverrides[key]='user-invocable-only'；禁用全部扩展→'off'（同时关模型调用、用户显式调用与菜单展示）；开启→删除该键。key 优先取 frontmatter.name，无 name 用目录 identity，必须与 agent-cli 运行时一致。"
+      }
+    },
+    {
+      "id": "codex",
+      "label": "Codex",
+      "supports_symlink": true,
+      "symlink_evidence": "实测 32 个软链全部可解析（指向 ~/gstack 与 ~/.agents）",
+      "install_hint": "~/.codex/skills/",
+      "roots": [
+        { "path": "~/.codex/skills", "kind": "user_skills", "label": "用户 skills" },
+        { "path": "~/.codex/skills/.system/*", "kind": "builtin", "label": "Codex 系统内置" },
+        { "path": "~/.codex/superpowers/skills/*", "kind": "market", "label": "上游仓库 superpowers", "evidence": "位于 obra/superpowers 上游仓库的克隆（含 .git / .claude-plugin/marketplace.json），经 ~/.agents/skills/superpowers 软链被各 agent 发现" }
+      ],
+      "toggle": {
+        "granularity": "plugin",
+        "writer": "toml_section",
+        "file": "~/.codex/config.toml",
+        "section": "plugins",
+        "field": "enabled",
+        "key_rule": "plugin_at_marketplace",
+        "set": { "on": true, "off": false },
+        "state_labels": { "on": "插件启用", "off": "插件已禁用" },
+        "file_level": {
+          "verified": true,
+          "mechanisms": {
+            "dot_prefix": { "works": true, "how": "目录名前加 . （<root>/.disabled/<名字>）" },
+            "skill_md_rename": { "works": true, "how": "SKILL.md 改名为 SKILL.md.disabled" },
+            "dir_suffix": { "works": false, "how": "目录名加 .disabled 后缀 —— 实测无效，照样被加载" }
+          },
+          "evidence": "实测：用 codex debug prompt-input 导出模型实际可见的技能清单，建 6 个探针（对照/点前缀/改名/后缀/归档/嵌套）逐项比对。结果：对照与 .disabled 后缀仍被加载；点前缀、SKILL.md 改名、移入点开头子目录均被忽略。"
+        },
+        "evidence": "~/.codex/config.toml 的 [plugins.\"<plugin>@<marketplace>\"] enabled 字段，实测 12 个插件条目全部由它控制。"
+      }
+    },
+    {
+      "id": "claude",
+      "label": "Claude",
+      "supports_symlink": true,
+      "symlink_evidence": "实测 50 个软链全部可解析（大量指向 ~/.agents/skills 共享池）",
+      "install_hint": "~/.claude/skills/",
+      "roots": [
+        { "path": "~/.claude/skills", "kind": "user_skills", "label": "用户 skills" },
+        { "path": "~/.claude/plugins/cache/*/*/*/skills/*", "kind": "market", "dedupe": "manifest", "label": "插件" }
+      ],
+      "toggle": {
+        "granularity": "plugin",
+        "writer": "cli",
+        "cli": {
+          "bin": "claude",
+          "disable": ["plugin", "disable", "{plugin}"],
+          "enable": ["plugin", "enable", "{plugin}"]
+        },
+        "fallback": {
+          "writer": "json_nested",
+          "file": "~/.claude/settings.local.json",
+          "container": ["enabledPlugins"],
+          "value_mode": "scalar",
+          "key_rule": "plugin_at_marketplace",
+          "set": { "on": true, "off": false }
+        },
+        "state_readers": [
+          { "writer": "json_nested", "file": "~/.claude/settings.local.json", "container": ["enabledPlugins"] },
+          { "writer": "json_nested", "file": "~/.claude/settings.json", "container": ["enabledPlugins"] }
+        ],
+        "plugin_key_fallback": "dirname",
+        "key_rule": "plugin_at_marketplace",
+        "set": { "on": true, "off": false },
+        "state_labels": { "on": "插件启用", "off": "插件已禁用" },
+        "evidence": "claude plugin list / disable / enable（实测 `claude plugin list` 输出 `codex@openai-codex … Status: ✘ disabled`），状态落在 settings.local.json 的 enabledPlugins。注意 Claude 只有插件级开关，且 ~/.claude/skills/<名字> 会被当作 skills-dir 插件（claude plugin init 即在此创建）。"
+      }
+    },
+    {
+      "id": "agents",
+      "label": "共享池 (~/.agents)",
+      "supports_symlink": true,
+      "symlink_evidence": "本体为实体目录，被 claude / minimax 软链引用",
+      "install_hint": "~/.agents/skills/",
+      "note": "事实上的跨 agent 共享池，建议作为迁移的默认落位",
+      "prefer_as_target": true,
+      "roots": [
+        { "path": "~/.agents/skills", "kind": "shared_pool", "label": "共享池" }
+      ],
+      "toggle": null
+    },
+    {
+      "id": "minimax",
+      "label": "MiniMax",
+      "supports_symlink": true,
+      "symlink_evidence": "实测 39 条目中 34 个软链，仅 5 个自有实体",
+      "install_hint": "~/.minimax/skills/",
+      "roots": [
+        { "path": "~/.minimax/skills", "kind": "user_skills", "label": "用户 skills" },
+        { "path": "~/.minimax/.builtin-skills/*", "kind": "builtin", "label": "内置" }
+      ],
+      "toggle": {
+        "granularity": "none",
+        "writer": "filemove",
+        "file_level": {
+          "verified": false,
+          "mechanisms": {
+            "dot_prefix": { "works": null, "how": "目录名前加 . —— 沿用 Codex 已验证的做法，本 agent 未实测" },
+            "skill_md_rename": { "works": null, "how": "SKILL.md 改名为 SKILL.md.disabled —— 未实测" }
+          }
+        },
+        "evidence": "~/.minimax/config.yaml 已通读，未发现任何 skill 级或插件级启用开关。"
+      }
+    },
+    {
+      "id": "bitto",
+      "label": "Bitto",
+      "supports_symlink": null,
+      "symlink_evidence": "bitto 自身用软链管理运行时版本（~/.bitto/runtimes/{python,uv,node}/current 共 3 个软链），说明其技术栈软链友好；但 skill / plugin 目录下未观测到任何软链，日志亦无相关记录 → 判为未知",
+      "install_hint": "~/.bitto/skills/",
+      "note": "三处载体：skills/（自建，容器自身 SKILL.md 与内嵌 skills/ 子技能都会被装载）、plugins/（用户插件，须 skills/<name>/SKILL.md）、App 内置 builtin-plugins/（升级会被覆盖）",
+      "roots": [
+        { "path": "~/.bitto/skills", "kind": "user_skills", "nested": "skills", "label": "自建技能" },
+        { "path": "~/.bitto/plugins", "kind": "plugins", "nested": "skills", "label": "用户插件" },
+        { "path": "/Applications/Bitto.app/Contents/resources/builtin-plugins", "kind": "builtin", "nested": "skills", "label": "App 内置插件" }
+      ],
+      "toggle": {
+        "granularity": "none",
+        "writer": "filemove",
+        "file_level": {
+          "verified": false,
+          "mechanisms": {
+            "dot_prefix": { "works": null, "how": "目录名前加 . —— 沿用 Codex 已验证的做法，本 agent 未实测" },
+            "skill_md_rename": { "works": null, "how": "SKILL.md 改名为 SKILL.md.disabled —— 未实测；bitto 装载器靠目录名索引，风险较高" }
+          }
+        },
+        "evidence": "~/.bitto/settings.json 已通读（version/general/model/workspace/auth/appearance/pet），未发现任何 skill 级或插件级启用开关。"
+      }
+    },
+    {
+      "id": "autoclaw",
+      "label": "AutoClaw",
+      "supports_symlink": true,
+      "symlink_evidence": "plugin-skills/browser-automation 本体是软链（指向 ~/Library/Application Support/autoclaw/embedded-gateway-runtime/.../extensions/browser/skills/）且被正常装载；共享池 ~/.agents/skills/superpowers 软链亦被读取",
+      "install_hint": "~/.openclaw-autoclaw/skills/",
+      "note": "官方 workspace/AGENTS.md 明确：托管技能目录是 ~/.openclaw-autoclaw/skills/，并显式要求【不要】装进 ~/.agents/skills/（那是与其他工具共享的）。43 个托管技能里 39 个带 _store_meta.json（source=store），来源可逐条验证",
+      "roots": [
+        { "path": "~/.openclaw-autoclaw/skills", "kind": "user_skills", "store_meta": "_store_meta.json", "label": "托管技能（商店同步）" },
+        { "path": "~/.openclaw-autoclaw/plugin-skills", "kind": "builtin", "label": "插件技能（App 运行时）" }
+      ],
+      "toggle": {
+        "granularity": "skill",
+        "writer": "json_nested",
+        "file": "~/.openclaw-autoclaw/openclaw.json",
+        "container": ["skills", "entries"],
+        "value_mode": "object_field",
+        "value_field": "enabled",
+        "key_rule": "dirname",
+        "set": { "on": true, "off": false },
+        "state_labels": { "on": "启用", "off": "已禁用" },
+        "evidence": "~/.openclaw-autoclaw/openclaw.json 的 skills.entries.<技能名>.enabled。实测现网 9 条里 8 条为 false（write-research / watch-positions / pick-funds / assess-credit / read-macro / vet-companies / model-deals / find-clients）。另注意 agents.list[].skills 是白名单机制，auto-legal 这个 agent 只挂了 33 个技能。"
+      }
+    }
+  ],
+
+  "builtin_libraries": [
+    {
+      "path": "/Applications/AutoClaw.app/Contents/Resources/skills",
+      "for_agent": "autoclaw",
+      "reason": "App 自带的技能库（44 个）。托管目录里的同名副本是由它 + 商店元数据生成的投影，实测差异仅为多出的 _store_meta.json 与 .bundled-hash。因此这里【只作来源索引、不作为实体扫描】——否则会凭空产生 42 组假「同名冲突」",
+      "use": "同名命中 → 该条目的来源证据记为「App 内置库」；无商店记录者判为内置"
+    }
+  ],
+
+  "install_manifests": [
+    "~/.workbuddy/plugins/installed_plugins.json",
+    "~/.claude/plugins/installed_plugins.json"
+  ],
+
+  "excluded": [
+    { "path": "~/.qwen/skills", "reason": "仅 1 条，疑为残留，默认不纳入" },
+    { "path": "~/.iflow/skills", "reason": "仅 1 条，疑为残留，默认不纳入" },
+    { "path": "~/.minimax/.internal-skills", "reason": "内部构建用，非用户可见 skill" },
+    { "path": "<工作区>/.bitto/skills", "reason": "Bitto 的项目级 skills 目录（日志实测 project_skills_dir=<cwd>/.bitto/skills）；随项目走，默认不纳入" },
+    { "path": "~/.openclaw-autoclaw/agents/*", "reason": "AutoClaw 的 12 个 agent 定义（各含 agent/ sessions/ workspace/），不是技能载体，不扫描" },
+    { "path": "~/.openclaw-autoclaw/workspace", "reason": "AutoClaw 工作区，只含 AGENTS.md 等运行态文件，非技能目录" },
+    { "path": "~/.openclaw-autoclaw/skills/.hot-update-tmp", "reason": "AutoClaw 的商店热更新临时目录（隐藏目录），非技能本体" },
+    { "path": "~/.codex/superpowers/{commands,agents,hooks,docs,tests}", "reason": "superpowers 上游仓库的非技能目录，只取 skills/" },
+    { "path": "<项目级目录>", "reason": "项目级 skill 随 git 仓库走，天然跨 agent 可见，无需迁移；如需纳入请加到 agents[].roots，例如 ~/Documents/GitHub/workspace/skills" }
+  ]
+}

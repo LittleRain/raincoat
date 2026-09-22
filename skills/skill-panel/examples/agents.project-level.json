@@ -1,0 +1,7 @@
+{
+  "_comment": "片段示例：把某个项目级 skills 目录纳入扫描。把 roots 里这一段追加到 agents.json 里对应 agent 的 roots 数组末尾，不要整份替换。",
+  "_warning": "项目级 skill 随 git 仓库走，天然跨 agent 可见，本不需要迁移；纳入后同名冲突会明显变多。",
+  "path": "~/Documents/GitHub/your-project/skills",
+  "kind": "user_skills",
+  "label": "项目级 skills（可按需纳入）"
+}
