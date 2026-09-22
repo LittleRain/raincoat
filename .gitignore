@@ -7,6 +7,14 @@ coverage
 .env
 .env.*
 
+# 本会话工作区（记忆、临时笔记、自动化配置）不进仓库
+.workbuddy/
+
+# 生成物：字节码与运行日志一律不提交
+__pycache__/
+*.pyc
+skills/**/run.log
+
 # trade-weekly-report local runtime artifacts
 skills/trade-weekly-report/input/
 skills/trade-weekly-report/output/
@@ -15,8 +23,9 @@ skills/trade-weekly-report/scripts/__pycache__/
 # all skill local input artifacts
 skills/**/input/
 
-# generated local report artifact
+# generated local report artifacts
 skills/gongfang-weekly-report/output/report.html
+skills/report-circle-daily/output/
 
-# skill-panel generated artifacts are covered by skills/skill-panel/.gitignore,
-# which travels with the skill when it is exported into its own repository.
+# skill-panel 的产物不落在 skill 目录里（默认 ~/.skill-panel/，可用 --out 改），
+# 它自己的 .gitignore 是兜底，导出成独立仓库时跟着一起走。

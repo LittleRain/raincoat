@@ -32,7 +32,7 @@ This repository is used to:
 - `report-circle-weekly`
 - `skill-panel`
 
-See [skills/README.md](/Users/raincai/Documents/GitHub/raincoat/skills/README.md) for the catalog.
+See [skills/README.md](skills/README.md) for the catalog.
 
 ### Common Workflows
 
@@ -78,7 +78,7 @@ Raincoat 是一个用于孵化 AI Agent Skills 的仓库。
 - `report-circle-weekly`
 - `skill-panel`
 
-完整目录见 [skills/README.md](/Users/raincai/Documents/GitHub/raincoat/skills/README.md)。
+完整目录见 [skills/README.md](skills/README.md)。
 
 ### 常用流程
 
