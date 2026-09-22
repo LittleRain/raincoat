@@ -635,6 +635,8 @@ class SnapshotExitCodeTests(unittest.TestCase):
         self._orig_base = skillctl.BASE
         self._tmp = tempfile.mkdtemp()
         skillctl.BASE = self._tmp
+        # 产物落点也得钉住：否则「没有快照」取决于跑测人 ~/.skill-panel 里有没有东西
+        skillctl.set_artifact_root(self._tmp)
         # 只缺扫描快照，配置照旧 —— 否则先撞上「agents.json 缺失」，测不到这条。
         for name in CONFIG_FILES:
             shutil.copy(SKILL_DIR / name, Path(self._tmp) / name)
@@ -642,6 +644,7 @@ class SnapshotExitCodeTests(unittest.TestCase):
 
     def tearDown(self):
         skillctl.BASE = self._orig_base
+        skillctl.set_artifact_root(None)
         shutil.rmtree(self._tmp, ignore_errors=True)
 
     def _call(self, func, **kwargs):
@@ -944,6 +947,144 @@ class ConfigDocsTests(unittest.TestCase):
             with self.subTest(key=key):
                 self.assertRegex(SOURCE, rf'(ov\.get\("{key}"\)|"{key}" in ov)',
                                  f"overrides.json 的样例里有 {key}，但代码从没读过它")
+
+
+# ---------------------------------------------------------- 通用代码 vs 本地产物
+
+def _minimal_entity(name):
+    """够 do_check 打印一条的最小实体。只为本组测试服务。"""
+    return {
+        "name": name, "verdict": "pass", "real_path": f"/virtual/{name}",
+        "type": "local", "type_evidence": "test", "auto_created": False,
+        "entity_agents": ["agenta"], "link_agents": [], "agents": ["agenta"],
+        "file_count": 1, "total_bytes": 10, "link_count": 0,
+        "description": "fixture", "checks": [], "refs": [],
+        "unknown_state_agents": [],
+    }
+
+
+class ArtifactLayoutTests(unittest.TestCase):
+    """通用代码与本地产物必须分家：代码在 skill 目录里，产物在 $HOME/.skill-panel。
+
+    混着放的代价是具体的 —— 市场式安装的 skill 目录可能只读、插件升级整目录替换，
+    而快照与仪表盘里含本机路径和命中的凭据原文。
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.addCleanup(skillctl.set_artifact_root, None)
+        # 跑测人 shell 里的 SKILL_PANEL_OUT 会串味，先摘掉；测完原样放回
+        self._env = os.environ.pop("SKILL_PANEL_OUT", None)
+        self.addCleanup(self._restore_env)
+
+    def _restore_env(self):
+        if self._env is None:
+            os.environ.pop("SKILL_PANEL_OUT", None)
+        else:
+            os.environ["SKILL_PANEL_OUT"] = self._env
+
+    def test_default_root_is_not_inside_the_skill_dir(self):
+        root = skillctl.artifact_root()
+        self.assertEqual(root, skillctl.STATE_ROOT)
+        self.assertFalse(root == skillctl.BASE or root.startswith(skillctl.BASE + os.sep),
+                         f"默认落点落在 skill 目录里: {root}")
+
+    def test_no_product_path_is_built_from_the_skill_dir(self):
+        """除了那句「旧产物还在」的提示，代码里不许再有按 BASE 拼产物路径的地方。"""
+        offenders = [line.strip() for line in SOURCE.splitlines()
+                     if 'BASE, "data"' in line or 'BASE, "skill-panel.html"' in line]
+        self.assertEqual(offenders, [], f"产物路径又拼回 skill 目录了: {offenders}")
+
+    def test_env_var_overrides_default(self):
+        os.environ["SKILL_PANEL_OUT"] = self.tmp
+        self.assertEqual(skillctl.artifact_root(), self.tmp)
+
+    def test_explicit_override_beats_env_var(self):
+        os.environ["SKILL_PANEL_OUT"] = os.path.join(self.tmp, "env")
+        explicit = os.path.join(self.tmp, "explicit")
+        skillctl.set_artifact_root(explicit)
+        self.assertEqual(skillctl.artifact_root(), explicit)
+
+    def test_every_artifact_lives_under_one_root(self):
+        skillctl.set_artifact_root(self.tmp)
+        for path in (skillctl.artifact_json(), skillctl.artifact_html(),
+                     skillctl.trash_root(), skillctl.ledger_path()):
+            with self.subTest(path=path):
+                self.assertTrue(path.startswith(self.tmp + os.sep), path)
+
+    def test_ledger_and_trash_follow_the_root(self):
+        """台账与回收站也得跟着走 —— 否则 --out 会把状态悄悄漏回真实 HOME。"""
+        skillctl.set_artifact_root(self.tmp)
+        skillctl.save_ledger({"version": 1, "actions": [{"action": "disable"}]})
+        self.assertTrue((Path(self.tmp) / "ledger.json").is_file())
+        self.assertEqual(skillctl.load_ledger()["actions"][0]["action"], "disable")
+
+    def test_render_html_writes_under_the_root(self):
+        skillctl.set_artifact_root(self.tmp)
+        out = skillctl.render_html({"generated_at": "2026-01-01T00:00:00+08:00",
+                                    "entities": []})
+        self.assertEqual(out, skillctl.artifact_html())
+        self.assertEqual(os.path.dirname(out), self.tmp)
+        self.assertTrue(os.path.isfile(out))
+
+    def test_reader_reads_the_configured_root_not_the_skill_dir(self):
+        """读者与写者认同一个落点：快照放新落点能读到，放旧落点读不到。"""
+        base = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, base, ignore_errors=True)
+        self.addCleanup(setattr, skillctl, "BASE", skillctl.BASE)
+        skillctl.BASE = base
+        skillctl.set_artifact_root(self.tmp)
+        doc = {"generated_at": "2026-01-01T00:00:00+08:00", "host": "test",
+               "entities": [_minimal_entity("alpha-report")], "conflicts": [],
+               "skipped": [], "agent_stats": []}
+
+        legacy = Path(skillctl.legacy_artifact_paths()[0])
+        self.assertTrue(str(legacy).startswith(base), "旧落点得是临时目录，别写进真仓库")
+        legacy.parent.mkdir(parents=True, exist_ok=True)
+        legacy.write_text(json.dumps(doc), encoding="utf-8")
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(skillctl.do_check(argparse.Namespace(name="alpha-report")), 1)
+        self.assertIn("还没有扫描产物", err.getvalue())
+        self.assertIn(skillctl.artifact_json(), err.getvalue(),
+                      "提示里得写明找的是哪个路径，否则落点配错时没法自查")
+
+        path = Path(skillctl.artifact_json())
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(doc), encoding="utf-8")
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(skillctl.do_check(argparse.Namespace(name="alpha-report")), 0)
+        self.assertIn("alpha-report", out.getvalue())
+
+    def test_out_flag_works_on_both_sides_of_the_subcommand(self):
+        """`--out X scan` 与 `scan --out X` 必须等价。
+
+        argparse 解析子命令时在新建命名空间里补默认值再整体盖回父命名空间；
+        子命令那份默认值若不是 SUPPRESS，前面的 --out 会被一个 None 抹掉。
+        """
+        seen = []
+        original = skillctl.do_agents
+        skillctl.do_agents = lambda args: seen.append(skillctl.artifact_root()) or 0
+        self.addCleanup(setattr, skillctl, "do_agents", original)
+        for argv in (["agents", "--out", self.tmp], ["--out", self.tmp, "agents"]):
+            with self.subTest(argv=argv):
+                seen.clear()
+                saved = sys.argv
+                sys.argv = ["skillctl.py"] + argv
+                try:
+                    with contextlib.redirect_stdout(io.StringIO()):
+                        code = skillctl.main()
+                finally:
+                    sys.argv = saved
+                    skillctl.set_artifact_root(None)
+                self.assertEqual(code, 0)
+                self.assertEqual(seen, [self.tmp])
+
+    def test_pretty_path_collapses_home(self):
+        self.assertEqual(skillctl.pretty_path(skillctl.HOME + "/x"), "~/x")
+        self.assertEqual(skillctl.pretty_path("/tmp/elsewhere"), "/tmp/elsewhere")
 
 
 if __name__ == "__main__":

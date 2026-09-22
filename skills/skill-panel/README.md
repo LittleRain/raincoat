@@ -8,9 +8,9 @@
 
 **看是只读的，改是要点确认的。** 各 agent 的开关状态是读它们的配置文件得出来的，所以页面上的「已禁用 / 仅手动可用」不是猜测。写操作走两步：先干跑给你看要改哪个文件的哪个键、旧值是什么，加 `--yes` 才落盘；落盘前所有被替换或删除的东西先移进回收站，不真删。
 
-**页面脱离服务也能用** —— 双击 `skill-panel.html` 打开是只读模式，操作按钮只生成命令让你自己粘到终端。想要「点一下就生效」，跑 `serve`（只绑 `127.0.0.1`，带一次性 token）。
+**页面脱离服务也能用** —— 双击产物目录里的 `skill-panel.html`（默认 `~/.skill-panel/skill-panel.html`）打开是只读模式，操作按钮只生成命令让你自己粘到终端。想要「点一下就生效」，跑 `serve`（只绑 `127.0.0.1`，带一次性 token）。
 
-**状态是快照，不是每次实时读的。** `scan` 会把各 agent 的开关状态一并算进 `data/skills.json`，`state`、`check` 和页面展示的都是这份快照。所以改完开关（用 `disable` / `enable`，或自己动手改了配置文件）要**重跑 `scan`** 才会刷新。工具不会让你自己发现这件事：检测到开关文件比快照新时 `state` 会主动提示，`--yes` 落盘后也会提醒一句。
+**状态是快照，不是每次实时读的。** `scan` 会把各 agent 的开关状态一并算进 `~/.skill-panel/data/skills.json`，`state`、`check` 和页面展示的都是这份快照。所以改完开关（用 `disable` / `enable`，或自己动手改了配置文件）要**重跑 `scan`** 才会刷新。工具不会让你自己发现这件事：检测到开关文件比快照新时 `state` 会主动提示，`--yes` 落盘后也会提醒一句。
 
 ## 依赖
 
@@ -51,18 +51,38 @@ python3 scripts/skillctl.py plan --grades auto,semi,manual
 python3 scripts/skillctl.py serve --open
 ```
 
-## 产物
+## 通用代码与本地产物是分开的
+
+这个 skill 目录里只有**通用代码**：引擎、三个声明式配置表、页面模板、测试。所有**本地产物**（扫描快照、仪表盘、方案包、回收站、台账）都落在产物目录里，默认 `~/.skill-panel/`：
+
+```bash
+python3 scripts/skillctl.py scan --out /tmp/sp          # 本次换落点
+SKILL_PANEL_OUT=/tmp/sp python3 scripts/skillctl.py scan # 用环境变量换落点
+ls ~/.skill-panel/                                       # 默认落点
+```
+
+优先级：`--out` > `$SKILL_PANEL_OUT` > `~/.skill-panel/`。`--out` 放子命令前后都可以。
+
+**同一次 scan 之后，所有命令必须用同一个落点**，否则 `check` / `state` 会找不到快照（提示里会写明它找的是哪个路径）。
+
+为什么不写在 skill 目录里：市场式安装（`plugins/cache/<市场>/<插件>/<版本>/skills/…`）会被整目录替换，升级后产物就没了；装到只读位置（App 自带内置库）直接写失败；而且产物含本机路径和命中的凭据原文，本就不该跟代码一起走。
+
+| 落点 | 文件 | 说明 |
+|---|---|---|
+| `~/.skill-panel/` | `skill-panel.html` | 主产物。自包含单文件，数据内联，双击即开，可直接发人 |
+| | `data/skills.json` | 扫描数据。给 CLI 子命令和二次加工用 |
+| | `plan-<时间戳>.md` / `.sh` | 冲突处理方案包。md 给人看，sh 给机器跑（默认干跑） |
+| | `trash/` | 卸载回收站。只移不删 |
+| | `ledger.json` | 写操作台账 |
+
+留在 skill 目录里的，只有一个字都不用改也能跑的东西：
 
 | 文件 | 说明 |
 |---|---|
-| `skill-panel.html` | 主产物。自包含单文件，数据内联，双击即开，可直接发人 |
-| `data/skills.json` | 扫描数据。给 CLI 子命令和二次加工用 |
-| `plan-<时间戳>.md` / `.sh` | 冲突处理方案包。md 给人看，sh 给机器跑（默认干跑） |
 | `agents.json` | **agent 适配表** —— 加减 agent / 根目录 / 开关落点只改这里 |
 | `rules.json` | **校验规则表** —— 加规则、调阈值只改这里 |
 | `overrides.json` | **人工覆盖表** —— 自动判定不可能全对，这里是你纠正的唯一入口 |
-| `~/.skill-panel/trash/` | 卸载回收站。只移不删 |
-| `~/.skill-panel/ledger.json` | 写操作台账 |
+| `assets/dashboard_template.html` | 页面模板。数据由 `scan` 注入成 `skill-panel.html` |
 
 ## 四个核心概念
 
@@ -208,14 +228,14 @@ python3 scripts/skillctl.py serve --open
 ## 目录
 
 ```
-skill-panel/
+skill-panel/                       # 通用代码，跟着仓库走
 ├── SKILL.md                       # agent 读的操作说明
 ├── README.md                      # 本文件
 ├── skill.json                     # 元数据
 ├── agents.json                    # agent 适配表（含各 agent 的 toggle 落点声明）
 ├── rules.json                     # 校验规则表
 ├── overrides.json                 # 人工覆盖表
-├── .gitignore                     # 生成物的忽略规则（放这里是为了导出成独立仓库时跟着走）
+├── .gitignore                     # 兜底：万一有人把 --out 指回这里
 ├── scripts/skillctl.py            # 引擎（扫描 / 校验 / 状态 / 安装 / 写操作 / 直连服务），纯标准库
 ├── assets/dashboard_template.html # 页面模板，`/*__SKILL_DATA__*/null` 是数据注入点
 ├── references/
@@ -223,12 +243,12 @@ skill-panel/
 │   ├── agent-adapters.md          # 各 agent 载体形态 + 接入新 agent 的五步
 │   └── validation-rules.md        # 校验规则逐条说明
 ├── tests/test_skillctl.py         # 单元测试
-├── examples/                      # 怎么扩展三张配置表（不改代码）
-├── skill-panel.html               # ← 产物：自包含仪表盘（只读模式）
-├── plan-<时间戳>.md / .sh          # ← 产物：冲突处理方案包
-└── data/skills.json               # ← 产物：扫描数据
+└── examples/                      # 怎么扩展三张配置表（不改代码）
 
-~/.skill-panel/
+~/.skill-panel/                    # 本地产物，不进任何仓库（--out / $SKILL_PANEL_OUT 可改）
+├── skill-panel.html               # 自包含仪表盘（只读模式双击即开）
+├── data/skills.json               # 扫描数据
+├── plan-<时间戳>.md / .sh          # 冲突处理方案包
 ├── trash/<时间戳>-<agent>/        # 卸载的东西放这儿，不真删
 └── ledger.json                    # 每次真实写操作的留痕
 ```
@@ -246,7 +266,8 @@ python3 -m unittest discover -s skills/skill-panel/tests # 单元测试
 
 ## 已知空白 / 待确认
 
-- **产物写在 skill 自己的目录里**（`data/skills.json`、`skill-panel.html`、`plan-*`）。作为用户 skills 目录安装（`~/.workbuddy/skills/skill-panel`）没有影响；若装到只读位置（App 自带的内置库）会直接写失败，若装到会被整目录替换的市场插件缓存（`plugins/cache/<市场>/<插件>/<版本>/skills/…`）则升级后产物消失。当前版本没有 `--out` 这类开关，要固定到别处得自己加。
+- **产物落点可配，但不会跟着 skill 走。** 默认 `~/.skill-panel/`，`--out` / `$SKILL_PANEL_OUT` 可改。代价是：落点不同就等于换了一套快照与台账，A 机器扫的快照拿到 B 机器用之前得先确认落点一致；`check` / `state` 的报错里会写清它找的是哪个路径。
+- **旧版本的产物不会自动清理。** 升级前产物写在 skill 目录下（`data/skills.json`、`skill-panel.html`、`plan-*`）。新版本读的是新落点，旧文件留在原地既不报错也没人读，只会在 `scan` 结尾提示一句。确认新落点正常后自行删除。
 - **本机绝对路径规则只认 `/Users/` 与 `/home/`**（本机用户名取自 `$HOME` 的目录名）。在 Windows 上这条规则静默不生效 —— `C:\Users\…` 之类的死路径不会被报出来，其余功能不受影响。
 - **Bitto 是否支持软链：未知。** Bitto 自身用软链管理运行时版本，说明技术栈软链友好；但 skill / plugin 目录下未观测到任何软链。安装指令自动回退为复制。确认后改 `agents.json` 的 `supports_symlink`。
 - **AutoClaw 是否读项目级目录：未知。** 官方 `AGENTS.md` 只声明了托管目录一个，未发现项目级证据，默认按无处理。
@@ -256,5 +277,5 @@ python3 -m unittest discover -s skills/skill-panel/tests # 单元测试
 - **AutoClaw 的 `_store_meta.json` 里有 `skillId`（UUID）**，可以拿它做跨机器去重的稳定标识；当前版本还没用上，只作为来源证据展示。
 - **MiniMax / Bitto 的开关机制未证实。** 翻遍两家的配置目录没找到开关字段，暂时按「无原生开关」处理、回退到文件级隐藏。若后续发现原生开关，按 Codex 那一行的格式补进 `agents.json` 的 `toggle` 段即可。
 - **Claude 的插件级停用会不会连带影响 `~/.claude/skills/` 下的实体，未逐一实测。** 当前把 `~/.claude/skills/<name>` 当作一个「skills 目录插件」处理，键名规则与 WorkBuddy 一致（`frontmatter.name` 优先）。
-- **⚠️ 生成的 `skill-panel.html` 会原样印出命中的凭据** —— 那是它的功能（「凭据硬编码」规则要把证据摆给人看），但也意味着**分享这个 html 等于分享凭据**。它已在 `.gitignore` 里不会被提交；要外发前先确认没有 FAIL 级的凭据命中，或者直接跑 `check <skill>` 看单条。
+- **⚠️ 生成的 `skill-panel.html` 会原样印出命中的凭据** —— 那是它的功能（「凭据硬编码」规则要把证据摆给人看），但也意味着**分享这个 html 等于分享凭据**。它落在产物目录里（默认 `~/.skill-panel/`）不进仓库；要外发前先确认没有 FAIL 级的凭据命中，或者直接跑 `check <skill>` 看单条。
 - **`secret-literal` 的允许词表是整行生效的。** `allow_patterns` 里的 `\bsample\b`、`\bexample\b`、`\bfake\b` 等只要出现在该行任意位置，整行就不再报——变量名叫 `sample` 就足以豁免。这是为扫陌生仓库而做的放宽（别人的代码里满屏 `your_token`），代价是这类词会给真凭据让路。**不要把这份放宽词表用在自己文件的审计上**：`tests/test_skillctl.py` 里的自检走 patterns-only 路径，且样本按需拼接、不留字面量。是否收紧这条规则（改成只在取值位置豁免）待定，收紧会改变全盘扫描结果，需要重新过一遍基线。

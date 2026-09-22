@@ -27,8 +27,8 @@ de-duplication and the evidence, not the directory walk.
 
 1. **Scan.** `scripts/skillctl.py scan` walks every configured agent root,
    validates, and writes both the JSON data and the dashboard.
-2. **Look.** Open `skill-panel.html` (self-contained, no server) or ask for a
-   specific skill with `check` / `state`.
+2. **Look.** Open the generated `skill-panel.html` (self-contained, no server) or
+   ask for a specific skill with `check` / `state`.
 3. **Decide.** `install` produces a migration command; `plan` produces a
    conflict-resolution package.
 4. **Act, if asked.** `disable` / `enable` / `uninstall` are the only operations
@@ -44,6 +44,11 @@ python3 scripts/skillctl.py plan [--names a,b] [--grades auto,semi,manual]
 python3 scripts/skillctl.py restore              # list the trash
 python3 scripts/skillctl.py serve --open         # loopback-only, lets the page's buttons act
 ```
+
+Every command reads and writes `~/.skill-panel/` and never this skill directory.
+`--out <dir>` or `$SKILL_PANEL_OUT` moves that root; the CLI prints the resolved
+paths, and `check` / `state` name the snapshot path when one is missing. If a
+command says there is no scan, check that both commands resolved the same root.
 
 ## Read-only by default
 
@@ -73,13 +78,18 @@ was found for them.
 
 ## Outputs
 
+Everything below lands in the artifact root — `~/.skill-panel/` by default, or
+whatever `--out` / `$SKILL_PANEL_OUT` says. Nothing is written into the skill
+directory, which stays pure code so it survives a read-only or
+replaced-on-upgrade install.
+
 | Path | What |
 |---|---|
-| `skill-panel.html` | generated dashboard, self-contained, double-click to open |
-| `data/skills.json` | the scan, for the CLI and for further processing |
-| `plan-<timestamp>.md` / `.sh` | conflict-resolution package (the `.sh` is dry-run by default) |
-| `~/.skill-panel/trash/` | uninstall destination — moved, never deleted |
-| `~/.skill-panel/ledger.json` | write-operation audit trail |
+| `<root>/skill-panel.html` | generated dashboard, self-contained, double-click to open |
+| `<root>/data/skills.json` | the scan, for the CLI and for further processing |
+| `<root>/plan-<timestamp>.md` / `.sh` | conflict-resolution package (the `.sh` is dry-run by default) |
+| `<root>/trash/` | uninstall destination — moved, never deleted |
+| `<root>/ledger.json` | write-operation audit trail |
 
 The dashboard can be previewed in a browser. When the user should see it, present
 the generated `skill-panel.html` rather than pasting scan output into chat.

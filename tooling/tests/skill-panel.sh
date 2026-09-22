@@ -12,6 +12,10 @@ FIXTURE="$TEST_TMP/fixture"
 FAKE_HOME="$TEST_TMP/home"
 
 cp -R "$ROOT_DIR/skills/skill-panel" "$SKILL_DIR"
+# 拷出来的必须是「通用代码」那一份：产物不该住在 skill 目录里，
+# 这里也顺手清掉开发机上跑出来的残留，好让后面的「目录保持干净」断言有意义。
+find "$SKILL_DIR" -maxdepth 1 -name 'plan-*' -delete
+rm -rf "$SKILL_DIR/data" "$SKILL_DIR/skill-panel.html"
 mkdir -p "$FAKE_HOME" "$TEST_TMP/state"
 
 # 写操作的台账（ledger.json）与回收站（trash/）都落在 $HOME/.skill-panel/ 下。
@@ -150,21 +154,37 @@ cat >"$SKILL_DIR/agents.json" <<JSON
 JSON
 
 SCAN="$SKILL_DIR/scripts/skillctl.py"
-DATA="$SKILL_DIR/data/skills.json"
+# 产物落点：默认跟着 HOME 走，所以这里就是被隔离出来的那份 ~/.skill-panel/
+ARTIFACTS="$FAKE_HOME/.skill-panel"
+DATA="$ARTIFACTS/data/skills.json"
+DASH="$ARTIFACTS/skill-panel.html"
 
 # ------------------------------------------------------------------ 扫描
 
 "$PYTHON" "$SCAN" scan >"$TEST_TMP/scan.out"
 
 test -f "$DATA"
-test -f "$SKILL_DIR/skill-panel.html"
+test -f "$DASH"
+
+# 通用代码目录必须保持干净。产物写回 skill 目录，装到只读位置或会被整目录替换的
+# 市场插件缓存里就会丢；这条断言就是钉住「代码与产物分家」。
+for leaked in data skill-panel.html; do
+  if [ -e "$SKILL_DIR/$leaked" ]; then
+    echo "扫描产物写进了 skill 目录（$leaked），通用代码与本地产物没有分开"
+    exit 1
+  fi
+done
+if compgen -G "$SKILL_DIR/plan-*" > /dev/null; then
+  echo "方案包写进了 skill 目录"
+  exit 1
+fi
 
 # 页面必须是自包含且真的注入了数据，不是一个空模板
-if grep -q '/\*__SKILL_DATA__\*/null' "$SKILL_DIR/skill-panel.html"; then
+if grep -q '/\*__SKILL_DATA__\*/null' "$DASH"; then
   echo "dashboard was generated without injecting scan data"
   exit 1
 fi
-grep -q 'alpha-report' "$SKILL_DIR/skill-panel.html"
+grep -q 'alpha-report' "$DASH"
 
 "$PYTHON" - "$DATA" <<'PY'
 import json
@@ -266,8 +286,8 @@ fi
 # ------------------------------------------------------------------ 方案包
 
 "$PYTHON" "$SCAN" plan --grades auto,semi,manual >"$TEST_TMP/plan.out"
-PLAN_MD=$(ls "$SKILL_DIR"/plan-*.md | head -1)
-PLAN_SH=$(ls "$SKILL_DIR"/plan-*.sh | head -1)
+PLAN_MD=$(ls "$ARTIFACTS"/plan-*.md | head -1)
+PLAN_SH=$(ls "$ARTIFACTS"/plan-*.sh | head -1)
 test -f "$PLAN_MD"
 test -f "$PLAN_SH"
 grep -q 'alpha-report' "$PLAN_MD"
@@ -276,6 +296,36 @@ if grep -qE '^[^#]*\b(rm -rf|rm -f)\b' "$PLAN_SH"; then
   echo "默认方案包不应该包含任何删除动作"
   exit 1
 fi
+
+# ------------------------------------------------------------------ 产物落点可换
+
+ALT="$TEST_TMP/alt-root"
+"$PYTHON" "$SCAN" scan --no-html --out "$ALT" >"$TEST_TMP/scan-out.out"
+test -f "$ALT/data/skills.json"
+grep -q "$ALT/data/skills.json" "$TEST_TMP/scan-out.out" || {
+  echo "scan 没把落点打进输出，落点配错时人没法自查"
+  exit 1
+}
+
+# --out 放子命令前面也得认（argparse 的子命令默认值会盖回父命名空间）
+ALT2="$TEST_TMP/alt-root-2"
+"$PYTHON" "$SCAN" --out "$ALT2" scan --no-html >/dev/null
+test -f "$ALT2/data/skills.json"
+
+# 环境变量同样生效
+SKILL_PANEL_OUT="$TEST_TMP/env-root" "$PYTHON" "$SCAN" scan --no-html >/dev/null
+test -f "$TEST_TMP/env-root/data/skills.json"
+
+# 换了落点就得换一套状态：另一处没有快照时，报错必须说清找的是哪里
+"$PYTHON" "$SCAN" check alpha-report --out "$TEST_TMP/empty-root" \
+  >"$TEST_TMP/out-miss.out" 2>&1 && {
+  echo "空落点居然读到了快照"
+  exit 1
+}
+grep -q "$TEST_TMP/empty-root/data/skills.json" "$TEST_TMP/out-miss.out" || {
+  echo "缺快照的报错没写明找的是哪个路径"
+  exit 1
+}
 
 # ------------------------------------------------------------------ 原生开关
 
@@ -370,6 +420,23 @@ set -e
 
 test "$BROKEN_CODE" -eq 2
 grep -q 'json_nestd' "$TEST_TMP/broken.out"
+
+# ------------------------------------------------------------------ 旧产物要提示
+
+# 老版本把产物写在 skill 目录里。读的是新落点，旧文件既不会报错也没人读，
+# 所以必须主动说一句，否则人会以为「扫了却看不到」。
+mkdir -p "$SKILL_DIR/data"
+echo '{}' >"$SKILL_DIR/data/skills.json"
+"$PYTHON" "$SCAN" scan --no-html >"$TEST_TMP/legacy.out"
+grep -q '旧产物' "$TEST_TMP/legacy.out" || {
+  echo "skill 目录里的旧产物没有被提示"
+  exit 1
+}
+grep -q "$SKILL_DIR/data/skills.json" "$TEST_TMP/legacy.out" || {
+  echo "旧产物提示没写清是哪个文件"
+  exit 1
+}
+rm -rf "$SKILL_DIR/data"
 
 # ------------------------------------------------------------------ 单元测试
 

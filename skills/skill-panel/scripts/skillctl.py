@@ -13,15 +13,26 @@ skillctl.py — 本地 skill 面板（扫描家底 + 跨 agent 校验 + 迁移�
      就是系统自带的 3.9，注解里不许出现 PEP 604 的 `X | Y`（3.10+ 才有）。
      tests/test_skillctl.py 的 PythonFloorTests 钉住这条。
 
-目录约定：本脚本位于 <skill_root>/scripts/，配置与产物都在 <skill_root> 下 ——
-  agents.json / rules.json / overrides.json  声明式配置
-  assets/dashboard_template.html             页面模板
-  data/skills.json                           扫描数据
-  skill-panel.html                           生成的自包含仪表盘
+目录约定：本脚本位于 <skill_root>/scripts/。两类文件分开住 ——
+
+  [通用代码，随 skill 分发]  <skill_root>/
+    agents.json / rules.json / overrides.json  声明式配置
+    assets/dashboard_template.html             页面模板
+
+  [本地产物，每台机器各自生成]  落点见 artifact_root()
+    data/skills.json                           扫描快照
+    skill-panel.html                           生成的自包含仪表盘
+    plan-<时间戳>.md / .sh                     冲突处理方案包
+    trash/  ledger.json                        回收站与操作台账
+
+  产物不写进 skill 目录有三个理由：市场式安装的 skill 目录可能只读；插件升级整目录
+  替换，产物会跟着消失；产物含本机路径与命中的凭据原文，本就不该跟着代码走。
+  默认落 $HOME/.skill-panel/，用 --out <dir> 或 $SKILL_PANEL_OUT 改。
 
 用法：
-  skillctl.py scan                       # 扫描 + 校验 + 生成 data/skills.json 与 skill-panel.html
-  skillctl.py scan --no-html             # 只出 json
+  skillctl.py scan                       # 扫描 + 校验 + 写快照与仪表盘
+  skillctl.py scan --no-html             # 只写 json
+  skillctl.py scan --out /tmp/sp         # 产物换个落点（全局选项，放子命令后面）
   skillctl.py check <skill>              # 终端打印单个 skill 的校验详情
   skillctl.py state <skill>              # 各 agent 的启用状态
   skillctl.py install <skill> --to <agent>   # 终端打印结构化安装指令
@@ -1478,19 +1489,74 @@ def toggle_store_label(tg):
     return fb.get("file") or "—"
 
 
-# ---------------------------------------------------------------- 写操作层
+# ------------------------------------------------- 本地产物层 / 写操作层
+#
+# 这一层的东西全部是「本地产物」：只对本机有意义，不该跟着 skill 目录走。
+# 原因见文件头 —— 目录可能只读、升级会整目录替换、内容含本机路径与凭据原文。
+# 落点优先级：--out > $SKILL_PANEL_OUT > ~/.skill-panel
+STATE_ROOT = os.path.join(HOME, ".skill-panel")
+OUT_HELP = "本地产物落点；缺省 $SKILL_PANEL_OUT，再缺省就是 ~/.skill-panel"
+_ARTIFACT_OVERRIDE = None
 
-TRASH_ROOT = os.path.join(HOME, ".skill-panel", "trash")
-LEDGER_PATH = os.path.join(HOME, ".skill-panel", "ledger.json")
+
+def set_artifact_root(value):
+    """由 main() 用 --out 的值调用。测试也用它把落点钉到临时目录。"""
+    global _ARTIFACT_OVERRIDE
+    _ARTIFACT_OVERRIDE = value
+
+
+def artifact_root():
+    override = _ARTIFACT_OVERRIDE or os.environ.get("SKILL_PANEL_OUT")
+    if override:
+        return os.path.abspath(os.path.expanduser(override))
+    return STATE_ROOT
+
+
+def artifact_json():
+    """扫描快照。读它的地方和写它的地方必须是同一个函数，否则就是「写了没人读」。"""
+    return os.path.join(artifact_root(), "data", "skills.json")
+
+
+def artifact_html():
+    return os.path.join(artifact_root(), "skill-panel.html")
+
+
+# 旧版本把产物写在 skill 目录下的这两个位置。留着只为了提示一句，没有任何读写走它们。
+LEGACY_ARTIFACT_RELPATHS = ("data/skills.json", "skill-panel.html")
+
+
+def legacy_artifact_paths():
+    return tuple(os.path.join(BASE, *rel.split("/")) for rel in LEGACY_ARTIFACT_RELPATHS)
+
+
+def trash_root():
+    return os.path.join(artifact_root(), "trash")
+
+
+def ledger_path():
+    return os.path.join(artifact_root(), "ledger.json")
+
+
+def pretty_path(path):
+    """打印给别人看时把 HOME 折成 ~。"""
+    return path.replace(HOME, "~", 1) if path.startswith(HOME) else path
+
+
+def missing_snapshot_hint():
+    """没快照时的统一提示。把找过的路径写出来 —— 落点可配之后，
+    「明明扫过却说没有」第一个要排查的就是两边落点不一致。"""
+    return (f"还没有扫描产物（找的是 {pretty_path(artifact_json())}），"
+            f"先跑：skillctl.py scan")
 
 
 def load_ledger():
-    return load_json(LEDGER_PATH) or {"version": 1, "actions": []}
+    return load_json(ledger_path()) or {"version": 1, "actions": []}
 
 
 def save_ledger(doc):
-    os.makedirs(os.path.dirname(LEDGER_PATH), exist_ok=True)
-    with open(LEDGER_PATH, "w", encoding="utf-8") as f:
+    path = ledger_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
         json.dump(doc, f, ensure_ascii=False, indent=1)
 
 
@@ -1701,7 +1767,7 @@ def apply_ops(ops, dry_run=True):
 def trash_path_for(entity, agent_id):
     ts = datetime.now().strftime("%Y%m%d-%H%M%S")
     safe = re.sub(r"[^A-Za-z0-9_.\-]", "_", entity["name"])[:60]
-    return os.path.join(TRASH_ROOT, f"{ts}-{agent_id}", safe)
+    return os.path.join(trash_root(), f"{ts}-{agent_id}", safe)
 
 
 def plan_uninstall(agents_cfg, entity, agent_id):
@@ -1727,7 +1793,7 @@ def plan_uninstall(agents_cfg, entity, agent_id):
                      f"先改掉那些引用，或勾选「同时清理引用」再执行。")
     ops.append({"kind": "move", "src": entity["real_path"],
                 "dst": trash_path_for(entity, agent_id),
-                "desc": f"移入回收站 {TRASH_ROOT.replace(HOME, '~')}/（不删除，可 restore 还原）"})
+                "desc": f"移入回收站 {pretty_path(trash_root())}/（不删除，可 restore 还原）"})
     for r in others:
         ops.append({"kind": "move", "src": r["path"], "dst": trash_path_for(entity, r["agent"]),
                     "desc": f"同时移走 {r['agent']} 的失效引用"})
@@ -1923,13 +1989,14 @@ def do_scan(args):
         "entities": sorted(entities, key=lambda e: e["name"].lower()),
         "install_rule_ids": [r["id"] for r in install_rules],
         "excluded": agents_cfg.get("excluded", []),
-        "paths": {"trash": TRASH_ROOT, "ledger": LEDGER_PATH},
+        "paths": {"trash": trash_root(), "ledger": ledger_path(),
+                  "artifacts": artifact_root()},
         "ledger": (load_ledger().get("actions") or [])[-50:],
     }
 
-    out_dir = os.path.join(BASE, "data")
+    out_dir = os.path.dirname(artifact_json())
     os.makedirs(out_dir, exist_ok=True)
-    json_path = os.path.join(out_dir, "skills.json")
+    json_path = artifact_json()
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(doc, f, ensure_ascii=False, indent=1)
 
@@ -1947,29 +2014,47 @@ def do_scan(args):
     print(f"  校验  阻塞 {stats['fail_entities']}  提示 {stats['warn_entities']}"
           f"  通过 {stats['pass_entities']}")
     print(f"  断链 {stats['broken_links']}")
-    print(f"  → {os.path.relpath(json_path, BASE)}")
+    print(f"  → {pretty_path(json_path)}")
     if not args.no_html:
         tpl = os.path.join(BASE, "assets", "dashboard_template.html")
         if os.path.isfile(tpl):
-            print(f"  → {os.path.relpath(render_html(doc), BASE)}")
+            print(f"  → {pretty_path(render_html(doc))}")
         else:
             print("  （未找到 assets/dashboard_template.html，跳过页面生成）")
+    warn_legacy_artifacts()
+
+
+def warn_legacy_artifacts():
+    """skill 目录里躺着旧版产物时提醒一句。
+
+    产物换落点之后，读的是新位置；旧文件留在原地不会报错，只会让人以为
+    「明明扫过却看不到」。这里只提示，不动手删。
+    """
+    legacy = [p for p in (legacy_artifact_paths() + tuple(
+        sorted(globmod.glob(os.path.join(BASE, "plan-*")))))
+        if os.path.exists(p)]
+    if not legacy:
+        return
+    more = f" 等 {len(legacy)} 个" if len(legacy) > 1 else ""
+    print(f"  注意：skill 目录里还有旧产物 {pretty_path(legacy[0])}{more}。"
+          f"产物已改落 {pretty_path(artifact_root())}，确认后自行删除旧的。")
 
 
 def render_html(doc):
     with open(os.path.join(BASE, "assets", "dashboard_template.html"), "r", encoding="utf-8") as f:
         tpl = f.read()
     payload = json.dumps(doc, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
-    out = os.path.join(BASE, "skill-panel.html")
+    out = artifact_html()
+    os.makedirs(os.path.dirname(out), exist_ok=True)
     with open(out, "w", encoding="utf-8") as f:
         f.write(tpl.replace("/*__SKILL_DATA__*/null", payload))
     return out
 
 
 def do_check(args):
-    doc = load_json(os.path.join(BASE, "data", "skills.json"))
+    doc = load_json(artifact_json())
     if not doc:
-        print("还没有扫描产物，先跑：skillctl.py scan", file=sys.stderr)
+        print(missing_snapshot_hint(), file=sys.stderr)
         return 1
     q = args.name.lower()
     hits = [e for e in doc["entities"] if e["name"].lower() == q] or \
@@ -2006,9 +2091,9 @@ def do_check(args):
 
 
 def do_install(args):
-    doc = load_json(os.path.join(BASE, "data", "skills.json"))
+    doc = load_json(artifact_json())
     if not doc:
-        print("还没有扫描产物，先跑：skillctl.py scan", file=sys.stderr)
+        print(missing_snapshot_hint(), file=sys.stderr)
         return 1
     hits = [e for e in doc["entities"] if e["name"].lower() == args.name.lower()]
     if not hits:
@@ -2064,14 +2149,14 @@ def build_plan(doc, agents_cfg, names=None, include_grades=("auto",)):
           f"",
           f"> 脚本默认干跑，不会动任何文件。确认清单无误后把 `DRY_RUN=1` 改成 `DRY_RUN=0` 再执行。",
           f"> 标「可自动」的组会直接替换；标「半自动」的组需要额外设 `CONFIRM_SEMI=1` 才会动手。",
-          f"> 所有被替换掉的副本都会先移进 `{TRASH_ROOT.replace(HOME, '~')}/`，不删除，可随时还原。",
+          f"> 所有被替换掉的副本都会先移进 `{pretty_path(trash_root())}/`，不删除，可随时还原。",
           f""]
     sh = ["#!/usr/bin/env bash",
           "# 由 skillctl.py plan 生成。默认干跑。",
           "set -uo pipefail",
           f'DRY_RUN="${{DRY_RUN:-1}}"',
           f'CONFIRM_SEMI="${{CONFIRM_SEMI:-0}}"',
-          f'TRASH="{TRASH_ROOT}/plan-{ts}"',
+          f'TRASH="{trash_root()}/plan-{ts}"',
           f'CANON_TS="{ts}"',
           'say(){ printf "%s\\n" "$*"; }',
           'run(){ if [ "$DRY_RUN" = "1" ]; then say "  [dry-run] $*"; else say "  [执行] $*"; "$@"; fi; }',
@@ -2131,12 +2216,11 @@ def build_plan(doc, agents_cfg, names=None, include_grades=("auto",)):
     sh.append('say "完成。回滚方式：把 $TRASH 里的目录移回原位即可。"')
     md += ["---", "",
            "## 回滚", "",
-           f"把 `{TRASH_ROOT.replace(HOME,'~')}/plan-{ts}/` 里的目录移回原位即可。",
-           f"本次动作同时记入 `{LEDGER_PATH.replace(HOME,'~')}`。"]
-    out_dir = os.path.join(BASE, "data")
-    os.makedirs(out_dir, exist_ok=True)
-    md_path = os.path.join(BASE, f"plan-{ts}.md")
-    sh_path = os.path.join(BASE, f"plan-{ts}.sh")
+           f"把 `{pretty_path(trash_root())}/plan-{ts}/` 里的目录移回原位即可。",
+           f"本次动作同时记入 `{pretty_path(ledger_path())}`。"]
+    os.makedirs(artifact_root(), exist_ok=True)
+    md_path = os.path.join(artifact_root(), f"plan-{ts}.md")
+    sh_path = os.path.join(artifact_root(), f"plan-{ts}.sh")
     with open(md_path, "w", encoding="utf-8") as f:
         f.write("\n".join(md))
     with open(sh_path, "w", encoding="utf-8") as f:
@@ -2156,7 +2240,7 @@ KIND_LABEL = {"identical": "逐字一致", "meta-only": "仅元数据不同",
 # ---------------------------------------------------------------- CLI 命令
 
 def _load_all():
-    doc = load_json(os.path.join(BASE, "data", "skills.json"))
+    doc = load_json(artifact_json())
     agents_cfg = load_json(os.path.join(BASE, "agents.json")) or {"agents": []}
     validate_agents_config(agents_cfg)
     return doc, agents_cfg
@@ -2165,15 +2249,14 @@ def _load_all():
 def do_state(args):
     doc, agents_cfg = _load_all()
     if not doc:
-        print("还没有扫描产物，先跑：skillctl.py scan", file=sys.stderr)
+        print(missing_snapshot_hint(), file=sys.stderr)
         return 1
     hits = [e for e in doc["entities"] if args.name.lower() in e["name"].lower()]
     if not hits:
         print(f"没找到匹配「{args.name}」的 skill", file=sys.stderr)
         return 1
     meta = {a["id"]: a for a in doc["agent_stats"]}
-    stale, newest = stale_toggle_source(agents_cfg,
-                                       os.path.join(BASE, "data", "skills.json"))
+    stale, newest = stale_toggle_source(agents_cfg, artifact_json())
     if stale:
         print(f"⚠️  开关文件已经比扫描结果新（{newest.replace(HOME, '~')}），"
               f"下面显示的是上一次 scan 的状态。重跑 `skillctl.py scan` 才会刷新。",
@@ -2198,7 +2281,7 @@ STATE_LABEL_CN = {"on": "启用", "model_off": "仅手动可用", "partial_model
 def _do_write_action(args, action):
     doc, agents_cfg = _load_all()
     if not doc:
-        print("还没有扫描产物，先跑：skillctl.py scan", file=sys.stderr)
+        print(missing_snapshot_hint(), file=sys.stderr)
         return 1
     _ALL_ENTITIES[:] = doc["entities"]
     try:
@@ -2273,7 +2356,7 @@ def do_restore(args):
 def do_plan(args):
     doc, agents_cfg = _load_all()
     if not doc:
-        print("还没有扫描产物，先跑：skillctl.py scan", file=sys.stderr)
+        print(missing_snapshot_hint(), file=sys.stderr)
         return 1
     if args.grades:
         grades = tuple(x.strip() for x in args.grades.split(",") if x.strip())
@@ -2284,15 +2367,15 @@ def do_plan(args):
     names = set(args.names.split(",")) if args.names else None
     r = build_plan(doc, agents_cfg, names=names, include_grades=grades)
     print(f"处理方案包已生成：")
-    print(f"  清单  {os.path.relpath(r['md'], BASE)}   （{r['groups']} 组："
+    print(f"  清单  {pretty_path(r['md'])}   （{r['groups']} 组："
           f"可自动 {r['auto']}　半自动 {r['semi']}　需人工 {r['manual']}）")
-    print(f"  脚本  {os.path.relpath(r['sh'], BASE)}   （默认干跑，DRY_RUN=0 才真跑）")
+    print(f"  脚本  {pretty_path(r['sh'])}   （默认干跑，DRY_RUN=0 才真跑）")
     return 0
 
 
 def do_agents(args):
     agents_cfg = load_json(os.path.join(BASE, "agents.json")) or {"agents": []}
-    doc = load_json(os.path.join(BASE, "data", "skills.json"))
+    doc = load_json(artifact_json())
     stats = {s["id"]: s for s in (doc or {}).get("agent_stats", [])}
     print(f"{'id':<10} {'名称':<20} {'注册':>4} {'快捷':>4} {'自有':>4}  {'快捷方式':<8} {'开关粒度':<8} 开关落点")
     print("-" * 118)
@@ -2347,7 +2430,7 @@ def make_handler(docbox, agents_cfg, token, html_path):
 
     def fresh():
         """每次请求都按磁盘现状取数据 —— 否则在终端重扫之后，页面还在用进程启动时的旧快照。"""
-        p = os.path.join(BASE, "data", "skills.json")
+        p = artifact_json()
         try:
             if os.path.getmtime(p) > docbox.get("mtime", 0):
                 latest = load_json(p)
@@ -2471,14 +2554,15 @@ def do_serve(args):
 
     doc, agents_cfg = _load_all()
     if not doc:
-        print("还没有扫描产物，先跑：skillctl.py scan", file=sys.stderr)
+        print(missing_snapshot_hint(), file=sys.stderr)
         return 1
-    html_path = os.path.join(BASE, "skill-panel.html")
+    html_path = artifact_html()
     if not os.path.isfile(html_path):
-        print("还没有页面，先跑：skillctl.py scan", file=sys.stderr)
+        print(f"还没有页面（找的是 {pretty_path(html_path)}），先跑：skillctl.py scan",
+              file=sys.stderr)
         return 1
     token = secrets.token_urlsafe(24)
-    json_path = os.path.join(BASE, "data", "skills.json")
+    json_path = artifact_json()
     try:
         docbox = {"doc": doc, "mtime": os.path.getmtime(json_path)}
     except OSError:
@@ -2493,7 +2577,7 @@ def do_serve(args):
         print(f"直连服务已启动（只绑本机回环，进程号 {os.getpid()}）")
         print(f"  {url}")
         print(f"  这次会话的一次性令牌：{token}")
-        print(f"  所有写操作默认干跑；卸载一律先移入 {TRASH_ROOT.replace(HOME, '~')}/")
+        print(f"  所有写操作默认干跑；卸载一律先移入 {pretty_path(trash_root())}/")
         print(f"  Ctrl-C 停止。")
         if args.open:
             threading.Timer(0.6, lambda: webbrowser.open(url)).start()
@@ -2508,27 +2592,34 @@ def main():
     ap = argparse.ArgumentParser(prog="skillctl",
                                  description="本地 skill 管理器（扫描 / 校验 / 迁移 / 开关）")
     sub = ap.add_subparsers(dest="cmd")
-    p = sub.add_parser("scan", help="扫描 + 校验 + 生成产物")
+    # 产物落点是全局选项：子命令前后都能写。两份 parser 都要挂，且子命令那份的默认值
+    # 必须是 SUPPRESS —— argparse 解析子命令时在新建的命名空间里补默认值，再整体盖回
+    # 父命名空间。默认值不压掉的话，`--out X scan` 里的 X 会被一个 None 抹掉。
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--out", metavar="DIR", default=argparse.SUPPRESS, help=OUT_HELP)
+    ap.add_argument("--out", metavar="DIR", help=OUT_HELP)
+
+    p = sub.add_parser("scan", help="扫描 + 校验 + 生成产物", parents=[common])
     p.add_argument("--no-html", action="store_true", help="只生成 json")
     p.set_defaults(func=do_scan)
-    p = sub.add_parser("check", help="查看单个 skill 的校验详情")
+    p = sub.add_parser("check", help="查看单个 skill 的校验详情", parents=[common])
     p.add_argument("name")
     p.set_defaults(func=do_check)
-    p = sub.add_parser("state", help="查看某个 skill 在各 agent 的启用状态")
+    p = sub.add_parser("state", help="查看某个 skill 在各 agent 的启用状态", parents=[common])
     p.add_argument("name")
     p.set_defaults(func=do_state)
-    p = sub.add_parser("install", help="生成安装指令")
+    p = sub.add_parser("install", help="生成安装指令", parents=[common])
     p.add_argument("name")
     p.add_argument("--to", help="目标 agent id，缺省列出所有尚未持有的 agent")
     p.set_defaults(func=do_install)
-    p = sub.add_parser("agents", help="列出 agent 适配表（含开关机制）")
+    p = sub.add_parser("agents", help="列出 agent 适配表（含开关机制）", parents=[common])
     p.set_defaults(func=do_agents)
-    p = sub.add_parser("plan", help="生成冲突处理方案包（清单 + 脚本）")
+    p = sub.add_parser("plan", help="生成冲突处理方案包（清单 + 脚本）", parents=[common])
     p.add_argument("--names", help="逗号分隔的冲突名，缺省全部")
     p.add_argument("--auto-only", action="store_true", help="只纳入可自动处理的组")
     p.add_argument("--grades", help="逗号分隔的处理级别，可选 auto/semi/manual（缺省 auto,semi）")
     p.set_defaults(func=do_plan)
-    p = sub.add_parser("serve", help="起本地直连服务，页面按钮可直接执行")
+    p = sub.add_parser("serve", help="起本地直连服务，页面按钮可直接执行", parents=[common])
     p.add_argument("--port", type=int, default=8799)
     p.add_argument("--open", action="store_true", help="自动打开浏览器")
     p.set_defaults(func=do_serve)
@@ -2536,7 +2627,7 @@ def main():
     for cmd, helptext in (("disable", "禁用某个 agent 下的 skill（写它自己的原生开关）"),
                           ("enable", "恢复启用"),
                           ("uninstall", "卸载（移入回收站，不删除）")):
-        p = sub.add_parser(cmd, help=helptext)
+        p = sub.add_parser(cmd, help=helptext, parents=[common])
         p.add_argument("name")
         p.add_argument("--agent", required=True, help="目标 agent id")
         p.add_argument("--yes", action="store_true", help="真正执行（缺省为干跑预览）")
@@ -2546,12 +2637,14 @@ def main():
         p.set_defaults(func={"disable": do_disable, "enable": do_enable,
                              "uninstall": do_uninstall}[cmd])
 
-    p = sub.add_parser("restore", help="查看回收站台账 / 还原指引")
+    p = sub.add_parser("restore", help="查看回收站台账 / 还原指引", parents=[common])
     p.add_argument("path", nargs="?", help="回收站里的路径")
     p.add_argument("--list", action="store_true", help="列出全部卸载记录")
     p.set_defaults(func=do_restore)
 
     args = ap.parse_args()
+    # 落点必须在任何命令之前定下来 —— 读快照和写快照必须落在同一个地方。
+    set_artifact_root(getattr(args, "out", None))
     fn = getattr(args, "func", None)
     if not fn:
         # 不带子命令是用法错误，不能返回 0 —— 否则 `skillctl.py && 下一步`
