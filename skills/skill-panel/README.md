@@ -235,3 +235,5 @@ python3 -m unittest discover -s skills/skill-panel/tests # 单元测试
 - **AutoClaw 的 `_store_meta.json` 里有 `skillId`（UUID）**，可以拿它做跨机器去重的稳定标识；当前版本还没用上，只作为来源证据展示。
 - **MiniMax / Bitto 的开关机制未证实。** 翻遍两家的配置目录没找到开关字段，暂时按「无原生开关」处理、回退到文件级隐藏。若后续发现原生开关，按 Codex 那一行的格式补进 `agents.json` 的 `toggle` 段即可。
 - **Claude 的插件级停用会不会连带影响 `~/.claude/skills/` 下的实体，未逐一实测。** 当前把 `~/.claude/skills/<name>` 当作一个「skills 目录插件」处理，键名规则与 WorkBuddy 一致（`frontmatter.name` 优先）。
+- **⚠️ 生成的 `skill-panel.html` 会原样印出命中的凭据** —— 那是它的功能（「凭据硬编码」规则要把证据摆给人看），但也意味着**分享这个 html 等于分享凭据**。它已在 `.gitignore` 里不会被提交；要外发前先确认没有 FAIL 级的凭据命中，或者直接跑 `check <skill>` 看单条。
+- **`secret-literal` 的允许词表是整行生效的。** `allow_patterns` 里的 `\bsample\b`、`\bexample\b`、`\bfake\b` 等只要出现在该行任意位置，整行就不再报——变量名叫 `sample` 就足以豁免。这是为扫陌生仓库而做的放宽（别人的代码里满屏 `your_token`），代价是这类词会给真凭据让路。**不要把这份放宽词表用在自己文件的审计上**：`tests/test_skillctl.py` 里的自检走 patterns-only 路径，且样本按需拼接、不留字面量。是否收紧这条规则（改成只在取值位置豁免）待定，收紧会改变全盘扫描结果，需要重新过一遍基线。

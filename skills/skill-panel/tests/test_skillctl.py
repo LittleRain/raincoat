@@ -266,6 +266,38 @@ class RulesConfigTests(unittest.TestCase):
 
 # ------------------------------------------------------------------ 凭据安全
 
+# 凭据形状的样本一律按需拼接，绝不写成字面量。这样本文件里不存在任何一行
+# 「键名 = 长随机值」，下面的自检才敢直接断言「零命中」，而不是给自己开例外。
+#
+# 这里踩过一次真坑：样本原本写成字面量、且用的是**真实**的 GitLab PAT，变量名又叫
+# sample —— 恰好命中规则的整行豁免词 `\bsample\b`，于是自检全绿地把它放进了仓库，
+# 最后是 GitHub secret scanning 在推送时拦下的。两个教训各自独立：
+# 样本不能用真值；自检不能复用规则的放宽词表。
+SAMPLE_KEY_NAME = "gitlab_" + "token"
+SAMPLE_KEY_VALUE = "AbCd1234EfGh5678IjKl"
+
+
+def sample_secret_line():
+    """返回一行「键名 = 长随机值」形状的合成样本。"""
+    return f'{SAMPLE_KEY_NAME} = "{SAMPLE_KEY_VALUE}"'
+
+
+# 生成物不在交付面内，扫它们必然假阳性：仪表盘的职责就是把命中凭据的**原文**印出来当证据，
+# 所以它含有凭据是设计如此。清单与仓库 .gitignore 里 skill-panel 的那几条一一对应。
+GENERATED_DIRS = ("data", "__pycache__")
+GENERATED_FILES = ("skill-panel.html",)
+GENERATED_PREFIXES = ("plan-",)
+
+
+def is_generated(rel):
+    """rel 是相对 skill 根的 PurePosixPath。"""
+    if any(part in GENERATED_DIRS for part in rel.parts):
+        return True
+    if rel.name in GENERATED_FILES:
+        return True
+    return rel.name.startswith(GENERATED_PREFIXES)
+
+
 class SecretLiteralTests(unittest.TestCase):
     """这条规则管的是别人，所以更要先管住自己 —— 本 skill 是要开放出去的。"""
 
@@ -274,8 +306,7 @@ class SecretLiteralTests(unittest.TestCase):
 
     def test_patterns_flag_a_hardcoded_token(self):
         rule = self._secret_rule()
-        sample = 'gitlab_token = "AbCd1234EfGh5678IjKl"'  # 合成值；别换回真串
-        hits = [p for p in rule["patterns"] if re.search(p, sample)]
+        hits = [p for p in rule["patterns"] if re.search(p, sample_secret_line())]
         self.assertTrue(hits, "凭据字面量没被检出，规则失效了")
 
     def test_allow_patterns_accept_env_reads_and_placeholders(self):
@@ -291,21 +322,58 @@ class SecretLiteralTests(unittest.TestCase):
                 self.assertFalse(any(re.search(p, sample) for p in rule["patterns"]),
                                  f"显式占位/环境变量写法被误报: {sample}")
 
+    def test_self_audit_is_not_defeated_by_broad_allow_words(self):
+        """把曾经的失效模式钉住：变量名叫 sample，凭据就被整行豁免掉了。
+
+        规则自己的 allow_patterns 是给「扫别人的仓库」用的，放宽是对的（别人的代码里
+        满屏 your_token / dummy_secret）。但放宽带不进自检 —— 这里同时断言两件事：
+        规则确实会豁免它（已知放宽），而自检走的 patterns-only 路径照样命中。
+        """
+        disguised = "sample = " + sample_secret_line()
+        rule = self._secret_rule()
+        self.assertTrue(any(re.search(a, disguised) for a in rule["allow_patterns"]),
+                        "规则不再豁免 sample 行 —— 说明放宽词表变了，请复核本注释")
+        self.assertTrue(any(re.search(p, disguised) for p in rule["patterns"]),
+                        "自检路径漏掉了样本，回退成复用 allow_patterns 了")
+
     def test_own_files_contain_no_secret_literal(self):
+        """零容忍：本 skill 的任何文件里都不许出现凭据形状，测试文件也不例外。
+
+        刻意**不**复用 rule["allow_patterns"] —— 那张表是给扫别人的仓库用的，
+        含 `\\bsample\\b` 这类整行豁免词，复用它就等于给自己留了后门（见文件头注释）。
+        需要占位符时写 `${VAR}` 或 `<NAME>`，它们本来就不匹配 patterns。
+        """
         rule = self._secret_rule()
         offenders = []
         for path in sorted(SKILL_DIR.rglob("*")):
             if not path.is_file() or path.name == "rules.json":
                 continue  # rules.json 里是检测模式本身，不是凭据
-            if path.suffix in (".pyc",) or "data" in path.relative_to(SKILL_DIR).parts:
+            if path.suffix == ".pyc":
+                continue
+            rel = path.relative_to(SKILL_DIR)
+            if is_generated(rel):
                 continue
             for lineno, line in enumerate(path.read_text(encoding="utf-8",
                                                          errors="ignore").splitlines(), 1):
-                for pattern in rule["patterns"]:
-                    if re.search(pattern, line) and not any(
-                            re.search(a, line) for a in rule["allow_patterns"]):
-                        offenders.append(f"{path.relative_to(SKILL_DIR)}:{lineno}")
-        self.assertEqual(offenders, [], f"本 skill 的文件里检出疑似凭据: {offenders}")
+                if any(re.search(p, line) for p in rule["patterns"]):
+                    offenders.append(f"{rel.as_posix()}:{lineno}")
+        self.assertEqual(offenders, [],
+                         f"本 skill 的文件里检出疑似凭据（测试文件也不豁免）: {offenders}")
+
+    def test_generated_skip_list_matches_gitignore(self):
+        """自检跳过的生成物必须与 .gitignore 对齐，否则两边各自漂移。
+
+        放宽了跳过范围就等于给凭据开后门；收窄了则会误报。只在仓库内跑这条。
+        """
+        gitignore = SKILL_DIR.parent.parent / ".gitignore"
+        if not gitignore.is_file():
+            self.skipTest("不在仓库内，跳过 .gitignore 对齐检查")
+        lines = [l.strip() for l in gitignore.read_text(encoding="utf-8").splitlines()
+                 if l.strip().startswith("skills/skill-panel/")]
+        for entry in GENERATED_DIRS + GENERATED_FILES + GENERATED_PREFIXES:
+            with self.subTest(entry=entry):
+                self.assertTrue(any(entry in l for l in lines),
+                                f".gitignore 未覆盖 {entry}，跳过清单已漂移")
 
 
 # ------------------------------------------------------------------ frontmatter
