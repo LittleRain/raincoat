@@ -125,6 +125,12 @@ them instead of patching `skillctl.py`:
 - `rules.json` — the validation rules and their thresholds.
 - `overrides.json` — manual corrections to automated judgements.
 
+These three are *this skill's own* files, not state scanned off the machine, so
+a broken one is a hard error: if `rules.json` fails to parse, `scan` prints the
+path and the JSON error and exits 2. It must not fall back to an empty rule
+table — that would report every skill as clean, and an all-green scan on a
+machine nobody cleaned is worse than a crash.
+
 `references/agent-adapters.md` has the five-step recipe for wiring up a new
 agent plus the per-agent quirks (AutoClaw's two carriers, Bitto's three, the
 `superpowers` upstream clone). `references/agent-toggle-matrix.md` is the

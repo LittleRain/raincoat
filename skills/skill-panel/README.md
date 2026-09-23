@@ -94,6 +94,20 @@ ls ~/.skill-panel/                                       # 默认落点
 | `overrides.json` | **人工覆盖表** —— 自动判定不可能全对，这里是你纠正的唯一入口 |
 | `assets/dashboard_template.html` | 页面模板。数据由 `scan` 注入成 `skill-panel.html` |
 
+三张配置表是**本 skill 自己的**文件，不是从机器上扫来的状态，所以坏了会**直接报错退出**，不会「当没配过」继续跑：
+
+```text
+$ python3 scripts/skillctl.py scan
+rules.json（…/rules.json）不是合法 JSON：Expecting value: line 1 column 14 (char 13)
+  改回去，或者删掉这个文件让它走内置默认值。
+```
+
+（退出码 2，不会继续扫描。）
+
+这条是刻意从严的。拿读别人状态文件那种「坏了就跳过」的兜底来读自己的配置，会造出最坏的一种失败：`rules.json` 里多一个逗号 → 空规则表 → 全场 PASS，输出跟「这台机器真干净」长得一模一样，唯一的信号是 FAIL 数突然归零 —— 而那正是没人会去怀疑的信号。
+
+同理，规则表里写了 `detector` 却没有对应实现的名字也会在启动时被拒（dispatch 是 if/elif 链，拼错的名字会掉进最后的分支拿到空证据，那条规则从此永远不报任何东西，而表里它明明写着）。
+
 ## 四个核心概念
 
 ### 1. 条目 vs 唯一实体

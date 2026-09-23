@@ -90,6 +90,11 @@ def expand(p: str) -> str:
 
 
 def load_json(path: str, default=None):
+    """读**别人的**状态文件：agent 的 store、manifest、快照。坏了就当没有。
+
+    这类文件本来就是「扫到什么算什么」，某一台机器上少一个、坏一个都正常，
+    跳过它继续跑才是对的。
+    """
     if not os.path.isfile(path):
         return default
     try:
@@ -99,12 +104,44 @@ def load_json(path: str, default=None):
         return default
 
 
+def load_config_json(path: str, what: str, default=None):
+    """读**本 skill 自己的**配置表（agents/rules/overrides）。坏了必须响亮失败。
+
+    用 load_json 的 `or {}` 兜底会造出最坏的一种失败：rules.json 写坏一个逗号
+    → 拿到空规则表 → 全场 PASS，一个 FAIL 都不报。面板和 `check` 的输出跟
+    「这台机器真干净」长得一模一样，只有 FAIL 数突然归零这一个信号，而那正是
+    没人会去怀疑的信号。配置表和状态文件的区别在于：前者缺了就是不可用。
+    """
+    if not os.path.isfile(path):
+        return default
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except ValueError as exc:
+        raise ConfigError(f"{what}（{pretty_path(path)}）不是合法 JSON：{exc}\n"
+                          f"  改回去，或者删掉这个文件让它走内置默认值。")
+    except OSError as exc:
+        raise ConfigError(f"{what}（{pretty_path(path)}）读不了：{exc}")
+
+
 # ---------------------------------------------------------------- 配置校验
 
 KNOWN_ROOT_KINDS = {"user_skills", "shared_pool", "market", "builtin", "plugins"}
 KNOWN_WRITERS = {"json_nested", "toml_section", "cli", "filemove"}
 KNOWN_GRANULARITIES = {"skill", "plugin", "none"}
 KNOWN_VALUE_MODES = {"scalar", "object_field"}
+
+# 校验期就认的 detector 名单。写法与上面几张表一致：dispatch 是 if/elif 链，
+# 拼错一个名字不会报错，只会掉进最后的 else 拿到空证据 —— 那条规则从此永远
+# 不报任何东西，而规则表里它明明写着。所以这里要能先把它挡下来。
+# 单测会拿这份名单跟源码里真实出现的 `det == "x"` 逐一比对，防止两边漂开。
+KNOWN_DETECTORS = {
+    "missing_skill_md", "empty_dir", "missing_frontmatter", "missing_name",
+    "missing_description", "regex_lines", "foreign_abs_path", "local_abs_path",
+    "broken_script_ref", "broken_symlink", "oversize_text", "short_description",
+    "name_dir_mismatch", "plugin_root_skill_md", "missing_plugin_json",
+    "symlink_target_unknown",
+}
 
 
 class ConfigError(Exception):
@@ -178,7 +215,12 @@ def validate_agents_config(cfg) -> None:
 
 
 def validate_rules_config(cfg) -> None:
-    """校验规则表。detector 是否真被实现由测试负责，这里只查结构。"""
+    """校验规则表：结构 + detector 是不是一个真有实现的名字。
+
+    单测另外拿 KNOWN_DETECTORS 跟源码里真实出现的 `det == "x"` 比对，两边一起
+    保证「表里写的」和「代码里跑的」不会漂开 —— 只靠一边的话，改代码忘改常量
+    （或反之）都会让这张校验表自己变成谎言。
+    """
     rules = (cfg or {}).get("rules")
     if not isinstance(rules, list) or not rules:
         raise ConfigError("rules.json 的 rules 必须是非空数组")
@@ -200,6 +242,10 @@ def validate_rules_config(cfg) -> None:
         for key in ("label", "detector"):
             if not r.get(key):
                 errors.append(f"{rid}: 缺 {key}")
+        det = r.get("detector")
+        if det and det not in KNOWN_DETECTORS:
+            errors.append(f"{rid}: detector={det!r} 没有对应实现"
+                          f"（可选值 {sorted(KNOWN_DETECTORS)}）—— 拼错的规则会永远静默不报")
 
     if errors:
         raise ConfigError("rules.json 配置错误：\n  - " + "\n  - ".join(errors))
@@ -2384,9 +2430,9 @@ _ALL_ENTITIES = []
 # ---------------------------------------------------------------- 主流程
 
 def do_scan(args):
-    agents_cfg = load_json(os.path.join(BASE, "agents.json")) or {"agents": []}
-    rules_cfg = load_json(os.path.join(BASE, "rules.json")) or {"rules": []}
-    overrides = load_json(os.path.join(BASE, "overrides.json")) or {}
+    agents_cfg = load_config_json(os.path.join(BASE, "agents.json"), "agents.json") or {"agents": []}
+    rules_cfg = load_config_json(os.path.join(BASE, "rules.json"), "rules.json") or {"rules": []}
+    overrides = load_config_json(os.path.join(BASE, "overrides.json"), "overrides.json") or {}
     validate_agents_config(agents_cfg)
     validate_rules_config(rules_cfg)
 
@@ -2620,8 +2666,8 @@ def do_install(args):
     if not hits:
         print(f"没找到 skill「{args.name}」", file=sys.stderr)
         return 1
-    agents_cfg = load_json(os.path.join(BASE, "agents.json"))
-    rules_cfg = load_json(os.path.join(BASE, "rules.json")) or {}
+    agents_cfg = load_config_json(os.path.join(BASE, "agents.json"), "agents.json")
+    rules_cfg = load_config_json(os.path.join(BASE, "rules.json"), "rules.json") or {}
     install_rules = [r for r in (rules_cfg.get("rules") or [])
                      if r.get("scope") == "install"]
     entity = hits[0]
@@ -2898,7 +2944,7 @@ KIND_LABEL = {"identical": "逐字一致", "meta-only": "仅元数据不同",
 
 def _load_all():
     doc = load_json(artifact_json())
-    agents_cfg = load_json(os.path.join(BASE, "agents.json")) or {"agents": []}
+    agents_cfg = load_config_json(os.path.join(BASE, "agents.json"), "agents.json") or {"agents": []}
     validate_agents_config(agents_cfg)
     return doc, agents_cfg
 
@@ -3031,7 +3077,7 @@ def do_plan(args):
 
 
 def do_agents(args):
-    agents_cfg = load_json(os.path.join(BASE, "agents.json")) or {"agents": []}
+    agents_cfg = load_config_json(os.path.join(BASE, "agents.json"), "agents.json") or {"agents": []}
     doc = load_json(artifact_json())
     stats = {s["id"]: s for s in (doc or {}).get("agent_stats", [])}
     print(f"{'id':<10} {'名称':<20} {'注册':>4} {'快捷':>4} {'自有':>4}  {'快捷方式':<8} {'开关粒度':<8} 开关落点")

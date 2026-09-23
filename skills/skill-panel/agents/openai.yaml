@@ -1,0 +1,10 @@
+interface:
+  display_name: "Skill Panel"
+  short_description: "Inventory, validate and de-duplicate the skills installed across local agents"
+  default_prompt: "Use $skill-panel to scan the skills installed across my local agents and open the generated dashboard."
+
+policy:
+  # 不隐式唤起：scan 会往 ~/.skill-panel/ 写快照与仪表盘，而 disable / uninstall /
+  # resolve 会改到别的 agent 的配置和目录。这几件事都该由人先开口，
+  # 不该因为一句话像是在聊 skill 就被自动触发。
+  allow_implicit_invocation: false

@@ -272,7 +272,8 @@ class AgentsConfigTests(unittest.TestCase):
 
 class RulesConfigTests(unittest.TestCase):
 
-    implementation = set(re.findall(r'det == "([a-z_]+)"', SOURCE))
+    # 带 if/elif 前缀，免得把注释里引用这个写法的句子也当成一条实现扫进来。
+    implementation = set(re.findall(r'(?:if|elif) det == "([a-z_]+)"', SOURCE))
 
     def test_real_config_passes_validation(self):
         skillctl.validate_rules_config(RULES)
@@ -294,6 +295,33 @@ class RulesConfigTests(unittest.TestCase):
             if rule["detector"] not in self.implementation:
                 undeclared.append(f"{rule['id']} → {rule['detector']}")
         self.assertEqual(undeclared, [], f"这些规则没有对应实现: {undeclared}")
+
+    def test_declared_detector_whitelist_matches_the_source(self):
+        """校验用的白名单必须恰好等于「源码里真有分支的」那批名字。
+
+        只钉一边会漂：改了 dispatch 忘了改常量，合法规则被拒；改了常量忘了改
+        dispatch，拼错的名字又被放行。两边对起来才有意义。
+
+        install 期的规则不走实体校验那条 if/elif 链（它们由 install_note 按 id
+        取用），所以白名单里会多出这一批 —— 一并纳入比较，否则这条会永远红。
+        """
+        install_detectors = {r["detector"] for r in RULES["rules"]
+                             if r.get("scope") == "install"}
+        self.assertEqual(skillctl.KNOWN_DETECTORS,
+                         self.implementation | install_detectors,
+                         "KNOWN_DETECTORS 与源码里真实 dispatch 的分支不一致")
+
+    def test_unknown_detector_is_rejected_not_silently_skipped(self):
+        """dispatch 是 if/elif 链，拼错的 detector 会掉进 else 拿到空证据。
+
+        那条规则从此永远不报任何东西，而规则表里它明明写着 —— 这是比报错更贵
+        的一种失败，因为没人会去查一条「从来没命中过」的规则。
+        """
+        cfg = {"rules": [{"id": "typo-rule", "level": "warn", "kind": "other",
+                          "label": "拼错的", "detector": "regex_linez"}]}
+        with self.assertRaises(skillctl.ConfigError) as ctx:
+            skillctl.validate_rules_config(cfg)
+        self.assertIn("regex_linez", str(ctx.exception))
 
     def test_install_scope_rules_are_consumed_by_the_install_path(self):
         """install 期规则的 id 必须真能被 install_note 取到 —— 连字符写成下划线就取不到。"""
@@ -1114,6 +1142,46 @@ class ConfigDocsTests(unittest.TestCase):
                 with self.subTest(example=table, key=key):
                     self.assertRegex(SOURCE, rf'(ov\.get\("{key}"\)|"{key}" in ov)',
                                      f"overrides.json 的 {table} 里有 {key}，但代码从没读过它")
+
+
+class ConfigHardFailureTests(unittest.TestCase):
+    """本 skill 自己的配置表坏了必须响亮失败，不能静默降级。
+
+    用读别人状态文件那种「坏了就当没有」的兜底来读自己的配置，会造出最坏的
+    一种失败：rules.json 里多一个逗号 → 空规则表 → 全场 PASS。`check` 的输出
+    跟「这台机器真干净」长得一模一样，唯一信号是 FAIL 数突然归零 —— 而那正是
+    没人会去怀疑的信号。
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.addCleanup(setattr, skillctl, "BASE", skillctl.BASE)
+        skillctl.BASE = self.tmp
+        skillctl.set_artifact_root(os.path.join(self.tmp, "art"))
+        self.addCleanup(skillctl.set_artifact_root, None)
+        for name in CONFIG_FILES:
+            shutil.copy(SKILL_DIR / name, os.path.join(self.tmp, name))
+
+    def _break(self, name):
+        with open(os.path.join(self.tmp, name), "w", encoding="utf-8") as fh:
+            fh.write("{ 这不是合法 JSON")
+
+    def test_broken_config_fails_loudly_instead_of_reporting_nothing(self):
+        for name in CONFIG_FILES:
+            with self.subTest(config=name):
+                shutil.copy(SKILL_DIR / name, os.path.join(self.tmp, name))
+                self._break(name)
+                with self.assertRaises(skillctl.ConfigError) as ctx:
+                    skillctl.do_scan(argparse.Namespace(no_html=True))
+                self.assertIn(name, str(ctx.exception),
+                              f"{name} 坏了却没在报错里点名它")
+                shutil.copy(SKILL_DIR / name, os.path.join(self.tmp, name))
+
+    def test_a_missing_config_file_is_not_an_error(self):
+        """缺文件不等于坏文件：没这个文件就用内置默认值，别拿它当错误。"""
+        self.assertIsNone(skillctl.load_config_json(
+            os.path.join(self.tmp, "never-existed.json"), "never-existed"))
 
 
 # ---------------------------------------------------------- 页面给出的命令
