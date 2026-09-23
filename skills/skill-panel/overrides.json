@@ -10,5 +10,14 @@
     }
   },
 
-  "by_entity": {}
+  "by_entity": {},
+
+  "_by_conflict_comment": "按冲突组纠正。有些组没有正确答案 —— 两份都还在用、或者你就是决定先不动。标了 ignore 的组不进「待处理」，面板的数字才不会一直红着没人信。想再动它，把这一条删掉重扫即可。",
+  "_by_conflict_example": {
+    "some-skill": {
+      "ignore": true,
+      "note": "两份都留着：壳是按各 agent 的调用方式定制的，合并会让一侧失效"
+    }
+  },
+  "by_conflict": {}
 }

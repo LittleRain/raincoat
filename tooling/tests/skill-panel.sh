@@ -79,6 +79,92 @@ description: Use when generating the beta business report from tabular input.
 Version B body, changed after the copy was made.
 SKILL
 
+# 正文一致但文件集不同的一对 —— 应判 same-body-diff-files（半自动）。
+# 专供批量去重那条路：一组的 SKILL.md 逐字一致，只有 agenta 那边多长了一个脚本，
+# 也就是「复制过去之后各自又长了东西」的典型形态。
+mkdir -p "$FIXTURE/agenta/skills/gamma-report/scripts" "$FIXTURE/agentb/skills/gamma-report"
+cat >"$FIXTURE/agenta/skills/gamma-report/SKILL.md" <<'SKILL'
+---
+name: gamma-report
+description: Use when checking that a copy which grew extra files counts as semi-automatic.
+---
+
+# Gamma Report
+
+Shared body; one side carries an extra script.
+SKILL
+echo 'print("gamma")' >"$FIXTURE/agenta/skills/gamma-report/scripts/extra.py"
+cp "$FIXTURE/agenta/skills/gamma-report/SKILL.md" \
+   "$FIXTURE/agentb/skills/gamma-report/SKILL.md"
+
+# 断链：一份指向空气的快捷方式 + 一份好副本。这一档没有取舍 —— 把链指回正本不涉及任何
+# 内容取舍（后面本来什么都没有），工具该自己修好。实测本机 ~/.claude/skills/find-skills
+# 就是这种形态，而它以前还会被选成正本。
+mkdir -p "$FIXTURE/agentb/skills/link-broken"
+cat >"$FIXTURE/agentb/skills/link-broken/SKILL.md" <<'SKILL'
+---
+name: link-broken
+description: Use when checking that a dangling copy gets repointed at the good one.
+---
+
+# Link Broken
+
+The real copy lives on the other side.
+SKILL
+ln -s "$FIXTURE/agenta/gone/link-broken" "$FIXTURE/agenta/skills/link-broken"
+
+# 软链农场：目录里只有一条软链、没有自己的文件。这一档**不能**自动处理 —— 那些链可能各自
+# 指向不同地方，换掉就是丢映射。要让正文真的不同才落进 divergent 那一档，所以这条链指向
+# 的是另一个文件（内容与 agentb 那份不一样）。
+cat >"$FIXTURE/agenta/elsewhere-link-farm.md" <<'SKILL'
+---
+name: link-farm
+description: Use when checking that a link-only copy is left for a human to decide.
+---
+
+# Link Farm
+
+Body written somewhere else entirely.
+SKILL
+mkdir -p "$FIXTURE/agentb/skills/link-farm"
+cat >"$FIXTURE/agentb/skills/link-farm/SKILL.md" <<'SKILL'
+---
+name: link-farm
+description: Use when checking that a link-only copy is left for a human to decide.
+---
+
+# Link Farm
+
+The real copy lives on the other side.
+SKILL
+mkdir -p "$FIXTURE/agenta/skills/link-farm"
+ln -s "$FIXTURE/agenta/elsewhere-link-farm.md" \
+   "$FIXTURE/agenta/skills/link-farm/SKILL.md"
+
+# 真分叉 + 一条断链：两侧正文都真有改动，不能因为「还有条断链」就把整组当可自动。
+mkdir -p "$FIXTURE/agenta/skills/mixed-report" "$FIXTURE/agentb/skills/mixed-report"
+cat >"$FIXTURE/agenta/skills/mixed-report/SKILL.md" <<'SKILL'
+---
+name: mixed-report
+description: Use when checking that real divergence is never auto resolved in tests.
+---
+
+# Mixed Report
+
+Version A body, changed on this side.
+SKILL
+cat >"$FIXTURE/agentb/skills/mixed-report/SKILL.md" <<'SKILL'
+---
+name: mixed-report
+description: Use when checking that real divergence is never auto resolved in tests.
+---
+
+# Mixed Report
+
+Version B body, changed on that side instead.
+SKILL
+ln -s "$FIXTURE/agenta/gone/mixed-report" "$FIXTURE/pool/skills/mixed-report"
+
 # FAIL: 目录里有文件但没有 SKILL.md
 mkdir -p "$FIXTURE/agenta/skills/no-skill-md"
 echo "just notes" >"$FIXTURE/agenta/skills/no-skill-md/notes.md"
@@ -170,7 +256,7 @@ test -f "$DASH"
 # 市场插件缓存里就会丢；这条断言就是钉住「代码与产物分家」。
 for leaked in data skill-panel.html; do
   if [ -e "$SKILL_DIR/$leaked" ]; then
-    echo "扫描产物写进了 skill 目录（$leaked），通用代码与本地产物没有分开"
+    echo "扫描产物写进了 skill 目录（${leaked}），通用代码与本地产物没有分开"
     exit 1
   fi
 done
@@ -185,6 +271,12 @@ if grep -q '/\*__SKILL_DATA__\*/null' "$DASH"; then
   exit 1
 fi
 grep -q 'alpha-report' "$DASH"
+
+# 批量去重必须带「含半自动」开关，并且真的把开关状态传给后端。这条防的是老毛病
+# 复发：半自动档曾经只让单组点，前端把批量过滤硬编码成 grade==auto，后端明明支持。
+grep -q 'id="bulkSemi"' "$DASH" || { echo "批量栏没有「含半自动」开关"; exit 1; }
+grep -q 'state.withSemi' "$DASH" || { echo "批量去重没读「含半自动」开关"; exit 1; }
+grep -q 'allow_semi' "$DASH" || { echo "页面没把 allow_semi 传给后端"; exit 1; }
 
 "$PYTHON" - "$DATA" <<'PY'
 import json
@@ -204,8 +296,9 @@ def failures(entity):
     return [c["label"] for c in entity["checks"] if c["level"] == "fail"]
 
 
-expected = {"alpha-report", "beta-report", "no-skill-md",
-            "no-frontmatter", "leaky", "switchable"}
+expected = {"alpha-report", "beta-report", "gamma-report", "no-skill-md",
+            "no-frontmatter", "leaky", "switchable", "link-broken", "link-farm",
+            "mixed-report"}
 missing = expected - set(by_name)
 assert not missing, f"扫描漏掉了这些 fixture: {sorted(missing)}"
 
@@ -233,11 +326,57 @@ assert group["nature"] == "duplicate", group["nature"]
 assert group["kind"] == "identical", group["kind"]
 assert group["prescription"]["grade"] == "auto", group["prescription"]
 
-# 正文已分叉 → 必须交人工，工具不得自作主张
+# 正文已分叉 → 必须交人工：工具不替你挑，但要给得起「选哪一份」的候选与推荐。
+# （以前这档只给一条 diff 命令；现在页面上给的是选正本的卡片，所以不再需要 needs_diff。）
 beta = conflicts["beta-report"]
 assert beta["kind"] == "divergent", beta["kind"]
 assert beta["prescription"]["grade"] == "manual", beta["prescription"]
-assert beta["prescription"]["needs_diff"] is True
+assert not beta["prescription"]["needs_diff"], beta["prescription"]
+assert beta["prescription"]["shape"], beta["prescription"]
+assert len(beta["prescription"]["candidates"]) == beta["count"], beta["prescription"]["candidates"]
+assert beta["prescription"]["canonical"], beta["prescription"]
+assert all(c["mtime"] > 0 for c in beta["prescription"]["candidates"]), \
+    beta["prescription"]["candidates"]
+
+# 正文一致但文件集不同 → 半自动。它必须给出正本与改写清单，
+# 否则页面上的批量去重就算勾了「含半自动」也无从下手。
+gamma = conflicts["gamma-report"]
+assert gamma["kind"] == "same-body-diff-files", gamma["kind"]
+assert gamma["prescription"]["grade"] == "semi", gamma["prescription"]
+assert gamma["prescription"]["canonical"], gamma["prescription"]
+assert gamma["prescription"]["rewrite"], gamma["prescription"]
+# 半自动档的正文是逐字一致的，不能给它贴「正文各有改动」的标签（那是分叉档的说法）。
+assert not gamma["prescription"].get("shape"), gamma["prescription"].get("shape")
+assert gamma["prescription"]["canonical_why"].startswith("文件最全"), \
+    gamma["prescription"]["canonical_why"]
+
+# 断链那份：不能当正本，正本得落在真副本上，而且链在哪儿要记下来（不然没处修）。
+broken = conflicts["link-broken"]
+assert broken["prescription"]["shape"] == "broken", broken["prescription"]
+bad = [e for e in broken["entities"] if not e["path_exists"]]
+assert len(bad) == 1, [e["path_exists"] for e in broken["entities"]]
+assert bad[0]["link_at"], bad[0]
+assert broken["prescription"]["canonical"] != bad[0]["real_path"], broken["prescription"]
+cands = {c["path"]: c for c in broken["prescription"]["candidates"]}
+assert cands[bad[0]["real_path"]]["usable"] is False, cands[bad[0]["real_path"]]
+assert "不存在" in cands[bad[0]["real_path"]]["why"], cands[bad[0]["real_path"]]
+
+# 软链农场那份：同样不能当正本（目录里全是软链、没有自己的文件）。
+farm = conflicts["link-farm"]
+assert farm["prescription"]["shape"] == "symlink-farm", farm["prescription"]
+link_only = [e for e in farm["entities"]
+             if not e["real_file_count"] and e["link_file_count"]]
+assert len(link_only) == 1, [e["real_file_count"] for e in farm["entities"]]
+farm_cands = {c["path"]: c for c in farm["prescription"]["candidates"]}
+assert farm_cands[link_only[0]["real_path"]]["usable"] is False, \
+    farm_cands[link_only[0]["real_path"]]
+assert "没有自己的文件" in farm_cands[link_only[0]["real_path"]]["why"], \
+    farm_cands[link_only[0]["real_path"]]
+
+# 真分叉 + 断链：正本、候选、形态都要对，重点是它必须仍然算「交人工」。
+mixed = conflicts["mixed-report"]
+assert mixed["prescription"]["grade"] == "manual", mixed["prescription"]
+assert mixed["prescription"]["shape"] == "broken", mixed["prescription"]
 
 # 三类必现 FAIL，且都要带证据
 for name, needle in (("no-skill-md", "SKILL.md"),
@@ -519,6 +658,241 @@ grep -q 'resolve-conflict' "$LEDGER" || { echo "台账没记这次去重"; exit 
 # 连点第二下必须是空操作 —— 否则第二次会把正本自己换掉
 "$PYTHON" "$SCAN" resolve --names alpha-report --yes >"$TEST_TMP/resolve-again.out"
 [ -d "$CANON" ] && [ ! -L "$CANON" ] || { echo "重复执行把正本弄没了"; exit 1; }
+
+# ------------------------------------------------------------------ 批量去重（含半自动）
+
+# 页面上的批量「一键去重」走的就是这里 —— 同名多组一起传，半自动由 allow_semi
+# 决定带不带。三条硬约束照旧：不带 --semi 时半自动组一个字节都不许动、带了也先
+# 干跑、落盘后原副本（连同它独有的文件）必须整份躺在回收站里。
+
+SEMI_DUP="$FIXTURE/agentb/skills/gamma-report"
+if [ -L "$SEMI_DUP" ]; then
+  echo "fixture 前提不成立：$SEMI_DUP 应当是实体目录"
+  exit 1
+fi
+
+"$PYTHON" "$SCAN" resolve --names alpha-report,gamma-report \
+  >"$TEST_TMP/resolve-batch-nosemi.out" 2>&1
+if [ -L "$SEMI_DUP" ]; then
+  echo "没加 --semi 的批量去重动了半自动组"
+  exit 1
+fi
+grep -q '半自动' "$TEST_TMP/resolve-batch-nosemi.out" || {
+  echo "批量去重跳过半自动组时没说明原因"
+  exit 1
+}
+
+"$PYTHON" "$SCAN" resolve --names alpha-report,gamma-report --semi \
+  >"$TEST_TMP/resolve-batch-dry.out"
+grep -q '干跑预览' "$TEST_TMP/resolve-batch-dry.out" || {
+  echo "批量 + --semi 缺省不是干跑"
+  exit 1
+}
+[ -d "$SEMI_DUP" ] && [ ! -L "$SEMI_DUP" ] || { echo "批量干跑就换了半自动组的副本"; exit 1; }
+
+"$PYTHON" "$SCAN" resolve --names alpha-report,gamma-report --semi --yes \
+  >"$TEST_TMP/resolve-batch.out"
+[ -L "$SEMI_DUP" ] || { echo "批量 + --semi 没把半自动组的副本换成快捷方式"; exit 1; }
+[ -f "$SEMI_DUP/SKILL.md" ] || { echo "半自动组的快捷方式读不到内容"; exit 1; }
+# 方向是规则的一部分，不是偶然：半自动档的正本必须落在内容更全的那份上（agenta 多一个
+# 脚本）。反了就等于把多出来的文件推进回收站、留一份残缺的当源 —— 实测按时间挑就会这样。
+case "$(readlink "$SEMI_DUP")" in
+  */agenta/skills/gamma-report) ;;
+  *) echo "半自动组的正本没落在内容更全的那份上：$(readlink "$SEMI_DUP")"; exit 1 ;;
+esac
+# 被留下的那份得真的还带着多出来的文件，不然「正本」只是名义上的
+[ -f "$SEMI_DUP/scripts/extra.py" ] || { echo "半自动组正本丢了独有文件"; exit 1; }
+
+SEMI_TRASHED=$(find "$FAKE_HOME/.skill-panel/trash" -name gamma-report -type d 2>/dev/null | head -1)
+[ -n "$SEMI_TRASHED" ] || { echo "半自动组的原副本没进回收站"; exit 1; }
+[ -f "$SEMI_TRASHED/SKILL.md" ] || { echo "回收站里的半自动副本内容不全"; exit 1; }
+# 「可还原」这三个字的实底：被换走那一份的独有文件不许凭空消失 —— 要么跟着正本
+# 还在原地，要么整份躺在回收站里。正本落哪一边由评分并列时的路径顺序决定，所以
+# 这里不断言方向，只断言「东西还在」。
+if [ ! -f "$FIXTURE/agenta/skills/gamma-report/scripts/extra.py" ] \
+   && [ ! -f "$SEMI_TRASHED/scripts/extra.py" ]; then
+  echo "半自动组独有的文件既不在正本也不在回收站里"
+  exit 1
+fi
+
+grep -q 'gamma-report' "$LEDGER" || { echo "台账没记半自动那一组"; exit 1; }
+
+# ------------------------------------------------- 需人工组：指定正本 → 执行 → 撤销
+
+# 正文已分叉那档的出口。三条必须成立：留哪份由人定；定了工具就把剩下的搬移换链做掉；
+# 做完能一键退回去（没有退路的「一键」不该给）。
+
+BETA_CANON="$FIXTURE/agenta/skills/beta-report"
+BETA_DUP="$FIXTURE/agentb/skills/beta-report"
+
+# 1) 组外路径必须拒绝。这是唯一的写入口，请求里的路径不能信 —— 否则一个畸形请求就能把
+#    任意目录移进回收站、再在原地建一个指向任意位置的快捷方式。
+"$PYTHON" "$SCAN" resolve --names beta-report \
+  --canonical "beta-report=$FIXTURE/agentb/skills/not-in-this-group" \
+  >"$TEST_TMP/resolve-outside.out" 2>&1
+grep -q '不属于这一组' "$TEST_TMP/resolve-outside.out" || {
+  echo "指定组外路径没被拒绝"; exit 1
+}
+[ -d "$BETA_DUP" ] && [ ! -L "$BETA_DUP" ] || { echo "被拒绝的请求动了磁盘"; exit 1; }
+
+# 2) 不给正本时必须原地不动 —— 留哪份是人的取舍，工具不替他挑。
+"$PYTHON" "$SCAN" resolve --names beta-report >"$TEST_TMP/resolve-manual.out" 2>&1
+grep -q '正文已分叉' "$TEST_TMP/resolve-manual.out" || { echo "需人工组没说明为什么不动"; exit 1; }
+[ -d "$BETA_DUP" ] && [ ! -L "$BETA_DUP" ] || { echo "需人工组没指定正本就自己动了"; exit 1; }
+
+# 3) 等价写法要能对上。这里用一条父目录软链构造「同一个目录的两种写法」——
+#    macOS 的 /tmp→/private/tmp、带软链的家目录都是这一类，实测会误判成「不属于这一组」。
+ln -s "$FIXTURE" "$TEST_TMP/fixture-alias"
+"$PYTHON" "$SCAN" resolve --names beta-report \
+  --canonical "beta-report=$TEST_TMP/fixture-alias/agenta/skills/beta-report" \
+  >"$TEST_TMP/resolve-alias.out" 2>&1
+grep -q '不属于这一组' "$TEST_TMP/resolve-alias.out" && {
+  echo "同一份副本的等价写法被误判成组外路径"; exit 1
+}
+grep -q '干跑预览' "$TEST_TMP/resolve-alias.out" || { echo "等价写法没进到干跑预览"; exit 1; }
+[ -d "$BETA_DUP" ] && [ ! -L "$BETA_DUP" ] || { echo "干跑就动了磁盘"; exit 1; }
+
+# 4) 指定「另一份」（刻意选不是推荐的那一份）。回归：以前 rewrite 是照扫描期的推荐正本算的，
+#    用户改选之后，那个列表恰好把用户选中的那份列成待替换对象 —— 于是静默什么都不做。
+"$PYTHON" "$SCAN" resolve --names beta-report \
+  --canonical "beta-report=$BETA_CANON" --yes >"$TEST_TMP/resolve-manual-yes.out"
+[ -L "$BETA_DUP" ] || { echo "指定正本后没把另一份换成快捷方式"; exit 1; }
+[ -d "$BETA_CANON" ] && [ ! -L "$BETA_CANON" ] || { echo "被指定为正本的那份反被换掉了"; exit 1; }
+[ -f "$BETA_DUP/SKILL.md" ] || { echo "换出来的快捷方式读不到正本内容"; exit 1; }
+grep -q '你指定的' "$TEST_TMP/resolve-manual-yes.out" || { echo "没标出这是用户指定的正本"; exit 1; }
+
+# 5) 撤销：先干跑（磁盘不能动），再落盘（磁盘回到去重前）。
+"$PYTHON" "$SCAN" undo >"$TEST_TMP/undo-dry.out"
+[ -L "$BETA_DUP" ] || { echo "撤销干跑就把快捷方式撤掉了"; exit 1; }
+"$PYTHON" "$SCAN" undo --yes >"$TEST_TMP/undo.out"
+[ -d "$BETA_DUP" ] && [ ! -L "$BETA_DUP" ] || { echo "撤销后原位没变回实体目录"; exit 1; }
+[ -f "$BETA_DUP/SKILL.md" ] || { echo "撤销后内容没回来"; exit 1; }
+
+# 6) 再撤一次 = 往历史里再退一步。同一批不能被撤两遍 —— 台账里每批做完就标了 undone。
+#    到这里历史是「alpha → gamma → beta」，撤掉 beta 之后这一步该退到 gamma。
+"$PYTHON" "$SCAN" undo --yes >"$TEST_TMP/undo-twice.out" 2>&1
+[ -d "$BETA_DUP" ] && [ ! -L "$BETA_DUP" ] || { echo "第二次撤销把已还原的又改回去了"; exit 1; }
+grep -q 'gamma-report' "$TEST_TMP/undo-twice.out" || {
+  echo "第二次撤销没往历史里退一步（应回到上一次批量）"; exit 1
+}
+grep -q 'beta-report' "$TEST_TMP/undo-twice.out" && {
+  echo "同一批被撤了两遍"; exit 1
+}
+# 撤到没得撤时是正常结果，不是错误
+"$PYTHON" "$SCAN" undo --yes >"$TEST_TMP/undo-empty.out" 2>&1
+[ $? -eq 0 ] || { echo "没有可撤销的记录时不该报错退出"; exit 1; }
+
+# ------------------------------------------------- 断链修复，以及它不该解锁的范围
+
+# 断链那一档不需要人指定正本 —— 后面什么都没有，把链指回正本不涉及取舍。这是唯一一条
+# 「需人工档里工具自己动手」的例外，所以边界要卡死：有真内容要取舍的一律仍然交人工。
+
+LINK_BROKEN_AT="$FIXTURE/agenta/skills/link-broken"
+
+[ -L "$LINK_BROKEN_AT" ] || { echo "fixture 前提不成立：$LINK_BROKEN_AT 应当是断链"; exit 1; }
+
+"$PYTHON" "$SCAN" resolve --names link-broken >"$TEST_TMP/resolve-linkbroken-dry.out" 2>&1
+grep -q '干跑预览' "$TEST_TMP/resolve-linkbroken-dry.out" || {
+  echo "断链组没进干跑（这一档不该要求人工指定正本）"; exit 1
+}
+[ -L "$LINK_BROKEN_AT" ] && [ ! -e "$LINK_BROKEN_AT" ] || { echo "干跑把断链改掉了"; exit 1; }
+
+"$PYTHON" "$SCAN" resolve --names link-broken --yes >"$TEST_TMP/resolve-linkbroken.out" 2>&1
+[ -f "$LINK_BROKEN_AT/SKILL.md" ] || { echo "断链没被指回正本"; exit 1; }
+# 后面本来什么都没有，所以这次修复不该往回收站搬任何东西
+find "$FAKE_HOME/.skill-panel/trash" -name link-broken -type d 2>/dev/null | grep -q . && {
+  echo "断链修复不该往回收站搬东西"; exit 1
+}
+[ -d "$FIXTURE/agentb/skills/link-broken" ] || { echo "正本被动了"; exit 1; }
+
+# 撤销要明说这条不还原，别让人以为撤掉了
+"$PYTHON" "$SCAN" undo --yes >"$TEST_TMP/undo-linkbroken.out" 2>&1
+grep -q '断链修复' "$TEST_TMP/undo-linkbroken.out" || {
+  echo "撤销没说明断链修复不还原"; exit 1
+}
+
+# 边界：软链农场（链可能各自指向别处）与「真分叉 + 断链」都必须仍然交人工。
+[ -L "$FIXTURE/agenta/skills/link-farm/SKILL.md" ] || {
+  echo "fixture 前提不成立：link-farm 里应当只有一条软链"; exit 1
+}
+for g in link-farm mixed-report; do
+  "$PYTHON" "$SCAN" resolve --names "$g" >"$TEST_TMP/resolve-$g.out" 2>&1
+  grep -q '正文已分叉' "$TEST_TMP/resolve-$g.out" || { echo "$g 没有交人工"; exit 1; }
+done
+[ -L "$FIXTURE/agenta/skills/link-farm/SKILL.md" ] || {
+  echo "软链农场被自动处理了（换掉就丢了链的映射）"; exit 1
+}
+[ -f "$FIXTURE/agentb/skills/mixed-report/SKILL.md" ] || {
+  echo "真分叉的副本被动了"; exit 1
+}
+
+# ------------------------------------------------- 「都先留着」出口
+
+# 有些组没有正确答案：两份都还在正常用，或者权衡之后就是决定先不动。以前没有出口，
+# 这些组会永远挂在「待处理」里，数字一直红着，久之就没人看了。
+
+STAT() {
+  "$PYTHON" - "$1" <<'PY'
+import json, os, sys
+d = json.load(open(os.path.expanduser("~/.skill-panel/data/skills.json")))
+name = sys.argv[1]
+c = next((x for x in d["conflicts"] if x["name"] == name), {})
+print(f'{d["stats"].get("todo_manual")} {d["stats"].get("ignored_conflicts")} '
+      f'{c.get("ignored")} {(c.get("prescription") or {}).get("grade")}')
+PY
+}
+
+# 断言失败时打这个，一眼看出是哪个组把数字顶上去的
+MANUALS() {
+  "$PYTHON" - <<'PY'
+import json, os
+d = json.load(open(os.path.expanduser("~/.skill-panel/data/skills.json")))
+print(" | ".join(f'{c["name"]}:{(c.get("prescription") or {}).get("grade")}'
+                 f'{"/ignored" if c.get("ignored") else ""}'
+                 for c in d["conflicts"] if (c.get("prescription") or {}).get("grade") == "manual"))
+PY
+}
+
+# 先重扫一次再取基线：上一段收尾动过文件，拿旧快照当基线会数出别组的差量
+"$PYTHON" "$SCAN" scan >/dev/null
+
+# 只认「这一组」的状态与「计数有没有跟着动」，不写死别组带来的绝对数量
+before_stat=$(STAT mixed-report)
+before_todo=${before_stat%% *}
+before_rest=${before_stat#* }
+before_manuals=$(MANUALS)
+case "$before_rest" in
+  "0 False manual") ;;
+  *) echo "fixture 前提不成立：mixed-report 应当是待处理里的需人工组（实际：${before_stat}）"; exit 1 ;;
+esac
+
+# 名字打错就等于写进一条永远匹配不上的配置，必须拦下
+"$PYTHON" "$SCAN" dismiss --names not-a-real-group --yes >"$TEST_TMP/dismiss-bad.out" 2>&1 \
+  && { echo "拼错的组名没被拒绝"; exit 1; }
+
+# 干跑不能写盘
+"$PYTHON" "$SCAN" dismiss --names mixed-report >"$TEST_TMP/dismiss-dry.out" 2>&1
+grep -q 'by_conflict' "$TEST_TMP/dismiss-dry.out" || { echo "「都先留着」缺省不是干跑"; exit 1; }
+[ "$(STAT mixed-report)" = "$before_stat" ] || { echo "干跑就写了配置"; exit 1; }
+
+"$PYTHON" "$SCAN" dismiss --names mixed-report --note "两侧都在用" --yes >"$TEST_TMP/dismiss.out" 2>&1
+"$PYTHON" "$SCAN" scan >/dev/null
+after_stat=$(STAT mixed-report)
+after_todo=${after_stat%% *}
+after_rest=${after_stat#* }
+[ "$after_todo" = "$((before_todo - 1))" ] \
+  || { echo "标了「都先留着」之后待人工数没减一（${before_todo} → ${after_todo}）"; \
+       echo "  标之前：${before_manuals}"; echo "  标之后：$(MANUALS)"; exit 1; }
+case "$after_rest" in
+  "1 True none") ;;
+  *) echo "标了「都先留着」之后这组仍算待处理（实际：${after_stat}）"; exit 1 ;;
+esac
+grep -q '两侧都在用' "$SKILL_DIR/overrides.json" || { echo "写的说明没进 overrides.json"; exit 1; }
+
+# 该能随时取消
+"$PYTHON" "$SCAN" dismiss --names mixed-report --undo --yes >"$TEST_TMP/undismiss.out" 2>&1
+"$PYTHON" "$SCAN" scan >/dev/null
+[ "$(STAT mixed-report)" = "$before_stat" ] || { echo "取消标记后没回到待处理"; exit 1; }
 
 # ------------------------------------------------------------------ 单元测试
 

@@ -30,7 +30,11 @@ de-duplication and the evidence, not the directory walk.
 2. **Look.** Open the generated `skill-panel.html` (self-contained, no server) or
    ask for a specific skill with `check` / `state`.
 3. **Decide.** `install` produces a migration command; `plan` produces a
-   conflict-resolution package; `resolve` deduplicates directly.
+   conflict-resolution package; `resolve` deduplicates directly. For a group
+   whose bodies really diverge, the page offers a pick-a-canonical card;
+   `resolve --canonical <group>=<path>` does the same thing from the CLI.
+   A group with no right answer can be silenced with `dismiss`, and any
+   `resolve` can be walked back with `undo`.
 4. **Act, if asked.** `disable` / `enable` / `uninstall` / `resolve` are the only
    operations that touch skill content, and they require `--yes` to write. The
    page's buttons drive the same implementations over loopback.
@@ -43,6 +47,9 @@ python3 scripts/skillctl.py install <skill> [--to <agent>]
 python3 scripts/skillctl.py agents               # the adapter table and each native toggle
 python3 scripts/skillctl.py plan [--names a,b] [--grades auto,semi,manual]
 python3 scripts/skillctl.py resolve [--names a,b] [--semi] [--yes]
+python3 scripts/skillctl.py resolve --names x --canonical x=/abs/path --yes
+python3 scripts/skillctl.py undo [--at <timestamp-prefix>] --yes
+python3 scripts/skillctl.py dismiss --names x [--note "why"] --yes
 python3 scripts/skillctl.py restore              # list the trash
 python3 scripts/skillctl.py serve --open         # loopback-only, lets the page's buttons act
 ```
@@ -55,13 +62,18 @@ command says there is no scan, check that both commands resolved the same root.
 ## Read-only by default
 
 `scan`, `check`, `state`, `install`, `agents` and `plan` never modify anything.
-The write commands are `disable`, `enable`, `uninstall`, `resolve` — and each of them:
+The write commands are `disable`, `enable`, `uninstall`, `resolve`, `undo` and
+`dismiss` — and each of them:
 
 - prints the exact diff (file, key, old value) and writes nothing unless `--yes`
   is passed;
 - moves whatever it replaces or deletes into `~/.skill-panel/trash/` first, so
   nothing is destroyed;
 - appends to `~/.skill-panel/ledger.json`.
+
+`dismiss` is the one exception to "moves things": it only writes an `ignore`
+flag into `overrides.json`, so its dry run prints the config line rather than a
+file diff.
 
 Prefer the agent's own native toggle over touching files. `agents.json` declares,
 per agent, where that toggle lives and which values mean what; `agents` prints it.
@@ -77,6 +89,13 @@ was found for them.
   operation is a no-op that only creates confusion.
 - Never trust a FAIL count without reading its evidence. `overrides.json` exists
   because automated judgement is not always right.
+- Never let the tool pick the canonical copy for a group whose bodies really
+  diverge. `resolve` on a `divergent` group needs an explicit `--canonical`, and
+  the page shows candidate cards instead of a plain button, because which body
+  is "right" is the user's call.
+- Never assume a `divergent` group needs a human. Check its `shape`: a dangling
+  link may be repaired automatically, and a `symlink-farm` or `shell` group is a
+  relink problem rather than a merge problem.
 
 ## Outputs
 

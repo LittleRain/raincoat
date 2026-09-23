@@ -313,6 +313,9 @@ class RulesConfigTests(unittest.TestCase):
 
     def test_overrides_template_is_loadable_and_empty(self):
         self.assertIsInstance(OVERRIDES.get("by_entity"), dict)
+        self.assertIsInstance(OVERRIDES.get("by_conflict"), dict)
+        self.assertEqual(OVERRIDES["by_entity"], {}, "模板要干净：别再往模板里塞真条目")
+        self.assertEqual(OVERRIDES["by_conflict"], {}, "模板要干净：别再往模板里塞真条目")
 
 
 # ------------------------------------------------------------------ 凭据安全
@@ -514,27 +517,128 @@ class InstallTextTests(unittest.TestCase):
 class PrescriptionTests(unittest.TestCase):
 
     @staticmethod
-    def ent(path, links=0, holders=()):
+    def ent(path, links=0, holders=(), mtime=0.0, kind="local", state="on",
+            real=3, link=0, size=1000, exists=True):
+        """一份副本。默认是一份普通、可用、有内容的副本，各参数用来把它改成各种坏样子。"""
         return {"real_path": path, "link_count": links, "entity_agents": list(holders),
-                "agents": ["a"], "name": "dup"}
+                "agents": ["a"], "name": "dup", "type": kind, "state": state,
+                "path_exists": exists, "real_file_count": real, "link_file_count": link,
+                "mtime": mtime, "total_bytes": size, "file_count": real + link}
 
-    def test_canonical_scoring_prefers_shared_pool_then_editable_copies(self):
-        """正本挑选顺序：跨 agent 共享池 > 不在 App 包内（改它不会被升级覆盖）> 实体本体。"""
-        home = os.path.expanduser("~")
-        shared = self.ent(os.path.join(home, ".agents", "skills", "dup"), links=1)
-        plain = self.ent("/tmp/somewhere/dup")
-        app = self.ent("/Applications/SomeApp.app/Contents/skills/dup")
-        held_app = self.ent("/Applications/SomeApp.app/Contents/skills/dup", holders=["x"])
-        scores = [skillctl._score_canonical(x)[0] for x in (shared, plain, app, held_app)]
-        self.assertGreater(scores[0], scores[1], "共享池应压过普通副本")
-        self.assertGreater(scores[1], scores[2], "可改的副本应压过 App 包内的")
-        self.assertGreater(scores[3], scores[2], "有 agent 直接持有的应压过无来源的")
+    def test_canonical_rank_picks_the_rule_that_matches_the_problem(self):
+        """三种排序规则，按「这一组到底是什么问题」选。
 
-    def test_more_symlink_references_score_higher(self):
-        plain = self.ent("/tmp/somewhere/dup")
-        linked = self.ent("/tmp/somewhere/dup", links=3)
-        self.assertGreater(skillctl._score_canonical(linked)[0],
-                           skillctl._score_canonical(plain)[0])
+        · 正文已分叉（time）：按「最近被动过」——本机实测 32 份冲突副本里状态不是启用的
+          只有 3 份、引用数为 0 的有 28 份、版本号 21 份没有，只有时间既有区分度又讲得清。
+        · 正文一致但文件集不同（content）：按「内容更全」。这一档按时间挑会挑中「更晚被
+          复制过来」的那份，把多出来的文件推进回收站 —— 实测 e2e 里就踩到了。
+        · 内容逐字一致（stable）：留哪份都不改内容，优先留在被多方引用的那份。
+        """
+        old = self.ent("/tmp/old", mtime=1000)
+        new = self.ent("/tmp/new", mtime=2000)
+        self.assertGreater(skillctl.canonical_rank(new, mode="time"),
+                           skillctl.canonical_rank(old, mode="time"),
+                           "分叉组里更新的副本应排在前面")
+        # 半自动档：更旧但更全的那份必须赢过更新但残缺的那份
+        fuller_but_older = self.ent("/tmp/full", mtime=1000, real=5, size=5000)
+        newer_but_thin = self.ent("/tmp/thin", mtime=9999, real=1, size=200)
+        self.assertGreater(skillctl.canonical_rank(fuller_but_older, mode="content"),
+                           skillctl.canonical_rank(newer_but_thin, mode="content"),
+                           "半自动组必须按内容更全挑，不能按时间挑")
+        pooled = self.ent(os.path.join(os.path.expanduser("~"), ".agents", "skills", "d"),
+                          mtime=1)
+        solo = self.ent("/tmp/zzz", mtime=999999)
+        self.assertGreater(skillctl.canonical_rank(pooled, mode="stable"),
+                           skillctl.canonical_rank(solo, mode="stable"),
+                           "内容一致的组里，共享池那份应排在前面（哪怕它更旧）")
+        linked = self.ent("/tmp/xxxxx", mtime=1000, links=3)
+        plain = self.ent("/tmp/x", mtime=1000)
+        self.assertGreater(skillctl.canonical_rank(linked, mode="stable"),
+                           skillctl.canonical_rank(plain, mode="stable"),
+                           "同一时间戳时被引用多的应排在前面")
+        self.assertGreater(skillctl.canonical_rank(self.ent("/tmp/bb", mtime=1000)),
+                           skillctl.canonical_rank(self.ent("/tmp/aaaaaaaa", mtime=1000)),
+                           "再并列时短路径兜底")
+        # 内容一致的档里刻意不看时间：同一份家底在不同机器上要挑出同一个正本。
+        self.assertEqual(skillctl.canonical_rank(self.ent("/tmp/aa", mtime=1), mode="stable"),
+                         skillctl.canonical_rank(self.ent("/tmp/aa", mtime=99999),
+                                                 mode="stable"))
+
+    def test_recommendation_reason_matches_the_rule_that_was_used(self):
+        """理由必须跟真正参与的判据一致 —— 说一个没参与判断的理由等于教人用错的判据。"""
+        mine = self.ent("/tmp/full", mtime=1000, real=5, size=5000)
+        other = self.ent("/tmp/thin", mtime=9999, real=1, size=200)
+        note = skillctl.canonical_note(mine, [other], mode="content")
+        self.assertIn("文件最全", note, f"半自动档该说内容更全，实际：{note}")
+        self.assertNotIn("最近被动过", note, f"半自动档不该拿时间当理由，实际：{note}")
+        fresh = self.ent("/tmp/new", mtime=9999999, real=1, size=200)
+        note = skillctl.canonical_note(fresh, [mine], mode="time")
+        self.assertIn("最近被动过", note, f"分叉档该说时间，实际：{note}")
+        self.assertNotIn("文件最全", note, f"分叉档不该拿体量当理由，实际：{note}")
+
+    def test_auto_repairable_only_when_every_replaced_copy_is_a_dangling_link(self):
+        """「工具可自行修复」只在被替换的每一份后面都什么都没有时成立。
+
+        这条判定是前后端共用的单一来源，判宽了就等于让工具替人做正文取舍。
+        """
+        canon = self.ent("/tmp/good", real=1)
+        gone = {"real_path": "/tmp/gone", "agents": ["a"], "name": "dup",
+                "type": "local", "state": "on", "path_exists": False,
+                "link_at": ["/tmp/where-the-link-sits"], "real_file_count": 0,
+                "link_file_count": 0, "mtime": 0.0, "total_bytes": 0,
+                "file_count": 0, "link_count": 0, "entity_agents": []}
+        out = skillctl.prescribe("divergent", "duplicate", "live", [canon, gone])
+        self.assertTrue(out["auto_repairable"], out)
+
+        real_other = self.ent("/tmp/other", real=1)
+        out = skillctl.prescribe("divergent", "duplicate", "live",
+                                 [canon, gone, real_other])
+        self.assertFalse(out["auto_repairable"],
+                         "还有一份真有正文的副本时，留哪份是人的取舍")
+
+        out = skillctl.prescribe("divergent", "duplicate", "live", [canon, real_other])
+        self.assertFalse(out["auto_repairable"], "没有断链就不该标记为可自行修复")
+
+        # 软链农场不是断链：目录在、只是文件都是链 —— 那些链可能各自指向别处
+        farm = dict(gone, path_exists=True, real_file_count=0, link_file_count=2)
+        out = skillctl.prescribe("divergent", "duplicate", "live", [canon, farm])
+        self.assertFalse(out["auto_repairable"], out)
+
+    def test_unusable_copies_are_never_usable_candidates(self):
+        """断链 / 空壳 / 软链农场 / 商店与内置 / 已停用，一律不能当正本。
+
+        这是回归测试：本机 `find-skills` 一组的正本候选是 `~/.agents/skills/find-skills`，
+        那条路径**不存在**（来源是 `~/.claude/skills/find-skills` 这个断链）。旧评分只看
+        「路径在不在共享池」，把空气选成了正本 —— 照着它执行就把好副本换成指向空气的快捷方式。
+        """
+        cases = [
+            (self.ent("/tmp/gone", exists=False), "不存在"),
+            (self.ent("/tmp/empty", real=0, link=0), "没有文件"),
+            (self.ent("/tmp/farm", real=0, link=7), "全是快捷方式"),
+            (self.ent("/tmp/mkt", kind="market"), "技能商店"),
+            (self.ent("/tmp/builtin", kind="builtin"), "内置"),
+            (self.ent("/tmp/off", state="model_off"), "停用"),
+        ]
+        for entity, needle in cases:
+            with self.subTest(path=entity["real_path"]):
+                usable, why = skillctl.candidate_usable(entity)
+                self.assertFalse(usable, f"{entity['real_path']} 不该可用")
+                self.assertIn(needle, why, why)
+        usable, why = skillctl.candidate_usable(self.ent("/tmp/fine", mtime=5))
+        self.assertTrue(usable, why)
+        self.assertEqual(why, "")
+
+    def test_prescribe_skips_unusable_copies_when_picking_canonical(self):
+        """只有一份可用时，正本就该是它 —— 哪怕别的副本「看起来更该留」。"""
+        ents = [
+            self.ent("/tmp/broken", exists=False, mtime=999999),      # 最新，但坏了
+            self.ent("/tmp/market", kind="market", mtime=999998),      # 也很新，但是商店的
+            self.ent("/tmp/real", real=4, mtime=100),
+        ]
+        result = skillctl.prescribe("divergent", "duplicate", "active", ents)
+        self.assertEqual(result["canonical"], "/tmp/real")
+        self.assertEqual(result["shape"], "broken")
+        self.assertTrue(result["decidable"], "只剩一份可用，没什么可挑的")
 
     def test_scoring_reason_is_always_non_empty(self):
         for label in ("共享池", "App 包内", "普通副本"):
@@ -542,10 +646,10 @@ class PrescriptionTests(unittest.TestCase):
                 path = {"共享池": os.path.join(os.path.expanduser("~"), ".agents", "skills", "d"),
                         "App 包内": "/Applications/A.app/skills/d",
                         "普通副本": "/tmp/d"}[label]
-                self.assertTrue(skillctl._score_canonical(self.ent(path))[1])
+                self.assertTrue(skillctl.canonical_note(self.ent(path, mtime=9), []))
 
     def test_prescription_grade_matrix(self):
-        ents = [self.ent("/tmp/a", links=2), self.ent("/tmp/b")]
+        ents = [self.ent("/tmp/a", links=2, size=5000), self.ent("/tmp/b", size=4900)]
         expected = {"identical": "auto", "meta-only": "auto",
                     "same-body-diff-files": "semi", "divergent": "manual"}
         for kind, grade in expected.items():
@@ -553,7 +657,47 @@ class PrescriptionTests(unittest.TestCase):
                 result = skillctl.prescribe(kind, "duplicate", "active", ents)
                 self.assertEqual(result["grade"], grade)
                 self.assertTrue(result["rewrite"])
-                self.assertEqual(result["needs_diff"], grade in ("semi", "manual"))
+                # 「需人工」不再靠左右对比了 —— 页面上给的是选正本的卡片，所以只有半自动还需要看差异。
+                self.assertEqual(result["needs_diff"], kind == "same-body-diff-files")
+
+    def test_divergent_shapes_are_told_apart(self):
+        """「正文不一致」要拆成四种形态，前三种不该让人做取舍。"""
+        broken = [self.ent("/tmp/a", exists=False), self.ent("/tmp/b")]
+        farm = [self.ent("/tmp/a", real=0, link=5), self.ent("/tmp/b")]
+        shell = [self.ent("/tmp/shell", size=147), self.ent("/tmp/real", size=2187)]
+        fork = [self.ent("/tmp/a", size=4246), self.ent("/tmp/b", size=4933)]
+        for ents, shape in ((broken, "broken"), (farm, "symlink-farm"),
+                            (shell, "shell"), (fork, "fork")):
+            with self.subTest(shape=shape):
+                result = skillctl.prescribe("divergent", "duplicate", "active", ents)
+                self.assertEqual(result["shape"], shape)
+                self.assertTrue(result["shape_sentence"], "每种形态都要有一句人话说明")
+        # 转发壳不能当正本：它本来就不装内容，把内容并过去才对。但要在候选里说明原因，不静默剔除。
+        result = skillctl.prescribe("divergent", "duplicate", "active", shell)
+        self.assertEqual(result["canonical"], "/tmp/real")
+        shell_row = [c for c in result["candidates"] if c["path"] == "/tmp/shell"][0]
+        self.assertFalse(shell_row["usable"])
+        self.assertIn("转发壳", shell_row["why"])
+        self.assertEqual(len(result["candidates"]), 2, "候选要列全，人才能自己改主意")
+        # 真分叉没有快捷答案
+        self.assertFalse(skillctl.prescribe("divergent", "duplicate", "active", fork)["decidable"])
+
+    def test_ignored_conflict_is_left_alone(self):
+        """标了「都留着」的组不进待处理 —— 出口有没有用全看这里。"""
+        ents = [self.ent("/tmp/a"), self.ent("/tmp/b")]
+        result = skillctl.prescribe("divergent", "duplicate", "active", ents, ignored=True)
+        self.assertEqual(result["grade"], "none")
+        self.assertIn("不再提醒", result["action"])
+        self.assertNotIn("rewrite", result)
+
+    def test_conflict_ignores_reads_only_valid_entries(self):
+        ov = {"by_conflict": {"keep-both": {"ignore": True, "note": "两份壳各喂一个 agent"},
+                              "not-ignored": {"note": "只是备注"},
+                              "junk": "不是字典"}}
+        self.assertEqual(skillctl.conflict_ignores(ov),
+                         {"keep-both": "两份壳各喂一个 agent"})
+        self.assertEqual(skillctl.conflict_ignores({}), {})
+        self.assertEqual(skillctl.conflict_ignores(None), {})
 
     def test_coexist_and_dormant_groups_are_left_alone(self):
         ents = [self.ent("/tmp/a"), self.ent("/tmp/b")]
@@ -963,11 +1107,13 @@ class ConfigDocsTests(unittest.TestCase):
         """overrides.json 的样例里写了的键，代码必须真的读它。
 
         写了没人读 = 用户照着填、以为生效了，实际静默忽略。
+        by_entity 与 by_conflict 两张表的样例都要守 —— 只守一张的话，新加那张表正好会漏。
         """
-        for key in OVERRIDES["_example"]["some-skill"]:
-            with self.subTest(key=key):
-                self.assertRegex(SOURCE, rf'(ov\.get\("{key}"\)|"{key}" in ov)',
-                                 f"overrides.json 的样例里有 {key}，但代码从没读过它")
+        for table in ("_example", "_by_conflict_example"):
+            for key in OVERRIDES[table]["some-skill"]:
+                with self.subTest(example=table, key=key):
+                    self.assertRegex(SOURCE, rf'(ov\.get\("{key}"\)|"{key}" in ov)',
+                                     f"overrides.json 的 {table} 里有 {key}，但代码从没读过它")
 
 
 # ---------------------------------------------------------- 页面给出的命令
@@ -1205,8 +1351,74 @@ class ResolveConflictTests(unittest.TestCase):
         log, ops, groups, skipped, warns = self._run(dry_run=False)
         self.assertFalse(ops, "重复点不该再产生动作")
         self.assertEqual(groups, [])
-        self.assertTrue(any("已经是快捷方式" in s["why"] for s in skipped), skipped)
+        self.assertTrue(any("已经是" in s["why"] and "快捷方式" in s["why"]
+                            for s in skipped), skipped)
         self.assertTrue(self.canon.is_dir(), "重复执行把正本弄没了")
+
+    def _manual_doc(self, entities, canonical, auto_repairable=False):
+        """手搭一份「正文已分叉」的冲突，用来单独验证需人工档的进入条件。"""
+        return {"generated_at": "2020-01-01T00:00:00+08:00", "host": "test",
+                "entities": [], "skipped": [], "agent_stats": [],
+                "conflicts": [{
+                    "name": "dup", "kind": "divergent", "count": len(entities),
+                    "entities": entities, "nature": "duplicate", "liveness": "live",
+                    "version_drift": [],
+                    "prescription": {"grade": "manual", "canonical": canonical,
+                                     "canonical_why": "fixture", "needs_diff": False,
+                                     "auto_repairable": auto_repairable,
+                                     "rewrite": []},
+                }]}
+
+    @staticmethod
+    def _copy(path, agents, exists=True, link_at=(), real=1, links=0):
+        return {"real_path": path, "agents": list(agents), "path_exists": exists,
+                "link_at": list(link_at), "real_file_count": real, "link_file_count": links}
+
+    def _make_dangling(self, target):
+        shutil.rmtree(self.other)
+        os.symlink(target, str(self.other))
+        return str(self.other)
+
+    def test_a_lone_dangling_copy_is_repaired_without_a_human_pick(self):
+        """断链 + 好副本：把链指回正本不涉及任何取舍（后面本来什么都没有），工具该自己修。
+
+        实测本机 ~/.claude/skills/find-skills 就是这种形态 —— 它以前还会被选成正本，
+        照那个建议执行等于把好副本换成指向空气的快捷方式。
+        """
+        gone = str(Path(self.tmp) / "rootsA" / "gone-dup")
+        at = self._make_dangling(gone)
+        doc = self._manual_doc([self._copy(gone, ["agentb"], exists=False, link_at=[at],
+                                           real=0),
+                                self._copy(str(self.canon), ["agenta"])],
+                               str(self.canon), auto_repairable=True)
+        log, ops, groups, skipped, warns = self._run(doc, dry_run=False)
+        self.assertEqual([o["kind"] for o in ops], ["unlink", "symlink"], ops)
+        self.assertEqual(os.path.realpath(self.other), os.path.realpath(self.canon))
+        self.assertEqual(groups[0]["relinked"], [at])
+        self.assertEqual(groups[0]["from"], [], "断链修复不该往回收站搬东西")
+        # 撤销要明说这一条不还原 —— 假装能还原只会让人以为撤了
+        _, _, _, _, undo_warns = skillctl.undo_resolve(doc, dry_run=True)
+        self.assertTrue(any("断链修复" in w for w in undo_warns), undo_warns)
+
+    def test_a_dangling_copy_does_not_unlock_real_divergence(self):
+        """真分叉的两份 + 一条断链：不能因为「顺带有条断链」就把整组当可自动 ——
+        那会把另一份真改动过的正文推进回收站，而留哪份是人的取舍。
+        """
+        third = Path(self.tmp) / "rootsC" / "dup"
+        third.mkdir(parents=True)
+        (third / "SKILL.md").write_text("---\nname: dup\n---\n\nother body\n",
+                                       encoding="utf-8")
+        gone = str(Path(self.tmp) / "rootsA" / "gone-dup")
+        at = self._make_dangling(gone)
+        doc = self._manual_doc([self._copy(gone, ["pool"], exists=False, link_at=[at],
+                                           real=0),
+                                self._copy(str(self.canon), ["agenta"]),
+                                self._copy(str(third), ["agentb"])],
+                               str(self.canon))
+        _, ops, _, skipped, _ = self._run(doc)
+        self.assertFalse(ops, ops)
+        self.assertTrue(any("正文已分叉" in s["why"] for s in skipped), skipped)
+        self.assertTrue(third.is_dir(), "需人工的组被动过")
 
     def test_manual_grade_is_never_touched(self):
         log, ops, groups, skipped, warns = self._run(self._doc(grade="manual"))

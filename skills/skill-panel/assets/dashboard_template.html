@@ -79,6 +79,8 @@ td.pth{font-family:var(--mono);font-size:11px;color:var(--tx3);max-width:290px;o
 .b-pluginagent{border:1px dashed var(--warn);color:var(--warn);background:transparent}
 .b-coexist{background:var(--surface3);color:var(--tx2)}
 .b-duplicate{background:var(--warn-bg);color:var(--warn)}
+/* 「推荐」得看得清。用 b-auto（虚线透明）会让最关键的那个标记最不显眼。 */
+.b-reco{background:var(--info-bg);color:var(--info)}
 .dot{display:inline-block;width:7px;height:7px;border-radius:50%;flex:0 0 auto}
 .d-fail{background:var(--danger)} .d-warn{background:#E0A800} .d-pass{background:#3EA96B}
 .st{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;white-space:nowrap}
@@ -142,6 +144,11 @@ details.rule .desc{color:var(--tx3);font-size:12px;margin:2px 0 8px}
 .rx{border:1px solid var(--border);border-radius:6px;padding:10px 12px;margin-top:8px;background:var(--surface2)}
 .rx .rxt{font-size:12.5px;font-weight:600;margin-bottom:4px}
 .rx .rxacts{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:9px;padding-top:9px;border-top:1px dashed var(--border)}
+/* 选正本的单选行。整行可点，选中的那份要一眼看得出来是它。 */
+.mpick{display:flex;gap:9px;align-items:flex-start;padding:8px 10px;margin-top:6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);cursor:pointer}
+.mpick:hover{border-color:var(--tx3)}
+.mpick.on{border-color:var(--tx3);background:var(--surface2);box-shadow:inset 0 0 0 1px var(--border2)}
+.mpick input{margin-top:2px;cursor:pointer}
 .grade{font-size:11px;font-family:var(--mono);padding:1px 6px;border-radius:4px}
 .gr-auto{background:var(--ok-bg);color:var(--ok)}
 .gr-semi{background:var(--warn-bg);color:var(--warn)}
@@ -163,10 +170,16 @@ aside#drawer.open{transform:none}
 #act .ah{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:flex-start}
 #act .ab{padding:14px 18px;overflow:auto;flex:1}
 #act .af{padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-#bulkbar{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;background:var(--tx);color:#fff;border-radius:10px;padding:10px 14px;display:none;gap:10px;align-items:center;z-index:40;box-shadow:0 10px 30px rgba(20,20,30,.28);font-size:12.5px}
+#bulkbar{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;background:var(--tx);color:#fff;border-radius:10px;padding:10px 14px;display:none;gap:10px;align-items:center;z-index:40;box-shadow:0 10px 30px rgba(20,20,30,.28);font-size:12.5px;
+  /* left:50% 会把收缩后的可用宽度卡在半屏以内，内容稍多就折行。改成按内容定宽，
+     窄屏再退化成折行。 */
+  width:max-content;max-width:calc(100vw - 36px);flex-wrap:wrap;row-gap:6px}
+#bulkbar>span,#bulkbar>label,#bulkbar>button{white-space:nowrap}
 #bulkbar.on{display:flex}
 #bulkbar button{background:rgba(255,255,255,.12);color:#fff;border-color:rgba(255,255,255,.25)}
 #bulkbar button:hover{background:rgba(255,255,255,.22)}
+#bulkbar label{display:none;align-items:center;gap:5px;color:rgba(255,255,255,.88);cursor:pointer;user-select:none}
+#bulkbar label input{accent-color:#fff;margin:0;cursor:pointer}
 .srvbar{font-size:12px;border-radius:6px;padding:7px 11px;margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .srv-on{background:var(--ok-bg);color:var(--ok);border:1px solid #BFE3CE}
 .srv-off{background:var(--surface2);color:var(--tx2);border:1px solid var(--border)}
@@ -289,9 +302,11 @@ tr.sel td{background:var(--accent-bg)}
       <div class="row">
         <button class="pill on" id="cfAll">全部</button>
         <button class="pill" id="cfTodo">只看待处理</button>
+        <button class="pill" id="cfIgnored">已确认先留着</button>
         <button class="pill" id="cfCoexist">只看同名异物</button>
         <button class="pill" id="cfDormant">只看已停用</button>
         <span class="spacer"></span>
+        <button class="btn" id="btnUndo" title="按台账把上一次「一键去重」退回去：撤掉快捷方式、目录搬回原位。没有做过就不会亮。">撤销上次去重</button>
         <button class="btn" id="btnPlan">生成处理方案包</button>
       </div>
     </div>
@@ -355,6 +370,9 @@ tr.sel td{background:var(--accent-bg)}
 
 <div id="bulkbar">
   <span id="bulkText"></span>
+  <label id="bulkSemiWrap" title="半自动组：正文一致但文件集不同。勾上即一并去重；被换掉的副本整目录移入回收站，可还原。">
+    <input type="checkbox" id="bulkSemi">含半自动（<span id="bulkSemiN">0</span>）
+  </label>
   <button class="btn" id="bulkClear">清空</button>
   <button class="btn" id="bulkPlan">生成方案包</button>
   <button class="btn pri" id="bulkResolve">一键去重</button>
@@ -383,6 +401,21 @@ const sh = p => String(p||'').replace(/^\/Users\/[^/]+/, '~');
 const TYPELABEL = {builtin:'内置', market:'市场安装', local:'本地自建'};
 const KIND = {identical:'逐字一致','meta-only':'仅元数据不同','same-body-diff-files':'正文一致·文件集不同',divergent:'正文已不一致'};
 const GRADELABEL = {auto:'脚本可自动',semi:'半自动',manual:'需人工',none:'无需处理'};
+// 版本号必须带来源。实测 32 份同名副本里 21 份没有版本号，而有的两份内容不同却都写着
+// 1.0.0（作者根本没维护版本号）—— 只给数字等于暗示「版本一样，随便选」，是负资产。
+const VERSRC = {'frontmatter':'作者标注','安装清单':'安装清单','技能商店记录':'技能商店记录'};
+function verText(c){
+  if(!c || !c.version) return '未标注版本';
+  const s = VERSRC[c.version_source]
+    || (c.version_source ? '来自 ' + c.version_source : '');
+  return 'v' + c.version + (s ? '（' + s + '）' : '');
+}
+// 需人工那档用户选中的正本：组名 → 路径。放在渲染之外，切换筛选时不会丢。
+const MANUAL_PICK = {};
+const pickDefault = n => {
+  const c = DOC.conflicts.find(x=>x.name===n);
+  return ((c&&c.prescription)||{}).canonical || '';
+};
 const STATE = {
   on:{t:'启用',c:'st-on',d:'#3EA96B', k:'on'},
   model_off:{t:'仅手动可用',c:'st-model',d:'#E0A800', k:'model_off'},
@@ -451,7 +484,7 @@ function stateCell(e){
 }
 
 const state = {agent:'all', q:'', type:'', st:'', verdict:'', shared:false, conflict:false,
-               limit:80, rule:'', cf:'all', fmt:'agent', sel:new Set()};
+               limit:80, rule:'', cf:'all', fmt:'agent', sel:new Set(), withSemi:true};
 
 /* ---------- header ---------- */
 function renderHead(){
@@ -743,7 +776,10 @@ function doGen(){
 /* ---------- view 4 ---------- */
 function conflictShown(){
   return DOC.conflicts.filter(c=>{
-    if(state.cf==='todo') return c.nature==='duplicate' && c.liveness!=='dormant';
+    // 「只看待处理」= 还没处理过的。标了「都先留着」的组已经处理过了（结论是先不动），
+    // 混在里面会让这个数字永远清不干净 —— 那正是这个出口要解决的问题。
+    if(state.cf==='todo') return c.nature==='duplicate' && c.liveness!=='dormant' && !c.ignored;
+    if(state.cf==='ignored') return !!c.ignored;
     if(state.cf==='coexist') return c.nature==='coexist';
     if(state.cf==='dormant') return c.liveness==='dormant' || (c.nature==='coexist'&&c.liveness!=='live');
     return true;
@@ -753,6 +789,7 @@ function renderTriage(){
   const s = DOC.stats;
   const cards = [
     ['todo','待处理', (s.todo_auto||0)+(s.todo_semi||0)+(s.todo_manual||0), `真重复且仍有副本在生效`, 'var(--warn)'],
+    ['ignored','已确认先留着', s.ignored_conflicts||0, '你判断两份都该活着的组', 'var(--tx3)'],
     ['coexist','同名异物', s.conflict_coexist, '不同来源恰好重名，不该合并', 'var(--tx3)'],
     ['dormant','已停用', s.conflict_dormant + (s.coexist_dormant||0), '两边都已关掉或历史残留', 'var(--tx3)'],
     ['all','全部冲突', s.conflicts, `其中真重复 ${s.conflict_duplicate} 组`, 'var(--tx2)'],
@@ -766,8 +803,9 @@ function renderTriage(){
   $('#triage').querySelectorAll('.tcard').forEach(c=>c.onclick=()=>{ state.cf=c.dataset.k; syncCfPills(); renderTriage(); renderConf(); });
 }
 function syncCfPills(){
-  [['cfAll','all'],['cfTodo','todo'],['cfCoexist','coexist'],['cfDormant','dormant']].forEach(([id,k])=>{
-    $('#'+id).classList.toggle('on', state.cf===k);
+  [['cfAll','all'],['cfTodo','todo'],['cfIgnored','ignored'],['cfCoexist','coexist'],['cfDormant','dormant']].forEach(([id,k])=>{
+    const el = $('#'+id);
+    if(el) el.classList.toggle('on', state.cf===k);
   });
 }
 function renderGroups(){
@@ -783,6 +821,65 @@ function renderGroups(){
     </div>`).join('')}
   </div>`;
 }
+function manualCard(c){
+  /* 「正文已分叉」这一档的界面。
+     设计原则是替人做减法，而不是把复杂度原样摊开：
+       · 工具能直接判定的（断链那种「后面什么都没有」）就只给一个按钮，不让人做选择题；
+       · 真要取舍的，先把不可用的候选挡在候选之外并写明原因，只留能选的那几份；
+       · 每份只讲三件人能听懂的事：归谁管（来源）、最近被动过、现在谁在用，版本号带来源。
+     刻意不给 diff —— 这一步要的是「留哪份」，不是读代码。 */
+  const p = c.prescription || {};
+  const cands = p.candidates || [];
+  const usable = cands.filter(x=>x.usable);
+  // 形态那句只在「工具发现了什么异常」时才用警示色。正文分叉本身不是异常，
+  // 只是需要你定夺 —— 满屏黄条会让人对真正该注意的（坏了、只剩快捷方式）麻木。
+  const loud = !!p.shape && p.shape !== 'fork';
+  const head = p.shape_label
+    ? `<div class="note${loud?' warn':''}"><b>${esc(p.shape_label)}</b>　${esc(p.shape_sentence||'')}</div>`
+    : '';
+  if(p.auto_repairable){
+    return head + `<div class="rxacts">
+      <button class="btn pri" data-repair="${esc(c.name)}">修好这条断链</button>
+      <span style="font-size:11.5px;color:var(--tx3)">正本留在 <span class="mono">${esc(sh(p.canonical||'—'))}</span>；这一档没有取舍，不用你选</span>
+    </div>
+    <div class="note">${SRV?'点按钮会先给你看干跑差量，确认之后才落盘，落盘后可以一键撤销。':'当前是只读模式，点按钮会把对应命令复制给你。'}</div>`;
+  }
+  if(!usable.length){
+    return head + `<div class="note warn">这一组里没有可用的候选 —— 每一份要么坏了、要么来自技能商店（升级会整个换掉）。工具不给推荐，先别动。</div>`;
+  }
+  const mine = MANUAL_PICK[c.name] || p.canonical || '';
+  const rows = usable.map(x=>{
+    const on = x.path === mine;
+    const rec = x.path === p.canonical;
+    return `<label class="mpick${on?' on':''}">
+      <input type="radio" name="mp-${esc(c.name)}" data-manual="${esc(c.name)}" value="${esc(x.path)}" ${on?'checked':''}>
+      <span style="flex:1;min-width:0">
+        <span class="mono" style="font-size:11.5px;word-break:break-all">${esc(sh(x.path))}</span>
+        ${rec?'<span class="b b-reco" style="margin-left:6px">推荐</span>':''}
+        <span class="row" style="gap:12px;color:var(--tx3);font-size:11px;margin-top:4px;flex-wrap:wrap">
+          <span>${esc(TYPELABEL[x.type]||x.type||'')}${x.root_label?'·'+esc(x.root_label):''}</span>
+          <span>${x.mtime_text?'最近被动过 '+esc(x.mtime_text):'时间未记录'}</span>
+          <span>${(x.agents||[]).length?esc(x.agents.join('、'))+' 在用':'当前没有 agent 在用'}</span>
+          <span>${esc(verText(x))}</span>
+          <span>${x.file_count||0} 个文件</span>
+        </span>
+      </span>
+    </label>`;
+  }).join('');
+  const bad = cands.filter(x=>!x.usable).map(x=>
+    `<div class="note">用不了：<span class="mono">${esc(sh(x.path))}</span> —— ${esc(x.why||'')}</div>`).join('');
+  const isRec = mine === (p.canonical||'');
+  return head
+    + `<div style="font-size:12px;margin-top:8px"><b>建议留这一份</b>：<span class="mono">${esc(sh(p.canonical||'—'))}</span>`
+    + (p.canonical_why?`<div style="color:var(--tx3);margin-top:2px">理由：${esc(p.canonical_why)}</div>`:'')
+    + `</div>`
+    + `<div style="margin-top:8px">${rows}</div>` + bad
+    + `<div class="rxacts">
+        <button class="btn pri" data-manual-go="${esc(c.name)}">${isRec?'按推荐这份为准':'按我选的这份为准'}</button>
+        <button class="btn" data-manual-dismiss="${esc(c.name)}">都先留着，别再提醒</button>
+      </div>
+      <div class="note">${SRV?'无论选哪一份，都会先给你看干跑差量，确认之后才落盘；落盘后可以一键撤销。':'当前是只读模式，点按钮会把对应命令复制给你。'}</div>`;
+}
 function renderConf(){
   const list = conflictShown();
   if(!DOC.conflicts.length){ $('#confList').innerHTML = '<div class="empty">没有同名冲突</div>'; return; }
@@ -790,7 +887,7 @@ function renderConf(){
   $('#confList').innerHTML = list.map((c)=>{
     const p = c.prescription || {};
     const i = DOC.conflicts.indexOf(c);
-    const dim = c.nature==='coexist' || c.liveness==='dormant';
+    const dim = c.nature==='coexist' || c.liveness==='dormant' || c.ignored;
     const canPick = c.nature==='duplicate' && c.liveness!=='dormant';
     return `<div class="conf ${dim?'dim':''}" data-i="${i}">
       <div class="conf-h">
@@ -822,15 +919,17 @@ function renderConf(){
         <div class="rx">
           <div class="rxt">处理方案 <span class="grade gr-${p.grade||'none'}">${GRADELABEL[p.grade||'none']}</span></div>
           <div style="font-size:12.5px;color:var(--tx2)">${esc(p.action||'')}</div>
-          <div style="font-size:12px;color:var(--tx3);margin-top:3px">${esc(p.why||c.nature_why||'')}</div>
-          ${p.canonical?`<div style="font-size:12px;margin-top:7px">
+          ${p.grade==='manual'?'':`<div style="font-size:12px;color:var(--tx3);margin-top:3px">${esc(p.why||c.nature_why||'')}</div>`}
+          ${p.canonical&&p.grade!=='manual'?`<div style="font-size:12px;margin-top:7px">
             <b>建议保留的那一份</b>：<span class="mono">${esc(sh(p.canonical))}</span>
             <div style="color:var(--tx3);margin-top:2px">理由：${esc(p.canonical_why||'')}</div>
             ${p.rewrite&&p.rewrite.length?`<div style="color:var(--tx3);margin-top:3px">其余 ${p.rewrite.length} 份改为指向它的快捷方式：${p.rewrite.map(r=>`<span class="mono">${esc(sh(r.path))}</span>`).join('、')}</div>`:''}
           </div>`:''}
           ${p.grade==='auto'?`<div class="note">内容逐字一致，去重不会带来任何行为差异。${SRV?'点「一键去重」会先给你看干跑差量，确认之后才落盘。':'当前是只读模式，点按钮会把对应命令复制给你。'}</div>`:''}
-          ${p.grade==='semi'?`<div class="note">正文一致但文件集不同。先跑对比命令看清差在哪，确认没有你要保留的独有文件再动手 —— 这一档不会被批量操作带走，只能单独点。</div>`:''}
-          ${p.grade==='manual'?`<div class="note">正文已真实分叉，留哪份是你自己的取舍。方案包只给对比命令，页面也不给按钮。</div>`:''}
+          ${p.grade==='semi'?`<div class="note">正文一致但文件集不同。先跑对比命令看清差在哪，确认没有你要保留的独有文件再动手。批量时由「含半自动」开关决定带不带它走 —— 被换掉的副本是整目录移入回收站，独有文件随时能捞回来。</div>`:''}
+          ${p.grade==='manual'? manualCard(c) : ''}
+          ${c.ignored?`<div class="note">已确认「都先留着」，所以这条不再计入待处理。${c.ignore_note?`（你写的：${esc(c.ignore_note)}）`:''}
+            <button class="btn" style="margin-left:8px" data-undismiss="${esc(c.name)}">恢复提醒</button></div>`:''}
           ${canPick&&(p.grade==='auto'||p.grade==='semi')?`<div class="rxacts">
             <button class="btn ${p.grade==='auto'?'pri':''}" data-resolve="${esc(c.name)}">一键去重</button>
             <span style="font-size:11.5px;color:var(--tx3)">正本留在 <span class="mono">${esc(sh(p.canonical||'—'))}</span>，其余 ${(p.rewrite||[]).length} 份换成指向它的快捷方式</span>
@@ -853,7 +952,46 @@ function renderConf(){
     };
   });
   $('#confList').querySelectorAll('button[data-resolve]').forEach(b=>{
-    b.onclick = ev => { ev.stopPropagation(); resolveNow([b.dataset.resolve]); };
+    b.onclick = ev => { ev.stopPropagation(); resolveNow([b.dataset.resolve], true); };
+  });
+  // ---- 需人工那一档：选正本、执行、以及「都先留着」的出口
+  $('#confList').querySelectorAll('input[data-manual]').forEach(r=>{
+    r.onclick = ev => {
+      ev.stopPropagation();   // 别冒泡到卡片头 —— 那会顺手把卡片折起来
+      const n = r.dataset.manual;
+      MANUAL_PICK[n] = r.value;
+      // 只改受影响的那一处，不整表重渲染：重渲染会把卡片折回去、滚动位置也得找回来。
+      const card = r.closest('.conf');
+      card.querySelectorAll('input[data-manual]').forEach(o=>{
+        o.closest('.mpick').classList.toggle('on', o.checked);
+      });
+      const p = ((DOC.conflicts.find(x=>x.name===n)||{}).prescription)||{};
+      const go = card.querySelector('button[data-manual-go]');
+      if(go) go.textContent = (r.value === (p.canonical||''))
+        ? '按推荐这份为准' : '按我选的这份为准';
+    };
+  });
+  $('#confList').querySelectorAll('button[data-manual-go]').forEach(b=>{
+    b.onclick = ev => {
+      ev.stopPropagation();
+      const n = b.dataset.manualGo;
+      const pick = MANUAL_PICK[n] || pickDefault(n);
+      if(!pick){ alert('这一组没有可用的候选，先别动。'); return; }
+      openActResolve([n], true, {[n]: pick});
+    };
+  });
+  $('#confList').querySelectorAll('button[data-repair]').forEach(b=>{
+    b.onclick = ev => {
+      ev.stopPropagation();
+      // 断链那一档不传 canonical —— 后端会按 auto_repairable 自己挑，人不用选。
+      openActResolve([b.dataset.repair], true, {});
+    };
+  });
+  $('#confList').querySelectorAll('button[data-manual-dismiss]').forEach(b=>{
+    b.onclick = ev => { ev.stopPropagation(); dismissNow([b.dataset.manualDismiss]); };
+  });
+  $('#confList').querySelectorAll('button[data-undismiss]').forEach(b=>{
+    b.onclick = ev => { ev.stopPropagation(); dismissNow([b.dataset.undismiss], true); };
   });
   renderBulk();
 }
@@ -866,13 +1004,23 @@ function renderBulk(){
   const semi = picked.filter(c=>c.prescription.grade==='semi').length;
   const man  = picked.filter(c=>c.prescription.grade==='manual').length;
   $('#bulkText').innerHTML = `已选 <b>${state.sel.size}</b> 组　脚本可自动 ${auto}　半自动 ${semi}　需人工 ${man}`;
-  // 批量只带「可自动」的组。半自动单独点 —— 那是要人先看文件差异的一档，
-  // 顺手被批量带走就等于把该有人看一眼的步骤省掉了。
+  // 半自动（正文一致但文件集不同）也允许批量带走：它和「可自动」的差别只在附加
+  // 文件，而被换掉的副本是整目录移入回收站、不是删除，独有文件随时能捞回来。代
+  // 价仅是「没人先看一眼差异」，所以给一个默认勾上的开关让人能摘出去，而不是干
+  // 脆不让批量碰 —— 那只会逼着人一组一组点。
+  const wrap = $('#bulkSemiWrap');
+  if(wrap) wrap.style.display = semi ? 'flex' : 'none';
+  const semiN = $('#bulkSemiN'); if(semiN) semiN.textContent = semi;
+  const box = $('#bulkSemi'); if(box) box.checked = !!state.withSemi;
+  // 需人工的（正文已分叉）不进批量，留哪份是人的取舍。
+  const n = auto + (state.withSemi ? semi : 0);
   const rb = $('#bulkResolve');
   if(rb){
-    rb.disabled = auto === 0;
-    rb.textContent = auto ? `一键去重（${auto} 组）` : '一键去重';
-    rb.title = auto ? '' : '选中的组里没有「可自动」档；半自动/需人工请逐组处理';
+    rb.disabled = n === 0;
+    rb.textContent = n ? `一键去重（${n} 组）` : '一键去重';
+    rb.title = n ? '' : (auto + semi
+      ? '勾上「含半自动」才有可批量的组'
+      : '选中的组全是「需人工」档，请逐组处理');
   }
 }
 
@@ -1145,18 +1293,32 @@ async function doApply(){
   if(!ACT || !SRV) return;
   $('#aGo').disabled = true;
   $('#aMsg').textContent = '执行中…';
-    const payload = {action:ACT.kind, name:ACT.name, agent:ACT.agentId, apply:true};
-    if(ACT.names) payload.names = ACT.names;
-    if(ACT.allowSemi) payload.allow_semi = true;
-    const r = await callServer(payload);
-    $('#aGo').disabled = false;
-    if(!r.ok){ $('#aMsg').textContent = ''; $('#aBody').innerHTML += `<div class="note danger">执行失败：${esc(r.error||'')}</div>`; return; }
-    $('#aMsg').innerHTML = '<span style="color:var(--ok)">已执行</span>';
-    $('#aBody').innerHTML += `<div class="note ok">已执行：<br><span class="mono">${esc((r.log||[]).join('\n'))}</span></div>`;
-    if(ACT.kind==='resolve-conflict' && (r.groups||[]).length){
-      $('#aBody').innerHTML += `<div class="note">想还原：把 <span class="mono">${esc(sh(r.groups[0].trash))}</span> 里的目录移回原位，再删掉留在原位置的快捷方式。</div>`;
-    }
-    $('#aGo').style.display = 'none';
+  const kind = ACT.kind;
+  const payload = {action:kind, name:ACT.name, agent:ACT.agentId, apply:true};
+  if(ACT.names) payload.names = ACT.names;
+  if(ACT.allowSemi) payload.allow_semi = true;
+  if(ACT.canonicalMap && Object.keys(ACT.canonicalMap).length)
+    payload.canonical_map = ACT.canonicalMap;
+  if(kind==='dismiss-conflict') payload.ignore = ACT.ignore !== false;
+  const r = await callServer(payload);
+  $('#aGo').disabled = false;
+  if(!r.ok){ $('#aMsg').textContent = ''; $('#aBody').innerHTML += `<div class="note danger">执行失败：${esc(r.error||'')}</div>`; return; }
+  $('#aMsg').innerHTML = '<span style="color:var(--ok)">已执行</span>';
+  // 执行完还挂着「还没改动任何文件」会误导人，这行字得跟着状态走
+  const head = $('#aBody').firstElementChild;
+  if(head && /干跑预览/.test(head.textContent))
+    head.textContent = '已落盘 —— 下面是本次实际执行的动作';
+  $('#aBody').innerHTML += `<div class="note ok">已执行：<br><span class="mono">${esc((r.log||[]).join('\n'))}</span></div>`;
+  if(kind==='resolve-conflict'){
+    const back = (r.groups||[]).flatMap(g=>g.from||[]).length;
+    $('#aBody').innerHTML += back
+      ? `<div class="note">想退回去：点右上的「撤销上次去重」，或者自己去 <span class="mono">${esc(sh((r.groups[0]||{}).trash||DOC.paths.trash))}</span> 把目录移回原位。原副本是搬走、不是删除。</div>`
+      : `<div class="note">这次是断链修复，没有东西进回收站，所以也没有要还原的。</div>`;
+  }
+  if(kind==='dismiss-conflict'){
+    $('#aBody').innerHTML += `<div class="note">重扫之后这一组就不在「待处理」里了。要恢复提醒，在同一张卡片上点「恢复提醒」。</div>`;
+  }
+  $('#aGo').style.display = 'none';
   setTimeout(()=>{ rescan(); }, 900);
 }
 async function rescan(){
@@ -1188,28 +1350,51 @@ function planNow(){
   }
   /* 一键去重：留一份作正本，其余副本换成指向它的快捷方式。
      跟 disable/uninstall 同一条规矩 —— 先干跑给差量，点「确认执行」才落盘。
-     只读模式下退化成复制命令，跟页面上其它按钮一致。 */
-  function resolveNow(names){
+     只读模式下退化成复制命令，跟页面上其它按钮一致。
+
+     两个入口：单组点按钮进来意图明确，半自动那一档也认；批量走 bulkResolve，
+     半自动由「含半自动」开关决定（默认带）。两种走法在后端是同一条实现路径，
+     只是 allow_semi 传不传的区别。 */
+  function resolveNow(names, allowSemi){
     const groups = DOC.conflicts.filter(c=>names.includes(c.name));
-    const autos = groups.filter(c=>((c.prescription||{}).grade)==='auto').map(c=>c.name);
-    const semis = groups.filter(c=>((c.prescription||{}).grade)==='semi').map(c=>c.name);
-    // 单组点进来的，意图明确，半自动那一档也认；批量只带走「可自动」。
-    const use = (names.length===1 && semis.length===1) ? semis : autos;
-    if(!use.length){ alert('这些组里没有可自动处理的。半自动和需人工的组请逐组点开看。'); return; }
-    openActResolve(use, use.length===1 && semis.length===1);
+    const usable = groups.filter(c=>{
+      const g = (c.prescription||{}).grade;
+      return g === 'auto' || (allowSemi && g === 'semi');
+    });
+    if(!usable.length){
+      const semi = groups.filter(c=>((c.prescription||{}).grade)==='semi').length;
+      alert(semi
+        ? '选中的组只有「半自动」档，要先勾上批量栏里的「含半自动」才带得走；也可以在每一组上单独点。'
+        : '这些组里没有可自动或半自动处理的 —— 「需人工」档是正文已分叉，留哪份得你自己定夺，页面不给按钮。');
+      return;
+    }
+    openActResolve(usable.map(c=>c.name), !!allowSemi);
   }
-  function openActResolve(names, allowSemi){
-    ACT = {kind:'resolve-conflict', names, allowSemi:!!allowSemi, ops:null};
-    $('#aTitle').textContent = names.length===1 ? `一键去重：${names[0]}` : `一键去重：${names.length} 组`;
-    $('#aSub').textContent = '留一份作正本，其余副本换成指向它的快捷方式';
+  function openActResolve(names, allowSemi, canonMap){
+    const cm = canonMap || {};
+    const one = names.length===1 ? names[0] : null;
+    const isManual = one && cm[one];
+    ACT = {kind:'resolve-conflict', names, allowSemi:!!allowSemi, canonicalMap:cm, ops:null};
+    $('#aTitle').textContent = isManual
+      ? `按你选的这份为准：${one}`
+      : (names.length===1 ? `一键去重：${names[0]}` : `一键去重：${names.length} 组`);
+    const semiN = names.filter(n=>{
+      const c = (DOC.conflicts||[]).find(x=>x.name===n);
+      return c && ((c.prescription||{}).grade)==='semi';
+    }).length;
+    $('#aSub').textContent = isManual
+      ? `正本留在 ${sh(cm[one])}，另一份换成指向它的快捷方式`
+      : '留一份作正本，其余副本换成指向它的快捷方式'
+        + (allowSemi && semiN ? `　·　其中 ${semiN} 组是半自动（正文一致但文件集不同）` : '');
     $('#aGo').textContent = '确认执行';
     $('#aGo').className = 'btn pri';
     $('#aMsg').textContent = '';
-    if(!SRV){ renderActResolveOffline(names, allowSemi); return; }
+    if(!SRV){ renderActResolveOffline(names, allowSemi, cm); return; }
     $('#aGo').style.display = 'none';
     $('#aBody').innerHTML = '<div class="empty">正在做干跑检查…</div>';
     $('#act').classList.add('open'); $('#mask').classList.add('on');
-    callServer({action:'resolve-conflict', names, allow_semi:!!allowSemi, apply:false})
+    callServer({action:'resolve-conflict', names, allow_semi:!!allowSemi,
+                canonical_map:cm, apply:false})
       .then(r=>renderActResolve(r));
   }
   function renderActResolve(r){
@@ -1219,11 +1404,21 @@ function planNow(){
       return;
     }
     const groups = r.groups||[], skipped = r.skipped||[], warns = r.warnings||[];
+    const semis = groups.filter(g=>g.grade==='semi');
     let html = '<div style="font-size:12px;color:var(--tx3);margin:0 0 6px">干跑预览（还没有改动任何文件）</div>';
+    if(semis.length) html += `<div class="note warn">其中 <b>${semis.length}</b> 组是半自动 —— `
+      + `正文一致但文件集不同，副本里可能有正本没有的附加文件。被换掉的副本是整目录移入回收站（不是删除），`
+      + `随时能还原；想稳妥就先按每组下面给的命令看一眼差异，或者把批量栏的「含半自动」摘掉重新选。</div>`;
     html += groups.length
       ? `<div class="cmd">${esc((r.log||[]).join('\n'))}</div>`
-        + groups.map(g=>`<div class="note ok"><b>${esc(g.name)}</b>　正本留在 <span class="mono">${esc(sh(g.canonical))}</span>`
+        + groups.map(g=>`<div class="note ok"><b>${esc(g.name)}</b>`
+          + `　<span class="grade gr-${esc(g.grade||'auto')}">${esc(GRADELABEL[g.grade]||g.grade||'')}</span>`
+          + `　正本留在 <span class="mono">${esc(sh(g.canonical))}</span>`
           + g.from.map(f=>`<div style="margin-top:3px">${esc(sh(f.path))} → 改为快捷方式</div>`).join('')
+          + (g.grade==='semi' && g.from.length
+              ? `<div style="margin-top:5px">动手前想看清差在哪，先跑这条（只读，不改文件）：</div>
+                 <div class="cmd" style="margin-top:3px">diff -ru '${esc(g.canonical)}' '${esc(g.from[0].path)}' | head -200</div>`
+              : '')
           + `<div style="margin-top:3px;color:var(--tx3)">原副本移入 <span class="mono">${esc(sh(g.trash))}</span>（不删除，可还原）</div></div>`).join('')
       : '<div class="note">没有可处理的组。</div>';
     html += warns.map(w=>`<div class="note warn">${esc(w)}</div>`).join('');
@@ -1232,16 +1427,20 @@ function planNow(){
     ACT.ops = r.ops||[];
     ACT.preview = (r.log||[]).join('\n');
     $('#aGo').style.display = groups.length ? '' : 'none';
+    if(groups.length) $('#aGo').textContent = semis.length ? `确认执行（含 ${semis.length} 组半自动）` : '确认执行';
     $('#aCopy').textContent = '复制命令';
     $('#aMsg').textContent = groups.length ? '确认后才会真正执行' : '';
   }
-  function renderActResolveOffline(names, allowSemi){
-    const cmd = CLI(`resolve --names "${names.join(',')}"${allowSemi?' --semi':''}`);
+  function renderActResolveOffline(names, allowSemi, canonMap){
+    const cm = canonMap || {};
+    const canonArg = Object.keys(cm).length
+      ? ` --canonical "${Object.keys(cm).map(k=>`${k}=${cm[k]}`).join(',')}"` : '';
+    const cmd = CLI(`resolve --names "${names.join(',')}"${allowSemi?' --semi':''}${canonArg}`);
     $('#aBody').innerHTML = `
       <div class="note">当前是<b>只读模式</b>，页面不会改动任何文件。下面这条命令需要你自己粘到终端跑（默认干跑，加 <span class="mono">--yes</span> 才真执行）。</div>
       <dl class="kv" style="margin-top:12px">
         <dt>处理组</dt><dd class="mono">${esc(names.join(', '))}</dd>
-        <dt>做法</dt><dd>留一份作正本，其余换成指向它的快捷方式</dd>
+        <dt>做法</dt><dd>留一份作正本，其余换成指向它的快捷方式${allowSemi?'<br><span style="color:var(--tx3)">含半自动组：正文一致但文件集不同，原副本整目录移入回收站，可还原</span>':''}${Object.keys(cm).length?'<br><span style="color:var(--tx3)">正本按你选的那份（<span class="mono">--canonical</span>），不是推荐的那份</span>':''}</dd>
         <dt>回收站</dt><dd class="mono">${esc(sh(DOC.paths.trash))}</dd>
       </dl>
       <div class="cmd">${esc(cmd)}</div>
@@ -1249,6 +1448,98 @@ function planNow(){
     ACT.cmd = cmd;
     $('#aGo').style.display = 'none';
     $('#aCopy').textContent = '复制命令';
+    $('#act').classList.add('open'); $('#mask').classList.add('on');
+  }
+
+  /* 「都先留着，别再提醒」：给那些没有正确答案的组一个出口。
+     没有这个出口，这些组会永远挂在「待处理」里，面板的数字一直红着，久之就没人信了。 */
+  function dismissNow(names, undo){
+    ACT = {kind:'dismiss-conflict', names, ignore:!undo, ops:null};
+    $('#aTitle').textContent = undo ? `恢复提醒：${names.join('、')}` : `都先留着：${names.join('、')}`;
+    $('#aSub').textContent = undo
+      ? '把 overrides.json 里那条标记删掉，这一组重新计入待处理'
+      : '写进 overrides.json，这一组不再计入待处理（随时可以恢复）';
+    $('#aGo').textContent = undo ? '恢复提醒' : '确认，别再提醒';
+    $('#aGo').className = 'btn pri';
+    $('#aGo').style.display = '';
+    $('#aMsg').textContent = '';
+    if(!SRV){
+      const cmd = CLI(`dismiss --names "${names.join(',')}"${undo?' --undo':''}`)
+        + `\n\n（默认干跑，加 --yes 才真写；写的是 ${sh(DOC.paths.overrides||'')}）`;
+      ACT.cmd = cmd;
+      $('#aBody').innerHTML = `<div class="note">当前是<b>只读模式</b>，页面不改动任何配置。把这条命令自己粘到终端跑：</div>`
+        + `<div class="cmd">${esc(cmd)}</div>`;
+      $('#aGo').style.display = 'none';
+      $('#aCopy').textContent = '复制命令';
+      $('#act').classList.add('open'); $('#mask').classList.add('on');
+      return;
+    }
+    $('#aBody').innerHTML = `<div class="note">${undo
+      ? '恢复后这一组会重新出现在待处理里。'
+      : '这一组会从「待处理」里摘出去，但不会被改动、也不会被隐藏 —— 想再动它，随时点「恢复提醒」。'}</div>`;
+    $('#act').classList.add('open'); $('#mask').classList.add('on');
+  }
+
+  /* 撤销上一次「一键去重」。没有退路的「一键」不该给 —— 所以这个入口和执行按钮是一套。 */
+  function undoNow(){
+    const u = DOC.undo;
+    if(!u){
+      openAct({kind:'undo-resolve', names:[], ops:null}, '没有可撤销的「一键去重」',
+              '台账里还没有去过重的记录');
+      $('#aBody').innerHTML = `<div class="note">还没做过「一键去重」，所以没有可撤销的。台账在 <span class="mono">${esc(sh(DOC.paths.ledger))}</span>。</div>`;
+      $('#aGo').style.display = 'none';
+      return;
+    }
+    ACT = {kind:'undo-resolve', names:[], ops:null};
+    $('#aTitle').textContent = '撤销上一次「一键去重」';
+    $('#aSub').textContent = `${u.at||''}　共 ${u.files} 处副本、${(u.groups||[]).length} 组`;
+    $('#aGo').textContent = '确认撤销';
+    $('#aGo').className = 'btn pri';
+    $('#aMsg').textContent = '';
+    if(!SRV){
+      const cmd = CLI('undo');
+      ACT.cmd = cmd;
+      $('#aBody').innerHTML = `
+        <div class="note">当前是<b>只读模式</b>，页面不会改动任何文件。把这条命令自己粘到终端跑（默认干跑，加 <span class="mono">--yes</span> 才真撤）：</div>
+        <div class="cmd">${esc(cmd)}</div>
+        <div style="font-size:12px;color:var(--tx3);margin-top:10px">这次要去掉的是：</div>
+        ${(u.groups||[]).map(g=>`<div class="note">${esc(g.name)}　撤掉 ${g.count} 处快捷方式，目录搬回原位</div>`).join('')}`;
+      $('#aGo').style.display = 'none';
+      $('#aCopy').textContent = '复制命令';
+      $('#act').classList.add('open'); $('#mask').classList.add('on');
+      return;
+    }
+    $('#aGo').style.display = 'none';
+    $('#aBody').innerHTML = '<div class="empty">正在做干跑检查…</div>';
+    $('#act').classList.add('open'); $('#mask').classList.add('on');
+    callServer({action:'undo-resolve', apply:false}).then(r=>renderActUndo(r));
+  }
+  function renderActUndo(r){
+    if(!r.ok){
+      $('#aBody').innerHTML = `<div class="note danger"><b>撤不了：</b>${esc(r.error||'未知错误')}</div>`;
+      $('#aGo').style.display = 'none';
+      return;
+    }
+    const inf = r.info||{}, groups = inf.groups||[];
+    let html = '<div style="font-size:12px;color:var(--tx3);margin:0 0 6px">干跑预览（还没有改动任何文件）</div>';
+    html += groups.length
+      ? `<div class="cmd">${esc((r.log||[]).join('\n'))}</div>`
+        + groups.map(g=>`<div class="note ok">${esc(g.name)}　撤掉 ${g.restored.length} 处快捷方式，目录搬回原位`
+          + g.restored.map(x=>`<div style="margin-top:3px" class="mono">${esc(sh(x.trash))} → ${esc(sh(x.path))}</div>`).join('')
+          + `</div>`).join('')
+      : '<div class="note">这次操作里没有可还原的条目。</div>';
+    html += (r.warnings||[]).map(w=>`<div class="note warn">${esc(w)}</div>`).join('');
+    html += (r.skipped||[]).map(s=>`<div class="note">跳过 <b>${esc(s.name)}</b>：${esc(s.why)}</div>`).join('');
+    $('#aBody').innerHTML = html;
+    ACT.ops = r.ops||[];
+    ACT.preview = (r.log||[]).join('\n');
+    $('#aGo').style.display = groups.length ? '' : 'none';
+    $('#aMsg').textContent = groups.length ? '确认后才会真正撤销' : '';
+  }
+  function openAct(act, title, sub){
+    ACT = act;
+    $('#aTitle').textContent = title; $('#aSub').textContent = sub||'';
+    $('#aMsg').textContent = '';
     $('#act').classList.add('open'); $('#mask').classList.add('on');
   }
   
@@ -1298,18 +1589,29 @@ $('#iAgent').onchange = () => { if($('#iOut').querySelector('.cmd')) doGen(); };
     if($('#iOut').querySelector('.cmd')) doGen();
   };
 });
-[['cfAll','all'],['cfTodo','todo'],['cfCoexist','coexist'],['cfDormant','dormant']].forEach(([id,k])=>{
-  $('#'+id).onclick = () => { state.cf = k; syncCfPills(); renderTriage(); renderConf(); };
+[['cfAll','all'],['cfTodo','todo'],['cfIgnored','ignored'],['cfCoexist','coexist'],['cfDormant','dormant']].forEach(([id,k])=>{
+  const el = $('#'+id);
+  if(el) el.onclick = () => { state.cf = k; syncCfPills(); renderTriage(); renderConf(); };
 });
 $('#btnPlan').onclick = planNow;
+// 没有可撤销的东西就不摆一个点了没反应的按钮 —— 但也不能藏起来不让人知道有这条路，
+// 所以按钮始终在，只把状态写在 title 里。
+$('#btnUndo').onclick = undoNow;
+(()=>{
+  const b = $('#btnUndo'), u = DOC.undo;
+  if(!u){ b.classList.remove('pri'); b.title = '还没做过「一键去重」，所以没有可撤销的。'; }
+  else if(!SRV){ b.title = '只读模式：点了会把撤销命令复制给你'; }
+  else { b.title = `撤销 ${u.at||''} 那次去重（${u.files} 处副本，可先看干跑差量）`; }
+})();
 $('#bulkClear').onclick = () => { state.sel.clear(); renderConf(); };
 $('#bulkPlan').onclick = planNow;
+$('#bulkSemi').onchange = e => {
+  state.withSemi = !!e.target.checked;
+  renderBulk();
+};
 $('#bulkResolve').onclick = () => {
-  const autos = DOC.conflicts
-    .filter(c=>state.sel.has(c.name) && ((c.prescription||{}).grade)==='auto')
-    .map(c=>c.name);
-  if(!autos.length){ alert('选中的组里没有「可自动」档的冲突。半自动的请逐组点开处理。'); return; }
-  openActResolve(autos, false);
+  const names = DOC.conflicts.filter(c=>state.sel.has(c.name)).map(c=>c.name);
+  resolveNow(names, !!state.withSemi);
 };
 $('#btnRescan').onclick = rescan;
 $('#dClose').onclick = closeDrawer;

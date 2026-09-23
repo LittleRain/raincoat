@@ -39,6 +39,7 @@ skillctl.py — 本地 skill 面板（扫描家底 + 跨 agent 校验 + 迁移�
   skillctl.py disable|enable <skill> --agent <agent> [--yes]
   skillctl.py uninstall <skill> --agent <agent> [--yes]
   skillctl.py restore                    # 列出回收站
+  skillctl.py undo [--yes]                # 撤销上一次一键去重（撤快捷方式、目录搬回原位）
   skillctl.py plan --grades auto,semi,manual
   skillctl.py serve --open               # 直连模式，页面按钮点一下就生效
   skillctl.py agents                     # 列出适配表
@@ -589,15 +590,25 @@ def scan_entity_files(root: str, budget: int):
     files, text_files, total_bytes, total_lines = [], [], 0, 0
     consumed = 0
     truncated = False
+    # 真文件 / 软链分开数，再取真实文件里最晚的 mtime。
+    # 「目录里全是软链」（软链农场）和「最近被动过」都靠这几个数，别再从 file_count 反推 ——
+    # 软链在下面按 size=0 记账，混在一起就分不出「空目录」和「只有软链的目录」。
+    real_files = link_files = broken_links = 0
+    mtime = 0.0
     if not os.path.isdir(root):
         return {"files": [], "text_files": [], "total_bytes": 0, "file_count": 0,
-                "line_count": 0, "truncated": False}
+                "line_count": 0, "truncated": False,
+                "real_file_count": 0, "link_file_count": 0, "broken_link_count": 0,
+                "mtime": 0.0}
     for dp, dns, fns in os.walk(root, followlinks=False):
         dns[:] = [d for d in dns if d not in SKIP_DIRS]
         for fn in sorted(fns):
             fp = os.path.join(dp, fn)
             rel = os.path.relpath(fp, root)
             if os.path.islink(fp):
+                link_files += 1
+                if not os.path.exists(fp):
+                    broken_links += 1
                 files.append({"rel": rel, "link": True,
                               "broken": not os.path.exists(fp), "size": 0})
                 continue
@@ -606,7 +617,15 @@ def scan_entity_files(root: str, budget: int):
             except OSError:
                 continue
             files.append({"rel": rel, "link": False, "broken": False, "size": size})
+            real_files += 1
             total_bytes += size
+            try:
+                m = os.path.getmtime(fp)
+            except OSError:
+                pass
+            else:
+                if m > mtime:
+                    mtime = m
             if os.path.splitext(fn)[1].lower() not in TEXT_EXT or size > 2_000_000:
                 continue
             if consumed >= budget:
@@ -618,7 +637,9 @@ def scan_entity_files(root: str, budget: int):
             total_lines += len(lines)
             text_files.append({"rel": rel, "lines": lines})
     return {"files": files, "text_files": text_files, "total_bytes": total_bytes,
-            "file_count": len(files), "line_count": total_lines, "truncated": truncated}
+            "file_count": len(files), "line_count": total_lines, "truncated": truncated,
+            "real_file_count": real_files, "link_file_count": link_files,
+            "broken_link_count": broken_links, "mtime": mtime}
 
 
 # ---------------------------------------------------------------- 检测器
@@ -1065,6 +1086,18 @@ def build_entities(entries, agents_cfg, rules_cfg, overrides, manifest_index,
                 os.path.realpath(expand("~/.agents")) + os.sep) for r in refs),
             "file_count": scan["file_count"], "total_bytes": scan["total_bytes"],
             "line_count": scan["line_count"], "truncated": scan["truncated"],
+            # 真文件 / 软链分开记：冲突页要靠它区分「空目录」「只有软链的目录」「真有内容」，
+            # 也靠 mtime 说「这份最近被动过」。软链按 size=0 记账，只看 file_count 是分不出来的。
+            "real_file_count": scan["real_file_count"],
+            "link_file_count": scan["link_file_count"],
+            "broken_link_count": scan["broken_link_count"],
+            "mtime": scan["mtime"],
+            "path_exists": os.path.exists(real_path),
+            # 断链：这副「实体」其实只是一条指向空气的快捷方式，real_path 是它指向的那个不
+            # 存在的目标，于是「这条链待在哪儿」的信息会丢 —— 想把它指回正本就没处下手。
+            # 所以单独记下落在什么地方。路径不存在时它才有值。
+            "link_at": (sorted(r["path"] for r in refs if r["is_link"])
+                        if not os.path.exists(real_path) else []),
             "body_hash": body_hash, "full_hash": full_hash,
             "checks": checks, "fail_count": len(fails), "warn_count": len(warns),
             "verdict": verdict, "deps": detect_deps(ctx, scan),
@@ -1093,59 +1126,233 @@ def classify_nature(group):
     return "duplicate", "同一份内容被复制到了多处，属于真正的副本漂移"
 
 
-def _score_canonical(x):
-    """给「哪一份该留作正本」打分。分数相同的由路径长度兜底，保证结果稳定。"""
-    s, why = 0, []
-    if x["real_path"].startswith(os.path.join(HOME, ".agents", "skills") + os.sep):
-        s += 100
-        why.append("落在跨 agent 共享池，天然被多方引用")
-    if x["link_count"]:
-        s += 20 * min(x["link_count"], 5)
-        why.append(f"已被 {x['link_count']} 处快捷方式引用")
-    if not x["real_path"].startswith("/Applications/"):
-        s += 5
-        why.append("不在 App 包内（改它不会被升级覆盖）")
-    if x["entity_agents"]:
-        s += 3
-        why.append(f"是实体本体（{','.join(x['entity_agents'])} 直接持有）")
-    return s, "；".join(why[:2]) or "无突出优势，仅为兜底候选"
+def _short_time(ts):
+    """把 mtime 说成人话。取不到就返回 —，不抛异常。"""
+    try:
+        return datetime.fromtimestamp(float(ts)).strftime("%m-%d %H:%M")
+    except (OSError, OverflowError, ValueError, TypeError):
+        return "—"
 
 
-def prescribe(kind, nature, liveness, ents):
-    """给一组冲突开处方：怎么做、能不能自动做、留哪一份。"""
+def canonical_blocked(x):
+    """这份副本能不能当正本。返回不能的理由，空串表示可以。
+
+    挡掉的三类都是「执行下去会出事」：
+      · 路径不存在 —— 断链。实测 `~/.agents/skills/find-skills` 正是这样被选成正本的，
+        照着它执行就会把好副本换成指向空气的快捷方式。
+      · 目录里没有真实文件 —— 空壳，或整个目录只有软链（软链农场）。
+      · 来自技能商店 / App 内置 —— 渠道升级会把整个目录换掉，正本放这儿等于给以后埋断链。
+    """
+    if not x.get("path_exists", True):
+        return "路径不存在（快捷方式断了）"
+    if not x.get("real_file_count"):
+        if x.get("link_file_count"):
+            return "目录里全是快捷方式，没有自己的文件"
+        return "目录里没有文件"
+    if x.get("type") == "market":
+        return "来自技能商店，升级时会被整个换掉"
+    if x.get("type") == "builtin":
+        return "App 内置技能，升级 App 会被覆盖"
+    return ""
+
+
+def candidate_usable(x):
+    """这份副本能不能当**推荐**的正本。返回 (可用, 不能用的原因)。
+
+    比 canonical_blocked 多挡一条：已被停用的副本不推荐。
+    但人在页面上明确指定时允许 —— 你可能就是想以它为准，只是在某个 agent 下关掉了它。
+    """
+    why = canonical_blocked(x)
+    if why:
+        return False, why
+    if (x.get("state") or "") in ("off", "model_off"):
+        return False, "已被停用"
+    return True, ""
+
+
+def canonical_rank(x, mode="stable"):
+    """可用候选的排序。三种规则，按「这一组到底是什么问题」选：
+
+    · time（正文已分叉）：只有「哪份是你后来改的」能说明问题 —— 本机实测 32 份冲突副本里
+      状态不是启用的只有 3 份、引用数为 0 的有 28 份、版本号 21 份没有，这三个信号里只有
+      时间既有区分度又讲得清楚。
+    · content（正文一致但文件集不同）：这一档要留的必须是**内容更全**的那份。按时间挑会挑中
+      「更晚被复制过来」的那一份，把它定成正本等于拿残缺的当源、把多出来的文件推进回收站。
+    · stable（内容逐字一致）：留哪份都不改内容，优先留在已被多方引用的那份 —— 正本放在只有
+      单个 agent 看得见的角落，等于让别的 agent 都绕过它。刻意不看 mtime：内容一样时「更晚」
+      往往只是「更晚被复制过来」，拿它当判据会让同一份家底在不同机器上挑出不同正本。
+
+    并列时取路径短的兜底。兜底是任意的，所以页面上会把选中的那份显示出来，点之前能看清。
+    """
+    if mode == "time":
+        return (float(x.get("mtime") or 0), int(x.get("link_count") or 0),
+                -len(x["real_path"]))
+    if mode == "content":
+        return (int(x.get("real_file_count") or 0), int(x.get("total_bytes") or 0),
+                int(x.get("link_count") or 0), -len(x["real_path"]))
+    shared = str(x["real_path"]).startswith(os.path.join(HOME, ".agents", "skills") + os.sep)
+    return (int(x.get("link_count") or 0), 1 if shared else 0, -len(x["real_path"]))
+
+
+def canonical_note(x, others, mode="stable"):
+    """推荐它的理由。只说人话 —— 不出现评分、相似度这类词。
+
+    理由要跟真正的排序依据一致：按时间挑的就别说「它被引用得多」，反之亦然 ——
+    说一个没参与判断的理由，等于教人用错的判据。
+    """
+    bits = []
+    if mode == "time":
+        mine, top = float(x.get("mtime") or 0), max(
+            [float(o.get("mtime") or 0) for o in others] or [0.0])
+        if mine and mine >= top:
+            bits.append(f"最近被动过（{_short_time(mine)}）")
+    if mode == "content":
+        mine = int(x.get("real_file_count") or 0)
+        top = max([int(o.get("real_file_count") or 0) for o in others] or [0])
+        if mine > top:
+            bits.append(f"文件最全（{mine} 个，另一份只有 {top} 个）"
+                        if top else f"文件最全（{mine} 个）")
+    if x.get("link_count"):
+        bits.append(f"已被 {x['link_count']} 处快捷方式引用")
+    if str(x["real_path"]).startswith(os.path.join(HOME, ".agents", "skills") + os.sep):
+        bits.append("落在跨 agent 共享池，天然被多方引用")
+    if x.get("entity_agents"):
+        bits.append(f"是实体本体（{','.join(x['entity_agents'][:2])} 直接持有）")
+    return "；".join(bits[:2]) or "候选里其他几份要么更旧、要么已经被停用"
+
+
+SHAPE_LABEL = {
+    "broken": "有一份坏了",
+    "symlink-farm": "有一份只剩快捷方式",
+    "shell": "有一份疑似转发壳",
+    "fork": "正文各有改动",
+}
+SHAPE_SENTENCE = {
+    "broken": "有一份的路径已经不存在了 —— 那不是「两份内容不一样」，是那一份本身坏了。",
+    "symlink-farm": "有一份目录里全是快捷方式、没有自己的文件，它不算一份真副本。",
+    "shell": "其中一份正文很短，看着像转发壳 —— 它本来就不装内容，把内容并过去才是对的。",
+    "fork": "两份正文各自改过，留哪份是你的取舍，工具不替你决定。",
+}
+
+
+def conflict_shape(ents):
+    """「正文不一致」其实是好几种情况。先把不是「取舍问题」的挑出来，剩下的才该问人。
+
+    对使用者的价值是减法：坏链、软链农场、转发壳这三类不该让他做选择，工具直接判掉；
+    他只需要面对真正的「两个版本各有改动」。实测本机 16 组「正文不一致」里有 4 组属于前三类。
+    """
+    if any(not e.get("path_exists", True) for e in ents):
+        return "broken"
+    if any(not e.get("real_file_count") and e.get("link_file_count") for e in ents):
+        return "symlink-farm"
+    big = max((e.get("total_bytes") or 0) for e in ents)
+    if big >= 1200 and any(
+            (e.get("total_bytes") or 0) < 400 and big >= 3 * max(1, e.get("total_bytes") or 0)
+            for e in ents):
+        return "shell"
+    return "fork"
+
+
+def prescribe(kind, nature, liveness, ents, ignored=False):
+    """给一组冲突开处方：怎么做、能不能自动做、留哪一份。
+
+    推荐正本只从「可用副本」里挑 —— 断链、空壳、软链农场、商店/内置、已停用全部出局。
+    全都不可用时宁可不给推荐（页面会说明原因），也不要把一份坏的推给人。
+    """
+    if ignored:
+        return {"grade": "none", "action": "已确认，不再提醒",
+                "why": "你在 overrides.json 里把这组标成「都留着」了。想改动时把那一条删掉再重扫。"}
     if nature == "coexist":
         return {"grade": "none", "action": "不动",
                 "why": "不同来源的同名技能，硬合并会让一侧的升级链路失效。"}
     if liveness == "dormant":
         return {"grade": "none", "action": "不动",
                 "why": "所有副本都处于禁用状态，属于历史残留，想清理则直接卸载。"}
-    best = max(ents, key=lambda x: (_score_canonical(x)[0], x["link_count"], -len(x["real_path"])))
-    score, why = _score_canonical(best)
-    table = {
-        "identical": ("auto", "保留一份作正本，其余改为指向它的快捷方式",
-                      "内容逐字一致，改完不会有任何行为差异。"),
-        "meta-only": ("auto", "保留一份作正本，其余改为快捷方式，元数据以正本为准",
-                      "正文与文件结构一致，只有 frontmatter 不同。"),
-        "same-body-diff-files": ("semi", "先确认要保留哪些附加文件，再改为快捷方式",
-                                 "正文一致但文件集不同 —— 典型的「复制过去之后各自又长了东西」。"),
-        "divergent": ("manual", "先出左右对比，你定哪份是正本，再生成脚本",
-                      "正文已经真实分叉，这属于你自己的改动取舍，不该由工具替你决定。"),
+    # 形态细分只服务于「正文真的不一致」这一档。半自动组的正文是逐字一致的，给它贴
+    # 「正文各有改动」是错的 —— 那一档要说明的是附加文件差在哪，不是正文分叉。
+    shape = conflict_shape(ents) if kind == "divergent" else None
+    usable = [x for x in ents if candidate_usable(x)[0]]
+    # 转发壳不推荐当正本：它本来就不装内容，把内容并过去才对。只在候选里说明，不静默剔除。
+    shells = set()
+    if shape == "shell":
+        biggest = max((e.get("total_bytes") or 0) for e in ents)
+        shells = {x["real_path"] for x in ents
+                  if (x.get("total_bytes") or 0) < 400
+                  and biggest >= 3 * max(1, x.get("total_bytes") or 0)}
+        usable = [x for x in usable if x["real_path"] not in shells]
+    mode = {"divergent": "time", "same-body-diff-files": "content"}.get(kind, "stable")
+    best = (max(usable, key=lambda x: (canonical_rank(x, mode), x["link_count"]))
+            if usable else None)
+    note = canonical_note(best, [x for x in usable if x is not best], mode) if best else ""
+    reason_why = {
+        "identical": "内容逐字一致，改完不会有任何行为差异。",
+        "meta-only": "正文与文件结构一致，只有 frontmatter 不同。",
+        "same-body-diff-files": "正文一致但文件集不同 —— 典型的「复制过去之后各自又长了东西」。",
+        "divergent": "两份正文各自改过，留哪份是你的取舍，工具不替你决定。",
     }[kind]
-    other = [x for x in ents if x["real_path"] != best["real_path"]]
-    return {
-        "grade": table[0], "action": table[1], "why": table[2],
-        "canonical": best["real_path"], "canonical_agents": best["agents"],
-        "canonical_why": why,
+    table = {
+        "identical": ("auto", "保留一份作正本，其余改为指向它的快捷方式"),
+        "meta-only": ("auto", "保留一份作正本，其余改为快捷方式，元数据以正本为准"),
+        "same-body-diff-files": ("semi", "先确认要保留哪些附加文件，再改为快捷方式"),
+        "divergent": ("manual", "选一份为准，其余改为指向它的快捷方式"),
+    }[kind]
+    other = [x for x in ents if best and x["real_path"] != best["real_path"]]
+    # 「工具可自行修复」：该被替换的每一份后面都什么都没有（断链）。这种组里没有取舍可言 ——
+    # 把链指回正本谁都不损失，所以不该让人做选择题。判定只此一处，页面与执行都读它，
+    # 免得两边各写一份规则、慢慢漂开。
+    auto_repairable = bool(best) and bool(other) and all(
+        not x.get("path_exists", True) and x.get("link_at") for x in other)
+    out = {
+        "grade": table[0], "action": table[1], "why": reason_why,
+        "canonical": best["real_path"] if best else None,
+        "canonical_agents": best["agents"] if best else [],
+        "canonical_why": note,
+        "auto_repairable": auto_repairable,
         "rewrite": [{"path": x["real_path"], "agents": x["agents"],
                      "link_count": x["link_count"]} for x in other],
-        "needs_diff": kind in ("divergent", "same-body-diff-files"),
+        "needs_diff": kind == "same-body-diff-files",
+        "candidates": [{"path": x["real_path"],
+                        "usable": x["real_path"] not in shells and candidate_usable(x)[0],
+                        "why": candidate_usable(x)[1] or (
+                            "正文很短，疑似转发壳，不建议留在它这儿" if x["real_path"] in shells
+                            else ""),
+                        "agents": x.get("agents") or [], "type": x.get("type"),
+                        "state": x.get("state"), "mtime": x.get("mtime") or 0,
+                        "mtime_text": _short_time(x.get("mtime") or 0),
+                        "version": x.get("version"), "version_source": x.get("version_source"),
+                        "file_count": x.get("file_count"), "total_bytes": x.get("total_bytes"),
+                        "root_label": x.get("root_label")}
+                       for x in ents],
     }
+    if shape:
+        out["shape"] = shape
+        out["shape_label"] = SHAPE_LABEL[shape]
+        out["shape_sentence"] = SHAPE_SENTENCE[shape]
+        # 「工具可判定」：这一组其实没什么可取舍的（候选只剩一份，或形态本就不是分叉）。
+        out["decidable"] = bool(best) and (shape != "fork" or len(usable) == 1)
+    return out
 
 
-def analyze_conflicts(entities):
+def conflict_ignores(overrides):
+    """overrides.json 里被标成「都留着、别再提醒」的冲突组 → {名字: 说明}。
+
+    冲突里有一类没有正确答案：两份都还在用（不同 agent 各喂一份），或者就看不出差别、
+    决定先不动。以前没有出口，这些组就永远挂在「待处理」里，数字一直红着，久了就没人看了。
+    """
+    out = {}
+    for name, ov in ((overrides or {}).get("by_conflict") or {}).items():
+        if not isinstance(ov, dict):
+            continue
+        if ov.get("ignore"):
+            out[name] = ov.get("note") or ""
+    return out
+
+
+def analyze_conflicts(entities, conflict_overrides=None):
     by_name = defaultdict(list)
     for e in entities:
         by_name[e["name"]].append(e)
+    ignored = conflict_ignores(conflict_overrides)
     conflicts = []
     for name, group in by_name.items():
         if len({e["real_path"] for e in group}) < 2:
@@ -1170,7 +1377,16 @@ def analyze_conflicts(entities):
                  "plugin_key": e.get("plugin_key"),
                  "state": e.get("overall_state"), "states": e.get("states") or {},
                  "off_agents": e.get("off_agents") or [],
-                 "root_label": e.get("root_label")}
+                 "root_label": e.get("root_label"),
+                 # 判断「这份能不能当正本」「最近被动过没有」要用的三个数，
+                 # 之前只传了 file_count，分不出空目录 / 只有软链的目录 / 真有内容。
+                 "path_exists": e.get("path_exists", True),
+                 "real_file_count": e.get("real_file_count", 0),
+                 "link_file_count": e.get("link_file_count", 0),
+                 "mtime": e.get("mtime") or 0,
+                 "version_source": e.get("version_source"),
+                 # 断链落在哪儿。有它才谈得上「把这条链指回正本」。
+                 "link_at": list(e.get("link_at") or [])}
                 for e in sorted(group, key=lambda x: x["real_path"])]
         vers = sorted({x["version"] for x in ents if x.get("version")})
         bundles = {x["bundle"] for x in ents if x.get("bundle")}
@@ -1187,7 +1403,10 @@ def analyze_conflicts(entities):
             # 新增两个维度：同名异物 vs 真重复 / 是否真的同时在生效
             "nature": nature, "nature_why": nature_why, "liveness": liveness,
             "disabled_count": n_off,
-            "prescription": prescribe(kind, nature, liveness, ents),
+            "ignored": name in ignored,
+            "ignore_note": ignored.get(name, ""),
+            "prescription": prescribe(kind, nature, liveness, ents,
+                                      ignored=name in ignored),
         })
     order = {"identical": 0, "meta-only": 1, "same-body-diff-files": 2, "divergent": 3}
     # 只把「真重复且仍有副本在生效」的排到前面；同名异物与全禁用的一律沉底
@@ -1545,6 +1764,19 @@ def pretty_path(path):
     return path.replace(HOME, "~", 1) if path.startswith(HOME) else path
 
 
+def path_key(path):
+    """把同一个路径的不同写法归一到一把尺子上，用来判断「这是不是同一份」。
+
+    实测踩到的坑：macOS 上 `/tmp` 是 `/private/tmp` 的软链，用户按终端里看到的 `/tmp/...`
+    传进来，快照里存的却是 `/private/tmp/...`，同一条路径被判成「不属于这一组」。带软链的
+    家目录同理。
+
+    只解析父目录、不解析最后一段 —— 最后一段本身可能就是个快捷方式，解析它会把两份不同的
+    副本（一份实体 + 一份指向它的快捷方式）认成同一份，那正好是这里最不该出的错。
+    """
+    return os.path.join(os.path.realpath(os.path.dirname(path)), os.path.basename(path))
+
+
 def missing_snapshot_hint():
     """没快照时的统一提示。把找过的路径写出来 —— 落点可配之后，
     「明明扫过却说没有」第一个要排查的就是两边落点不一致。"""
@@ -1775,6 +2007,16 @@ def apply_ops(ops, dry_run=True):
                     raise RuntimeError(f"目标已存在，拒绝覆盖：{dst}")
                 os.symlink(target, dst)
                 log.append(f"[link] 完成 {dst.replace(HOME, '~')} → {target.replace(HOME, '~')}")
+        elif k == "unlink":
+            # 只删快捷方式本身，而且必须真的是快捷方式 —— 撤销的时候宁可不做，也不能删错东西。
+            path = op["path"]
+            if not os.path.islink(path):
+                raise RuntimeError(f"这里不是快捷方式，拒绝删除：{path}")
+            if dry_run:
+                log.append(f"[unln] {path.replace(HOME, '~')}（删掉这里的快捷方式）")
+            else:
+                os.unlink(path)
+                log.append(f"[unln] 完成 {path.replace(HOME, '~')}")
     return log
 
 
@@ -1845,15 +2087,22 @@ def uninstall_entity(doc, agents_cfg, name, agent_id, force=False, dry_run=True)
     return log, warns, ops
 
 
-def resolve_conflict(doc, agents_cfg, names=None, allow_semi=False, dry_run=True):
+def resolve_conflict(doc, agents_cfg, names=None, allow_semi=False, dry_run=True,
+                     canonical_map=None):
     """把重复冲突真正落盘：留一份作正本，其余换成指向它的快捷方式。
 
     跟 `plan` 的分工：plan 只出清单和脚本给人复核，一个字节都不动；这里直接改，
     但同样干跑优先 —— 页面按钮先取一份差量，用户点头之后才落盘。
 
-    只碰 nature=duplicate 且还有副本在用的组。半自动（正文一致但文件集不同）默认
-    不动，得显式 allow_semi；需人工的永远不碰 —— 留哪份是人的取舍，不该由工具代劳。
+    三档的进入条件不同：
+      · auto / semi —— 脚本可判定，semi 要显式 allow_semi；
+      · manual（正文已分叉）—— 只在 canonical_map 里**明确指定了留哪一份**时才处理。
+        「留哪份」是你的取舍，工具不替你挑；但你挑了，剩下的搬移换链就不该让你手工做。
+
+    canonical_map 的路径必须落在**这次快照里该组真实存在的副本**上 —— 请求里的路径不能直接信，
+    否则一个畸形请求就能把任意目录移进回收站、再在原地建一个指向任意位置的快捷方式。
     """
+    canon_map = canonical_map or {}
     grades = ("auto", "semi") if allow_semi else ("auto",)
     ts = datetime.now().strftime("%Y%m%d-%H%M%S")
     groups, ops, skipped, warnings = [], [], [], []
@@ -1864,39 +2113,98 @@ def resolve_conflict(doc, agents_cfg, names=None, allow_semi=False, dry_run=True
             continue
         p = c.get("prescription") or {}
         grade = p.get("grade")
-        if grade not in grades:
-            skipped.append({"name": c["name"], "why": "正文已分叉，需人工定夺"
-                            if grade == "manual" else f"级别 {grade} 不在本次范围"})
+        chosen = canon_map.get(c["name"])
+        if grade == "manual" and not chosen and not p.get("auto_repairable"):
+            # 正文分叉那档默认必须由人指定留哪一份。唯一的例外是「该被替换的那些副本后面
+            # 什么都没有」—— 也就是断链：它只是一条指向空气的快捷方式，把它指回正本不涉及
+            # 任何取舍，判定见 prescribe 里的 auto_repairable。除此之外一律交给人，包括软链
+            # 农场（那些链可能各自指向不同地方，换掉会丢映射）和转发壳（它有正文，换掉就是丢正文）。
+            skipped.append({"name": c["name"],
+                            "why": "正文已分叉，要你在页面上指定留哪一份才动手"})
             continue
-        canon = p.get("canonical")
+        if grade not in grades and grade != "manual":
+            if grade == "semi":
+                why = "半自动组（正文一致但文件集不同）要显式加 --semi 才处理"
+            else:
+                why = f"级别 {grade} 不在本次范围"
+            skipped.append({"name": c["name"], "why": why})
+            continue
+        if chosen:
+            # 只认这次快照里的副本。传进来的路径再合理也不信 —— 但两种等价写法要能对上，
+            # 否则用户按终端里的路径传进来会被自己的机器判成非法。
+            key = path_key(chosen)
+            match = next((e for e in (c.get("entities") or [])
+                          if path_key(e["real_path"]) == key), None)
+            if not match:
+                skipped.append({"name": c["name"],
+                                "why": f"指定的那份不属于这一组，已拒绝：{pretty_path(chosen)}"})
+                continue
+            blocked = canonical_blocked(match)
+            if blocked:
+                skipped.append({"name": c["name"],
+                                "why": f"指定的那份不能当正本（{blocked}）：{pretty_path(chosen)}"})
+                continue
+            canon = match["real_path"]
+        else:
+            canon = p.get("canonical")
         if not canon or not os.path.isdir(canon) or os.path.islink(canon):
             warnings.append(f"{c['name']}：候选正本 {pretty_path(canon or '(空)')} 不可用"
                             f"（不存在／不是目录／本身还是个快捷方式），跳过。")
             continue
         targets = []
-        for r in p.get("rewrite") or []:
-            src = r.get("path")
-            if not src or src == canon:
+        # 要换掉哪几份必须**按这次实际选定的正本重算**，不能照抄扫描期的 rewrite ——
+        # 那个列表是针对「推荐正本」算的，用户一旦改选另一份，它恰好把用户选中的那份列成
+        # 待替换对象，结果就是什么都不做（实测：--canonical 指定后静默无输出）。
+        for e in sorted(c.get("entities") or [], key=lambda x: x["real_path"]):
+            src = e["real_path"]
+            if src == canon:
+                continue
+            if not e.get("path_exists", True):
+                # 断链。src 是「它指向的那个不存在的目标」，链真正待在哪儿要看 link_at。
+                # 把链指回正本是**修复**而不是取舍 —— 后面什么都没有，没有东西要进回收站，
+                # 这也是唯一能让这一份重新可用的动作。
+                stamped = list(e.get("link_at") or [])
+                if stamped:
+                    for at in stamped:
+                        targets.append((at, (e.get("agents") or ["?"])[0], None, True))
+                else:
+                    warnings.append(f"{c['name']}：{pretty_path(src)} 不存在，跳过。")
                 continue
             if os.path.islink(src):
                 skipped.append({"name": c["name"],
-                                "why": f"{pretty_path(src)} 已经是快捷方式"})
+                                "why": f"{pretty_path(src)} 已经是能用的快捷方式"})
                 continue
             if not os.path.lexists(src):
+                # 再验一次实时状态：快照可能已经过期（扫完之后目录被手工删掉／挪走了）。
                 warnings.append(f"{c['name']}：{pretty_path(src)} 不存在，跳过。")
                 continue
-            targets.append((src, (r.get("agents") or ["?"])[0]))
-        if not targets:
-            continue
-        for src, agent_id in targets:
+            if e.get("type") in ("market", "builtin"):
+                # 渠道管的副本不动：换成快捷方式后，商店/内置升级会把整个目录换回来，
+                # 去重白做；反过来让它当正本，别的副本就会指向随时会被清掉的缓存目录。
+                warnings.append(f"{c['name']}：{pretty_path(src)} 来自技能商店或 App 内置，"
+                                f"不换成快捷方式（升级会覆盖），保持原样。")
+                continue
+            agent_id = (e.get("agents") or ["?"])[0]
             safe = re.sub(r"[^A-Za-z0-9_.\-]", "_", c["name"])[:60]
             dst = os.path.join(trash_root(), f"conflict-{ts}-{agent_id}", safe)
-            ops.append({"kind": "move", "src": src, "dst": dst,
-                        "desc": f"移入回收站（不删除）：{pretty_path(dst)}"})
+            targets.append((src, agent_id, dst, False))
+        if not targets:
+            continue
+        for src, agent_id, dst, relink_only in targets:
+            if relink_only:
+                ops.append({"kind": "unlink", "path": src,
+                            "desc": f"先撤掉这条断掉的快捷方式：{pretty_path(src)}"})
+            else:
+                ops.append({"kind": "move", "src": src, "dst": dst,
+                            "desc": f"移入回收站（不删除）：{pretty_path(dst)}"})
             ops.append({"kind": "symlink", "dst": src, "target": canon,
                         "desc": f"原位建快捷方式指向正本 {pretty_path(canon)}"})
+        rewritten = [(s, a, d) for s, a, d, relink in targets if not relink]
+        relinked = [s for s, _, _, relink in targets if relink]
         groups.append({"name": c["name"], "grade": grade, "canonical": canon,
-                       "from": [{"path": s, "agent": a} for s, a in targets],
+                       "human_picked": bool(chosen),
+                       "from": [{"path": s, "agent": a, "trash": d} for s, a, d in rewritten],
+                       "relinked": relinked,
                        "trash": os.path.join(trash_root(), f"conflict-{ts}")})
     if not ops:
         return [], [], groups, skipped, warnings
@@ -1906,12 +2214,129 @@ def resolve_conflict(doc, agents_cfg, names=None, allow_semi=False, dry_run=True
         led["actions"].append({
             "at": datetime.now().isoformat(timespec="seconds"),
             "action": "resolve-conflict",
+            # 每份副本的回收站落点都要记 —— 撤销要照着它把目录搬回原位，
+            # 从 groups[].trash 反推不出来（那个是批次目录，实际落点还带 agent 后缀）。
             "groups": [{"name": g["name"], "canonical": g["canonical"],
-                        "from": [f["path"] for f in g["from"]]} for g in groups],
+                        "from": [{"path": f["path"], "agent": f["agent"],
+                                  "trash": f["trash"]} for f in g["from"]],
+                        "relinked": list(g.get("relinked") or [])}
+                       for g in groups],
         })
         save_ledger(led)
         log.append(f"已记入 {pretty_path(ledger_path())}")
     return log, ops, groups, skipped, warnings
+
+
+def last_undoable():
+    """上一次「一键去重」的台账摘要，给页面上的撤销按钮用。
+
+    返回 None 表示没什么可撤销的 —— 页面据此决定按钮显示与否，别让它点了才发现没事可做。
+    """
+    for a in reversed(load_ledger().get("actions", [])):
+        if a.get("action") != "resolve-conflict" or a.get("undone"):
+            continue
+        groups = a.get("groups") or []
+        return {"at": a.get("at"),
+                "groups": [{"name": g.get("name"), "canonical": g.get("canonical"),
+                            "count": len(g.get("from") or [])} for g in groups],
+                "files": sum(len(g.get("from") or []) for g in groups)}
+    return None
+
+
+def set_conflict_ignore(name, note="", ignore=True, dry_run=True):
+    """把一组冲突标成「都先留着，别再提醒」，或取消这个标记。
+
+    为什么需要这个出口：有些组根本没有「正确答案」—— 两份都还在正常用，或者你权衡之后
+    就是决定先不动。以前没有出口，这些组会永远挂在「待处理」里，面板的数字一直红着，
+    久之就没人看了。写进 overrides.json 的 by_conflict，删掉那一条再重扫即可撤销。
+    """
+    path = os.path.join(BASE, "overrides.json")
+    # 不写默认说明：面板上那句解释已经够用，再塞一句自动生成的「注释」只会在界面上
+    # 变成一层套一层的括号噪音。note 只在用户真写了的时候才存。
+    entry = {"ignore": True}
+    if note:
+        entry["note"] = note
+    value = entry if ignore else None
+    op = {"kind": "json_set", "file": path, "container": ["by_conflict"],
+          "key": name, "value": value,
+          "desc": f"by_conflict[\"{name}\"] → {'标记为都先留着' if ignore else '删掉标记'}"}
+    log = apply_ops([op], dry_run=dry_run)
+    return log, [op]
+
+
+def undo_resolve(doc, at=None, dry_run=True):
+    """把一次「一键去重」按台账退回去：删掉原位的快捷方式、把回收站里的目录搬回原位。
+
+    几处刻意的保守：
+      · 只在回收站里那份确实还在时才动原位的快捷方式 —— 顺序反了就会把目录弄丢；
+      · 原位如果不是「指向该正本的快捷方式」，就不碰（可能是你自己后来改的）；
+      · 回收站缺失 / 原位被换成别的东西，一律跳过并告警，不猜、不强行重建。
+    """
+    led = load_ledger()
+    acts = [a for a in led.get("actions", [])
+            if a.get("action") == "resolve-conflict" and not a.get("undone")]
+    if at:
+        acts = [a for a in acts if (a.get("at") or "").startswith(at)]
+    if not acts:
+        return [], [], {"error": "台账里没有可撤销的「一键去重」记录",
+                        "hint": f"台账：{pretty_path(ledger_path())}"}, [], []
+    act = acts[-1]
+    ops, groups, skipped, warnings = [], [], [], []
+    for g in act.get("groups") or []:
+        restored = []
+        for f in g.get("from") or []:
+            src, trash = f.get("path"), f.get("trash")
+            if not src or not trash:
+                warnings.append(f"{g.get('name')}：台账里这一条缺落点，跳过。")
+                continue
+            if not os.path.lexists(trash):
+                warnings.append(f"{g.get('name')}：回收站里已经没有 "
+                                f"{pretty_path(trash)} 了，跳过 —— 不删快捷方式，免得两头都没有。")
+                continue
+            if os.path.islink(src):
+                target = os.readlink(src)
+                if g.get("canonical") and os.path.realpath(target) != os.path.realpath(
+                        g["canonical"]):
+                    warnings.append(f"{g.get('name')}：{pretty_path(src)} 现在指向 "
+                                    f"{pretty_path(target)}，不是这次操作留下的，跳过。")
+                    continue
+                ops.append({"kind": "unlink", "path": src})
+            elif os.path.lexists(src):
+                warnings.append(f"{g.get('name')}：{pretty_path(src)} 现在不是快捷方式"
+                                f"（被换成别的东西了），跳过。")
+                continue
+            ops.append({"kind": "move", "src": trash, "dst": src})
+            restored.append({"path": src, "trash": trash})
+        if restored:
+            groups.append({"name": g.get("name"), "canonical": g.get("canonical"),
+                           "restored": restored})
+        # 断链修复没有可还原的源 —— 那个位置上本来就是一条指向空气的快捷方式。
+        # 假装能还原只会让人以为「撤了」，其实什么都没变。
+        for src in g.get("relinked") or []:
+            warnings.append(f"{g.get('name')}：{pretty_path(src)} 是断链修复，不还原"
+                            f"（这里本来就什么都没有，撤掉只会再留一条断的）。")
+    if not ops:
+        # 没得还原也是正常结果（比如连点两次撤销），不算错误 —— 交给调用方按空列表处理。
+        return [], [], {"groups": [], "at": act.get("at")}, skipped, warnings
+    log = apply_ops(ops, dry_run=dry_run)
+    if not dry_run:
+        act["undone"] = datetime.now().isoformat(timespec="seconds")
+        led["actions"].append({
+            "at": act["undone"], "action": "undo-resolve",
+            "groups": [{"name": g["name"], "restored": [r["path"] for r in g["restored"]]}
+                       for g in groups],
+        })
+        save_ledger(led)
+        # 批次目录空了就顺手收掉，别在回收站里留一堆空壳。
+        for g in groups:
+            for r in g["restored"]:
+                parent = os.path.dirname(r["trash"])
+                try:
+                    os.rmdir(parent)
+                except OSError:
+                    pass
+        log.append(f"已记入 {pretty_path(ledger_path())}")
+    return log, ops, {"groups": groups, "at": act.get("at")}, skipped, warnings
 
 
 def do_set_state(doc, agents_cfg, name, agent_id, action, dry_run=True, state="off"):
@@ -1972,7 +2397,7 @@ def do_scan(args):
     entities, install_rules = build_entities(entries, agents_cfg, rules_cfg, overrides,
                                              manifest_index, builtin_lib_index, toggle_snap)
     _ALL_ENTITIES[:] = entities
-    conflicts, conflict_groups = analyze_conflicts(entities)
+    conflicts, conflict_groups = analyze_conflicts(entities, overrides)
 
     broken_links = [{"agent": e["agent"], "path": e["path"], "link_raw": e["link_raw"]}
                     for e in entries if e["is_link"] and not e["exists"]]
@@ -2041,6 +2466,16 @@ def do_scan(args):
                          and c["nature"] == "duplicate" and c["liveness"] != "dormant"),
         "todo_manual": sum(1 for c in conflicts if c["prescription"]["grade"] == "manual"
                            and c["nature"] == "duplicate" and c["liveness"] != "dormant"),
+        # 标了「都留着、别再提醒」的组不进待处理 —— 出口有没有用，全看这几个数降没降。
+        "ignored_conflicts": sum(1 for c in conflicts if c.get("ignored")),
+        # 「正文不一致」再按形态拆开：坏链 / 软链农场 / 转发壳这三类不该让人做选择。
+        "divergent_by_shape": dict(sorted(
+            __import__("collections").Counter(
+                c["prescription"].get("shape") for c in conflicts
+                if c["kind"] == "divergent"
+                and c["nature"] == "duplicate" and c["liveness"] != "dormant"
+                and not c.get("ignored")).items(),
+            key=lambda kv: (kv[0] is None, kv[0]))),
     }
 
     rule_hits = defaultdict(int)
@@ -2073,8 +2508,11 @@ def do_scan(args):
         "install_rule_ids": [r["id"] for r in install_rules],
         "excluded": agents_cfg.get("excluded", []),
         "paths": {"trash": trash_root(), "ledger": ledger_path(),
-                  "artifacts": artifact_root()},
+                  "artifacts": artifact_root(),
+                  "overrides": os.path.join(BASE, "overrides.json")},
         "ledger": (load_ledger().get("actions") or [])[-50:],
+        # 页面上的撤销按钮靠它决定显示与否：没有可撤销的东西就别摆一个点了没反应的按钮。
+        "undo": last_undoable(),
     }
 
     out_dir = os.path.dirname(artifact_json())
@@ -2320,6 +2758,23 @@ def build_plan(doc, agents_cfg, names=None, include_grades=("auto",)):
             "auto": auto, "semi": semi, "manual": manual}
 
 
+def parse_canonical_arg(spec):
+    """把 `--canonical "组名=路径,组名2=路径"` 解成 {组名: 路径}。
+
+    路径里可能有逗号（少见但合法），所以只按**第一个** = 切分，剩下的整段当路径。
+    """
+    out = {}
+    for chunk in (spec or "").split(","):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        if "=" not in chunk:
+            raise ValueError(f"--canonical 要写成 组名=路径 的形式，收到：{chunk}")
+        name, path = chunk.split("=", 1)
+        out[name.strip()] = expand(path.strip())
+    return out
+
+
 def do_resolve(args):
     """一键去重。页面上的按钮和这里走的是同一条实现路径。"""
     doc, agents_cfg = _load_all()
@@ -2329,27 +2784,105 @@ def do_resolve(args):
     names = None
     if getattr(args, "names", None):
         names = {x.strip() for x in args.names.split(",") if x.strip()}
+    try:
+        canon_map = parse_canonical_arg(getattr(args, "canonical", None))
+    except ValueError as exc:
+        print(exc, file=sys.stderr)
+        return 2
     dry = not getattr(args, "yes", False)
     log, ops, groups, skipped, warnings = resolve_conflict(
         doc, agents_cfg, names=names,
-        allow_semi=bool(getattr(args, "semi", False)), dry_run=dry)
+        allow_semi=bool(getattr(args, "semi", False)), dry_run=dry,
+        canonical_map=canon_map)
     if not groups:
-        print("没有可自动处理的重复冲突。")
+        print("没有可处理的重复冲突。")
     else:
         print("干跑预览（一个字节都没动）：" if dry else "已执行：")
         for ln in log:
             print(f"  {ln}")
         print()
         for g in groups:
-            print(f"  {g['name']}　正本留在 {pretty_path(g['canonical'])}")
+            print(f"  {g['name']}　正本留在 {pretty_path(g['canonical'])}"
+                  + ("（你指定的）" if g.get("human_picked") else ""))
             for f in g["from"]:
                 print(f"    {pretty_path(f['path'])} → 改为快捷方式"
-                      f"（原副本在 {pretty_path(g['trash'])}）")
+                      f"（原副本在 {pretty_path(f['trash'])}）")
         if dry:
             picked_names = ",".join(g["name"] for g in groups)
+            canon_arg = ""
+            if canon_map:
+                canon_arg = ' --canonical "' + ",".join(
+                    f"{g['name']}={g['canonical']}" for g in groups
+                    if g.get("human_picked")) + '"'
             print()
             print(f"确认无误后加 --yes 重跑："
-                  f"skillctl.py resolve --names {picked_names} --yes")
+                  f"skillctl.py resolve --names {picked_names}{canon_arg} --yes")
+    for s in skipped:
+        print(f"[跳过] {s['name']}：{s['why']}", file=sys.stderr)
+    for w in warnings:
+        print(f"[注意] {w}", file=sys.stderr)
+    return 0
+
+
+def do_dismiss(args):
+    """把冲突组标成「都先留着，别再提醒」（或取消标记）。"""
+    doc, agents_cfg = _load_all()
+    if not doc:
+        print(missing_snapshot_hint(), file=sys.stderr)
+        return 1
+    names = [x.strip() for x in (args.names or "").split(",") if x.strip()]
+    if not names:
+        print("要指定组名：--names a,b", file=sys.stderr)
+        return 1
+    known = {c["name"] for c in (doc.get("conflicts") or [])}
+    unknown = [n for n in names if n not in known]
+    if unknown:
+        # 名字打错就等于静默写进一条永远匹配不上的配置，趁早拦下来。
+        print(f"这些名字不在当前冲突清单里：{', '.join(unknown)}", file=sys.stderr)
+        return 1
+    ignore = not getattr(args, "undo", False)
+    dry = not getattr(args, "yes", False)
+    for n in names:
+        log, _ = set_conflict_ignore(n, note=getattr(args, "note", "") or "",
+                                     ignore=ignore, dry_run=dry)
+        for ln in log:
+            print(f"  {ln}")
+    if dry:
+        print()
+        print(f"确认后加 --yes 重跑：skillctl.py dismiss --names {','.join(names)}"
+              + ("" if ignore else " --undo") + " --yes")
+    else:
+        print(f"\n已写入 {pretty_path(os.path.join(BASE, 'overrides.json'))}，"
+              f"重跑 scan 后这一组不再计入待处理。")
+    return 0
+
+
+def do_undo(args):
+    """撤销上一次「一键去重」。"""
+    doc, agents_cfg = _load_all()
+    if not doc:
+        print(missing_snapshot_hint(), file=sys.stderr)
+        return 1
+    dry = not getattr(args, "yes", False)
+    log, ops, info, skipped, warnings = undo_resolve(
+        doc, at=getattr(args, "at", None), dry_run=dry)
+    if info.get("error"):
+        print(info["error"], file=sys.stderr)
+        if info.get("hint"):
+            print(info["hint"], file=sys.stderr)
+        return 1
+    if not info.get("groups"):
+        print("这次操作里没有可还原的条目。")
+    else:
+        print("干跑预览（一个字节都没动）：" if dry else "已还原：")
+        for ln in log:
+            print(f"  {ln}")
+        print()
+        print(f"按台账回到 {info.get('at')} 之前的状态：")
+        for g in info["groups"]:
+            print(f"  {g['name']}　快捷方式已撤掉 {len(g['restored'])} 处，目录搬回原位")
+            for r in g["restored"]:
+                print(f"    {pretty_path(r['trash'])} → {pretty_path(r['path'])}")
     for s in skipped:
         print(f"[跳过] {s['name']}：{s['why']}", file=sys.stderr)
     for w in warnings:
@@ -2658,13 +3191,47 @@ def make_handler(docbox, agents_cfg, token, html_path):
                                 "md": r["md"], "sh": r["sh"]})
                 elif action == "resolve-conflict":
                     names = set(req.get("names") or []) or None
+                    raw_map = req.get("canonical_map") or {}
+                    if not isinstance(raw_map, dict):
+                        raise ValueError("canonical_map 必须是 {组名: 路径}")
                     log, ops, groups, skipped, warns = resolve_conflict(
                         doc, agents_cfg, names=names,
                         allow_semi=bool(req.get("allow_semi")),
-                        dry_run=not apply_now)
+                        dry_run=not apply_now,
+                        canonical_map={str(k): expand(str(v))
+                                       for k, v in raw_map.items()})
                     self._json({"ok": True, "ops": ops, "log": log,
                                 "groups": groups, "skipped": skipped,
-                                "warnings": warns, "dry_run": not apply_now})
+                                "warnings": warns, "dry_run": not apply_now,
+                                "undo": last_undoable() if apply_now else None})
+                elif action == "dismiss-conflict":
+                    names = [str(x) for x in (req.get("names") or [])]
+                    known = {c["name"] for c in (doc.get("conflicts") or [])}
+                    unknown = [n for n in names if n not in known]
+                    if not names or unknown:
+                        # 名字对不上就等于写进一条永远匹配不上的配置，必须拦下。
+                        self._json({"ok": False, "error":
+                                    f"这些名字不在当前冲突清单里：{', '.join(unknown) or '(空)'}"}, 400)
+                        return
+                    ignore = bool(req.get("ignore", True))
+                    logs = []
+                    for n in names:
+                        lg, _ = set_conflict_ignore(
+                            n, note=str(req.get("note") or ""), ignore=ignore,
+                            dry_run=not apply_now)
+                        logs.extend(lg)
+                    self._json({"ok": True, "log": logs, "dry_run": not apply_now,
+                                "names": names, "ignore": ignore})
+                elif action == "undo-resolve":
+                    log, ops, info, skipped, warns = undo_resolve(
+                        doc, at=req.get("at"), dry_run=not apply_now)
+                    if info.get("error"):
+                        self._json({"ok": False, "error": info["error"]}, 409)
+                        return
+                    self._json({"ok": True, "ops": ops, "log": log, "info": info,
+                                "skipped": skipped, "warnings": warns,
+                                "dry_run": not apply_now,
+                                "undo": last_undoable() if apply_now else None})
                 elif action == "rescan":
                     do_scan(argparse.Namespace(no_html=False))
                     self._json({"ok": True, "log": ["已重新扫描，刷新页面查看最新结果"]})
@@ -2757,8 +3324,23 @@ def main():
     p.add_argument("--names", help="逗号分隔的冲突名，缺省全部可自动组")
     p.add_argument("--semi", action="store_true",
                    help="连半自动组一起处理（正文一致但文件集不同）")
+    p.add_argument("--canonical", metavar="组名=路径,...",
+                   help="指定某一组留哪一份（正文已分叉的组要靠它才动手）")
     p.add_argument("--yes", action="store_true", help="真正执行（缺省为干跑预览）")
     p.set_defaults(func=do_resolve)
+    p = sub.add_parser("undo", parents=[common],
+                       help="撤销上一次「一键去重」：撤掉快捷方式，目录搬回原位")
+    p.add_argument("--at", metavar="时间戳前缀",
+                   help="撤销哪一次（缺省为最近一次没撤过的）")
+    p.add_argument("--yes", action="store_true", help="真正执行（缺省为干跑预览）")
+    p.set_defaults(func=do_undo)
+    p = sub.add_parser("dismiss", parents=[common],
+                       help="把冲突组标成「都先留着，别再提醒」（写进 overrides.json）")
+    p.add_argument("--names", required=True, help="逗号分隔的冲突名")
+    p.add_argument("--note", help="为什么先留着，写给自己以后看")
+    p.add_argument("--undo", action="store_true", help="取消标记（恢复提醒）")
+    p.add_argument("--yes", action="store_true", help="真正执行（缺省为干跑预览）")
+    p.set_defaults(func=do_dismiss)
     p = sub.add_parser("serve", help="起本地直连服务，页面按钮可直接执行", parents=[common])
     p.add_argument("--port", type=int, default=8799)
     p.add_argument("--open", action="store_true", help="自动打开浏览器")
