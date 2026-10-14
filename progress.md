@@ -10,3 +10,4 @@ pytest 实跑：9 passed, 1 warning in 22.52s（第三方 anyio BlockingPortal �
 浏览器真实操作：本地注册成功、重复跳过=1、越界目录显示拒绝；损坏 MOV 真实 ffprobe 错误，重试后 attempts=2 仍显示失败；场次编辑成功，临时场次创建/确认删除成功。
 浏览器 CDP 截图接口两次超时，未获得截图，不影响 DOM 操作与播放验证。服务启动关闭 access log，避免频繁状态轮询日志过量；TTY Ctrl+C 控制不可靠，使用已知测试 PID 的 SIGTERM 做重启。
 最终重启验证：旧进程19913退出，start.sh重启新进程22176。健康status=ok/worker_alive=true；3个卡片与尝试次数保留，代理加载duration=4.017007。TaskSpace56 finish({keep:[p1]})完成，保留可测试页面。完成 P0，停在里程碑。
+首次提交后发现仓库全局忽略 .env.example；修正应用 .gitignore 例外并补充配置模板提交。之前一次追加例外命令使用了错误工作目录，已修正。
