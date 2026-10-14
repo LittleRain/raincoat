@@ -1,0 +1,6 @@
+{
+  "create_session_request": {"name": "周六训练", "date": "2026-10-14"},
+  "register_request": {"path": "/absolute/approved/media/training.mp4", "source": "gopro"},
+  "job_shape_example_only": {"id": "<generated>", "type": "preprocess", "status": "queued", "progress": 0, "stage": "等待", "error": null},
+  "analysis_available": false
+}

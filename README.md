@@ -93,3 +93,7 @@ node tools/wecom_capture_opendoc.js --url "https://doc.weixin.qq.com/doc/w3_xxx?
 - skill 名称统一使用 kebab-case
 - 尽量把 skill 逻辑放在 skill 目录内部
 - 只有复用价值明确时才抽取共享工具
+
+## Local applications / 本地应用
+
+- [Football AI Studio P0](apps/football-ai-studio/README.md)：本地足球训练视频工作台，提供场次管理、视频导入、FFmpeg 代理/缩略图与持久化任务队列。当前未实现 AI 识别。
