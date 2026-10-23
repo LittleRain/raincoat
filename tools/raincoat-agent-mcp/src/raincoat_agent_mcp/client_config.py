@@ -20,8 +20,8 @@ def codex_config(text,command,entry):
 
 def dsh_config(text,command,entry):
     args=[entry,'mcp'] if isinstance(entry,str) else entry
-    block='    - id: local-agent-mcp\n      name: "@deepseek-ai/dsh-mcp-client"\n      config:\n        serverName: local_agents\n        transport: stdio\n        command: '+json.dumps(command)+'\n        args: '+json.dumps(args)+'\n        failOnStartupError: true\n'
-    pattern=r'^    - id: (?:bitto-agent-bridge|local-agent-mcp)\n.*?(?=^    - id:|^\S|\Z)'
+    block='    - id: raincoat-agent-mcp\n      name: "@deepseek-ai/dsh-mcp-client"\n      config:\n        serverName: local_agents\n        transport: stdio\n        command: '+json.dumps(command)+'\n        args: '+json.dumps(args)+'\n        failOnStartupError: true\n'
+    pattern=r'^    - id: (?:bitto-agent-bridge|local-agent-mcp|raincoat-agent-mcp)\n.*?(?=^    - id:|^\S|\Z)'
     if re.search(pattern,text,flags=re.M|re.S):
         result=re.sub(pattern,lambda _:block,text,count=1,flags=re.M|re.S)
     else:result=text.rstrip()+'\n\n- insert:\n'+block

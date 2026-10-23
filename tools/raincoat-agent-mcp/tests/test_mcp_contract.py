@@ -8,8 +8,6 @@ from mcp.client.stdio import stdio_client
 
 ROOT = Path(__file__).resolve().parents[1]
 ENTRY = ROOT / 'bridge.py'
-if not ENTRY.exists():
-    ENTRY = ROOT.parent / 'bitto-agent-bridge/bridge.py'
 
 class ContractTests(unittest.IsolatedAsyncioTestCase):
     async def test_caller_can_wait_for_immediate_completion_instead_of_slow_polling(self):

@@ -192,7 +192,7 @@ WorkBuddy 通过固定版本辅助模块只读获取当前用户的桌面登录�
 
 ## 给维护者：构建与发布
 
-当前源码位于 `tools/local-agent-mcp`。所有以下命令都在该目录运行：
+当前源码位于 `tools/raincoat-agent-mcp`。所有以下命令都在该目录运行：
 
 ```sh
 python3 -m pip install 'setuptools>=77' wheel build twine
@@ -202,12 +202,12 @@ python3 -m twine check dist/*
 
 产物为 `dist/raincoat_agent_mcp-0.1.0-py3-none-any.whl` 和源码包 `.tar.gz`，可以直接把 wheel 提供给别人。wheel 包含完整 Python 包和 `workbuddy.mjs`，不包含登录凭证、测试产物或开发机配置。
 
-版本只在 `src/raincoat_agent_mcp/_version.py` 维护。修改版本、完成验证后，可使用仓库中的 `.github/workflows/local-agent-mcp-release.yml`：
+版本只在 `src/raincoat_agent_mcp/_version.py` 维护。修改版本、完成验证后，可使用仓库中的 `.github/workflows/raincoat-agent-mcp-release.yml`：
 
 - 手动触发只构建、测试和上传 GitHub Actions artifact，不发布 PyPI。
-- 推送 `local-agent-mcp/v0.1.0` 格式标签时校验标签与包版本一致，生成发行包。
+- 推送 `raincoat-agent-mcp/v0.1.0` 格式标签时校验标签与包版本一致，生成发行包。
 - 仅在仓库变量 `LOCAL_AGENT_MCP_PYPI_ENABLED=true` 且配置好 `pypi` environment 和 PyPI Trusted Publisher 后，标签流程才发布 PyPI。
-- Trusted Publisher 需对应仓库 owner/name、工作流文件名 `local-agent-mcp-release.yml` 和 environment `pypi`。首次发布前需确认包名可用并完成 PyPI 关联；本次实现没有推送标签或发布公共包。
+- Trusted Publisher 需对应仓库 owner/name、工作流文件名 `raincoat-agent-mcp-release.yml` 和 environment `pypi`。首次发布前需确认包名可用并完成 PyPI 关联；本次实现没有推送标签或发布公共包。
 
 工作流使用 OIDC，不需要将 PyPI token 写入源码。参考：[Python 打包指南](https://packaging.python.org/en/latest/tutorials/packaging-projects/)、[PyPI Trusted Publishing](https://docs.pypi.org/trusted-publishers/using-a-publisher/)、[uv 工具管理](https://docs.astral.sh/uv/guides/tools/)。
 

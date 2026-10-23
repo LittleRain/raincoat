@@ -1,5 +1,0 @@
-[mcp_servers.bitto]
-command = "/opt/homebrew/opt/python@3.14/bin/python3.14"
-args = ["/Users/raincai/Documents/GitHub/raincoat/tools/bitto-agent-bridge/bridge.py", "mcp"]
-startup_timeout_sec = 20
-tool_timeout_sec = 60

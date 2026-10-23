@@ -1,10 +1,10 @@
-name: Local Agent MCP package
+name: Raincoat Agent MCP package
 
 on:
   workflow_dispatch:
   push:
     tags:
-      - 'local-agent-mcp/v*'
+      - 'raincoat-agent-mcp/v*'
 
 permissions:
   contents: read
@@ -19,7 +19,7 @@ jobs:
           python-version: '3.11'
       - uses: astral-sh/setup-uv@v6
       - name: Install build and test dependencies
-        run: python -m pip install 'setuptools>=77' wheel build twine -e tools/local-agent-mcp
+        run: python -m pip install 'setuptools>=77' wheel build twine -e tools/raincoat-agent-mcp
       - name: Validate release tag
         if: startsWith(github.ref, 'refs/tags/')
         env:
@@ -28,25 +28,25 @@ jobs:
           python - <<'PY'
           import os
           from raincoat_agent_mcp import __version__
-          assert os.environ['RELEASE_TAG'] == f'local-agent-mcp/v{__version__}'
+          assert os.environ['RELEASE_TAG'] == f'raincoat-agent-mcp/v{__version__}'
           PY
       - name: Model-free regression tests
-        run: python -m unittest discover -s tools/local-agent-mcp/tests -v
+        run: python -m unittest discover -s tools/raincoat-agent-mcp/tests -v
       - name: Build wheel and source distribution
-        run: python -m build tools/local-agent-mcp --outdir dist-local-agent-mcp
+        run: python -m build tools/raincoat-agent-mcp --outdir dist-raincoat-agent-mcp
       - name: Check distribution metadata
-        run: python -m twine check dist-local-agent-mcp/*
+        run: python -m twine check dist-raincoat-agent-mcp/*
       - name: Isolated install, upgrade and rollback
-        run: python tools/local-agent-mcp/tests/distribution_smoke.py dist-local-agent-mcp/*.whl
+        run: python tools/raincoat-agent-mcp/tests/distribution_smoke.py dist-raincoat-agent-mcp/*.whl
       - uses: actions/upload-artifact@v4
         with:
           name: raincoat-agent-mcp-dist
-          path: dist-local-agent-mcp/*
+          path: dist-raincoat-agent-mcp/*
           if-no-files-found: error
 
   publish:
     needs: build
-    if: startsWith(github.ref, 'refs/tags/local-agent-mcp/v') && vars.LOCAL_AGENT_MCP_PYPI_ENABLED == 'true'
+    if: startsWith(github.ref, 'refs/tags/raincoat-agent-mcp/v') && vars.LOCAL_AGENT_MCP_PYPI_ENABLED == 'true'
     runs-on: ubuntu-latest
     environment: pypi
     permissions:

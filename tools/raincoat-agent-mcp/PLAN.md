@@ -24,3 +24,7 @@ Bitto real MCP execution passed with 1.972 ms completion delivery. WorkBuddy rea
 Client migration uses backed-up config replacement and a stable per-user installed runtime release. No merge or push requested for this branch.
 
 Final verification: 29 unified regressions and 9 original Bitto regressions pass. Installed runtime was loaded from actual Codex registration (11 tools), both backend status calls passed, and the historical Bitto task retained its 55 tool-call records. Installed WorkBuddy execution completed with 1.963 ms delivery; same-session resume and real Python cancellation passed. Checked 58 bridge artifacts in memory against the current credential values and found zero token leaks. Both client configurations were parsed and compared against backups to confirm unrelated settings unchanged. Stable Node discovery also passed with a minimal desktop PATH.
+
+## Repository layout consolidation
+
+The canonical project directory is tools/raincoat-agent-mcp. The standalone tools/bitto-agent-bridge source tree has been removed. Legacy MCP tool aliases, migration recognition and the existing job store remain in the unified package; no credentials or historical jobs are deleted. Release workflow and tags use raincoat-agent-mcp.

@@ -1,4 +1,0 @@
-#!/bin/sh
-set -eu
-bridge_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
-exec "${BITTO_BRIDGE_PYTHON:-python3}" "$bridge_dir/bridge.py" "$@"

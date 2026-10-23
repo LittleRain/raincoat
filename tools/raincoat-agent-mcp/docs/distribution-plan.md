@@ -12,4 +12,4 @@ Approved approach: uv tool install/upgrade; each user's local Bitto/WorkBuddy ru
 - [x] Test package contents, install and MCP handshake outside the checkout, upgrade between two local wheel versions, setup idempotence, failure paths, and full regressions.
 - [x] Rewrite README for recipients and maintainers, including unpublished status, supported platforms, prerequisites, migration and reload requirements. Commit on codex/local-agent-mcp; no merge/push/publication.
 
-Files: pyproject.toml, src/raincoat_agent_mcp/{cli,management,client_config,dependencies,updates}.py; original protocol modules move into that package. Compatibility wrappers remain at bridge.py/install.py/configure.py. Tests cover installed distribution and CLI management. CI lives at .github/workflows/local-agent-mcp-release.yml.
+Files: pyproject.toml, src/raincoat_agent_mcp/{cli,management,client_config,dependencies,updates}.py; original protocol modules move into that package. Compatibility wrappers remain at bridge.py/install.py/configure.py. Tests cover installed distribution and CLI management. CI lives at .github/workflows/raincoat-agent-mcp-release.yml.

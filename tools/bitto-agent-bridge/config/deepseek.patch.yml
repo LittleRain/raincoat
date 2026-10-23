@@ -1,9 +1,0 @@
-- insert:
-    - id: bitto-agent-bridge
-      name: "@deepseek-ai/dsh-mcp-client"
-      config:
-        serverName: bitto
-        transport: stdio
-        command: "/opt/homebrew/opt/python@3.14/bin/python3.14"
-        args: ["/Users/raincai/Documents/GitHub/raincoat/tools/bitto-agent-bridge/bridge.py", "mcp"]
-        failOnStartupError: true
