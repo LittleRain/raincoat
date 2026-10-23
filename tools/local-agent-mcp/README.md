@@ -1,7 +1,5 @@
 # Local Agent MCP
 
-**当前分支为未完成草稿：Bitto 已实现并实测，WorkBuddy 仅有发现接口，持续认证适配尚待用户授权，不可执行。当前客户端配置尚未切换。**
-
 一个本地 MCP，通过必填参数 `backend="bitto" | "workbuddy"` 将完整任务交给对应 Agent 的原生运行时。模型与账户用量由对应后端处理；调用方自身的调度和验收仍消耗调用方额度。
 
 ## 返回速度
@@ -19,7 +17,7 @@
 
 MCP 工具调用结束后，不能保证主动唤醒已闲置的调用方模型。本方案通过保持有界等待，让后端结束时立即返回正在等待的工具调用，不宣称有跨客户端的主动回调。
 
-2026-10-22 本机 Bitto 真实执行测试完成，Unix socket 路径从收到后端终态到返回结果耗时 **1.972 ms**。该数字不包含调用方模型后续组织回复的时间，也不是任意负载下的保证。
+本机真实 MCP 执行测试：Bitto 完成结果交付 **1.972 ms**（2026-10-22），WorkBuddy **1.261 ms**（2026-10-23）。数字从收到后端完成事件算起，不包含后端推理或调用方模型组织回复的时间，也不是任意负载下的保证。
 
 ## MCP 工具
 
@@ -40,13 +38,26 @@ MCP 工具调用结束后，不能保证主动唤醒已闲置的调用方模型�
 
 Bitto 连接已经运行的本机 sidecar，使用现有 Bitto 会话协议；任务在桌面端可见。`project` 支持名称或 ID，默认 `default`；`cwd` 可能被 Bitto 映射，请在任务中用绝对路径指定产物位置。不会将中间一条模型回复误判为整个任务结束。
 
-WorkBuddy 使用应用自带的独立 Agent CLI，任务不会进入桌面客户端任务列表。`project` 不用于该后端。工具调用需要按用户授权在提交时显式指定 `allowed_tools`，不会自动切换为跳过权限模式。
+WorkBuddy 使用应用自带的独立 Agent CLI，任务不会进入桌面客户端任务列表。`project` 不用于该后端。工具调用需要按用户授权在提交时显式指定 `allowed_tools`，空列表不开放工具，不会自动切换为跳过权限模式。`session_id` 可续接同一 CLI 会话；前序完成后的清理会短暂等待，仍在执行的同会话并发提交会拒绝。
+
+只接受产品配置中的官方模型 ID（默认 `deepseek-v4.1-flash`），拒绝相同 ID 的自定义模型覆盖，避免转入调用方自己的 API 路由。凭证读取使用 `dsh-workbuddy-connect` 0.7.9 的现有桌面登录解密能力，令牌仅传给本地 CLI 子进程，既不放入任务记录也不放入 MCP 配置；包装层输出按令牌值脱敏。经用户明确授权，允许 `www.codebuddy.cn` 桌面凭证向 `www.workbuddy.cn` 认证。凭证过期时失败，需在 WorkBuddy 中重新登录，不自动刷新。
+
+`agent_status` 只检查安装和 Node 可用性，不验证登录。安装时记录 Node 路径，兼容桌面客户端未加载 shell PATH 的环境；可用 `LOCAL_AGENT_NODE` 显式指定。凭证模块默认从本机 DeepSeek Harness desktop/web profile 发现，可用 `WORKBUDDY_CREDENTIAL_HELPER` 指定兼容版本模块的绝对路径。取消会停止 CLI 进程组，并确认其中可执行的后代都退出后才返回 `cancelled`。
 
 ## 安装与配置
 
 要求 macOS、Python 3.11+ 和 `requirements.txt` 中的依赖。WorkBuddy 另需 Node.js 22+、已安装并登录的 WorkBuddy，以及本机的 `dsh-workbuddy-connect` 0.7.9 凭证读取模块。
 
-先生成当前 checkout 的绝对路径配置：
+本机安装并迁移 Codex 与 DeepSeek Harness desktop 配置：
+
+```sh
+python3 install.py          # 预览涉及的文件
+python3 install.py --apply  # 安装、备份、替换注册
+```
+
+运行时安装到 `~/.local/share/local-agent-mcp/releases/<内容哈希>`，通过 `current` 稳定路径访问，不依赖开发 worktree 存活。两个客户端各保留唯一的 `local_agents` 注册；原配置和旧 CLI 入口会保存带时间戳的备份。重载 MCP 或重启对应客户端后使用新工具。`~/.local/bin/local-agent` 提供统一 CLI，旧 `bitto-agent` 仍可使用。
+
+如只需为其他 MCP 客户端生成当前 checkout 的绝对路径配置：
 
 ```sh
 python3 configure.py
@@ -75,6 +86,8 @@ python3 -m unittest discover -s tests -v
 # 以下会创建真实测试任务并消耗对应后端的模型额度：
 python3 tests/integration.py bitto
 python3 tests/integration.py workbuddy
+# 用上一条输出的证据目录验证续接与真实子命令取消：
+python3 tests/lifecycle.py /private/tmp/local-agent-integration-EXAMPLE
 ```
 
 源码中的 `PLAN.md` 记录本分支的实施与验收范围。

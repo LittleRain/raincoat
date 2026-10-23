@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -59,6 +60,8 @@ def submit_task(backend: Backend, prompt: str, title='本地 Agent 委派任务'
         uuid.UUID(session_id)
     if cwd and (not Path(cwd).expanduser().is_absolute() or not Path(cwd).expanduser().is_dir()):
         raise ValueError('cwd must be an existing absolute directory')
+    if allowed_tools and (not isinstance(allowed_tools,list) or any(not isinstance(x,str) or not re.fullmatch(r'[A-Za-z][A-Za-z0-9_]*(?:\([^\r\n]*\))?',x) for x in allowed_tools)):
+        raise ValueError('allowed_tools must contain explicit tool names or Tool(rule) patterns')
     if allowed_tools and backend != 'workbuddy':
         raise ValueError('allowed_tools applies only to WorkBuddy; Bitto uses its own permission requests')
     request = dict(backend=backend,prompt=prompt,title=title,project=project,model=model,
@@ -75,6 +78,7 @@ def submit_task(backend: Backend, prompt: str, title='本地 Agent 委派任务'
             raise RuntimeError('WorkBuddy not installed')
         if not discovery['execution_ready']:
             raise RuntimeError(discovery['note'])
+        workbuddy.validate_model(request['model'])
     job_id = uuid.uuid4().hex
     directory = shared.job_dir(job_id)
     shared.atomic_json(directory / 'request.json', request)
