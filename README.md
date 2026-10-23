@@ -34,6 +34,10 @@ This repository is used to:
 
 See [skills/README.md](skills/README.md) for the catalog.
 
+### Local Agent MCP
+
+[Raincoat Agent MCP](tools/local-agent-mcp/README.md) delegates tasks to local Bitto and WorkBuddy runtimes, with package installation, client setup, diagnostics and upgrades.
+
 ### Common Workflows
 
 ```bash
@@ -79,6 +83,10 @@ Raincoat 是一个用于孵化 AI Agent Skills 的仓库。
 - `skill-panel`
 
 完整目录见 [skills/README.md](skills/README.md)。
+
+### 本地 Agent MCP
+
+[Raincoat Agent MCP](tools/local-agent-mcp/README.md) 将任务交给本机 Bitto、WorkBuddy，提供安装包、客户端配置、自检和升级命令。
 
 ### 常用流程
 
