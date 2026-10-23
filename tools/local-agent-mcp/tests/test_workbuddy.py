@@ -7,10 +7,10 @@ import tempfile
 import time
 import unittest
 from unittest.mock import patch
-sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
-import shared
-import workbuddy
-import bridge
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'src'))
+from raincoat_agent_mcp import shared
+from raincoat_agent_mcp import workbuddy
+from raincoat_agent_mcp import bridge
 
 class EventTests(unittest.TestCase):
     def setUp(self):self.state={'status':'submitted','model':'test','tool_calls':[],'message_usage':[]}

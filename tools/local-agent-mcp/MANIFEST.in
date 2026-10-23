@@ -1,0 +1,3 @@
+include bridge.py install.py configure.py local-agent requirements.txt
+recursive-include docs *.md
+include tests/distribution_smoke.py tests/integration.py tests/lifecycle.py

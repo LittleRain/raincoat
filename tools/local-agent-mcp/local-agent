@@ -1,4 +1,5 @@
 #!/bin/sh
 set -eu
 agent_mcp_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
-exec "${LOCAL_AGENT_PYTHON:-python3}" "$agent_mcp_dir/bridge.py" "$@"
+export PYTHONPATH="$agent_mcp_dir/src${PYTHONPATH:+:$PYTHONPATH}"
+exec "${LOCAL_AGENT_PYTHON:-python3}" -m raincoat_agent_mcp "$@"

@@ -1,8 +1,8 @@
 from pathlib import Path
 import sys
 import unittest
-sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
-import install
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'src'))
+from raincoat_agent_mcp import client_config as install
 
 class MigrationTests(unittest.TestCase):
     def test_codex_preserves_other_sections_and_is_idempotent(self):

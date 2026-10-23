@@ -10,25 +10,24 @@ import signal
 import subprocess
 import time
 import uuid
-import shared
+from . import shared, dependencies
 
 APP = Path('/Applications/WorkBuddy.app')
 
 
 def node_binary():
-    candidate=os.environ.get('LOCAL_AGENT_NODE') or shutil.which('node')
-    if not candidate:
-        manifest=Path(__file__).with_name('install.json')
-        if manifest.exists():candidate=shared.read_json(manifest).get('node')
-    return candidate if candidate and Path(candidate).is_file() else None
+    from .dependencies import node_binary as discover
+    return discover()
 
 
 def status():
     installed = (APP/'Contents/Resources/app.asar').is_file() and (APP/'Contents/MacOS/Electron').is_file()
     node = node_binary()
-    return {'installed':installed,'runtime':'WorkBuddy bundled Agent CLI','execution_ready':bool(installed and node),
-            'node':node,'desktop_task_visible':False,'default_model':'deepseek-v4.1-flash',
-            'note':'本地安装检查；提交时只读获取现有登录凭证，过期则失败，不自动刷新。CLI 任务不进入桌面任务列表。'}
+    from .dependencies import helper_path
+    helper = helper_path()
+    return {'installed':installed,'runtime':'WorkBuddy bundled Agent CLI','execution_ready':bool(installed and node and helper),
+            'node':node,'credential_helper':helper,'desktop_task_visible':False,'default_model':'deepseek-v4.1-flash',
+            'note':'本地安装检查；缺辅助模块时运行 local-agent doctor --backend workbuddy --install-deps。提交时只读获取现有登录凭证，过期则失败，不自动刷新。CLI 任务不进入桌面任务列表。'}
 
 
 def validate_model(model):
@@ -143,7 +142,8 @@ async def run(ctx):
             state.update(status='cancelled',finished_at=time.time());ctx.save();return
         with open(ctx.directory/'runtime.stderr.log','a',opener=lambda p,flags:os.open(p,flags,0o600)) as log:
             process=await asyncio.create_subprocess_exec(node_binary() or 'node',str(Path(__file__).with_suffix('.mjs')),str(ctx.directory/'launch.json'),
-                stdout=asyncio.subprocess.PIPE,stderr=log,start_new_session=True,limit=16*1024*1024)
+                stdout=asyncio.subprocess.PIPE,stderr=log,start_new_session=True,limit=16*1024*1024,
+                env={**os.environ,'WORKBUDDY_CREDENTIAL_HELPER':dependencies.helper_path() or ''})
         state.update(status='submitted',runtime_pid=process.pid);ctx.save()
         deadline=time.monotonic()+request['timeout_seconds']
         reader_task=asyncio.create_task(process.stdout.readline())

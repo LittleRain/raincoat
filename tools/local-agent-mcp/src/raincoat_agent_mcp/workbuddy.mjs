@@ -1,6 +1,6 @@
 // Run WorkBuddy's bundled Agent, keeping desktop credentials only in memory.
 import {spawn} from 'node:child_process';
-import {readFile, readdir} from 'node:fs/promises';
+import {readFile} from 'node:fs/promises';
 import {homedir} from 'node:os';
 import {join} from 'node:path';
 import {pathToFileURL} from 'node:url';
@@ -12,14 +12,7 @@ const emit = event => process.stdout.write(redact(JSON.stringify(event))+'\n');
 async function credentialHelper() {
   const override = process.env.WORKBUDDY_CREDENTIAL_HELPER;
   if (override) return override;
-  for (const profile of ['desktop','web']) {
-    const root = join(homedir(),'.dsh/profiles',profile,'node_modules/dsh-workbuddy-connect/lib');
-    try {
-      const matches = (await readdir(root)).filter(x=>/^host-heartbeat-.*\.js$/.test(x));
-      if (matches.length === 1) return join(root,matches[0]);
-    } catch (error) { if (error.code !== 'ENOENT') throw error; }
-  }
-  throw new Error('Missing dsh-workbuddy-connect credential helper; install 0.7.9 or set WORKBUDDY_CREDENTIAL_HELPER');
+  throw new Error('Missing managed WorkBuddy helper; run local-agent doctor --backend workbuddy --install-deps');
 }
 
 async function main() {

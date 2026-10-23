@@ -4,7 +4,7 @@ import asyncio, fcntl, json, os, re, subprocess, time, urllib.error, urllib.requ
 from pathlib import Path
 from urllib.parse import urlparse
 import websockets
-import shared
+from . import shared
 BITTO = Path(os.environ.get("BITTO_HOME", "~/.bitto")).expanduser()
 PREFIX = "bitto.gateway.v1."
 TERMINAL = shared.TERMINAL

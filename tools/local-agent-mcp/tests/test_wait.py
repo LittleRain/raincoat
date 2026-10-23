@@ -6,9 +6,9 @@ import tempfile
 import time
 import unittest
 from unittest.mock import patch
-sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
-import shared
-import bridge
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'src'))
+from raincoat_agent_mcp import shared
+from raincoat_agent_mcp import bridge
 
 class CompletionWaitTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
@@ -78,7 +78,7 @@ class CompletionWaitTests(unittest.IsolatedAsyncioTestCase):
         finally:
             process.wait()
     async def test_pending_workbuddy_backend_fails_before_job_creation(self):
-        with patch('workbuddy.status',return_value={'installed':True,'execution_ready':False,'note':'authorization pending'}):
+        with patch('raincoat_agent_mcp.workbuddy.status',return_value={'installed':True,'execution_ready':False,'note':'authorization pending'}):
             with self.assertRaisesRegex(RuntimeError,'authorization pending'):
                 bridge.submit_task('workbuddy','test')
         self.assertEqual(len(list((shared.STATE/'jobs').iterdir())),1)

@@ -1,8 +1,8 @@
 from pathlib import Path
 import sys
 import unittest
-sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
-import bitto
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'src'))
+from raincoat_agent_mcp import bitto
 class BittoEventsTests(unittest.TestCase):
     def event(self,kind,**payload):return {'type':bitto.PREFIX+kind,'payload':payload}
     def test_intermediate_message_is_not_task_completion(self):
