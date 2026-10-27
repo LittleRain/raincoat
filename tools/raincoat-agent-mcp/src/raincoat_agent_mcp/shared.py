@@ -1,11 +1,13 @@
-"""Persistent jobs and bounded completion waits shared by both runtimes."""
+"""Persistent jobs, process cleanup and bounded waits shared by all runtimes."""
 from __future__ import annotations
 import asyncio
+import fcntl
 import hashlib
 import json
 import os
 from pathlib import Path
 import re
+import signal
 import stat
 import subprocess
 import time
@@ -120,6 +122,68 @@ async def wait_task(job_id, timeout_seconds=25):
         finally:
             writer.close()
             await writer.wait_closed()
+
+
+async def group_alive(group_id):
+    # A CLI leader may exit before its tools; zombies cannot execute work.
+    result = await asyncio.to_thread(subprocess.run, ['ps', '-axo', 'pgid=,stat='], capture_output=True, text=True)
+    if result.returncode:
+        raise RuntimeError('Cannot verify agent process group termination')
+    return any(parts[0] == str(group_id) and not parts[1].startswith('Z')
+               for line in result.stdout.splitlines() if len(parts := line.split()) == 2)
+
+
+async def stop_process(process):
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        await process.wait()
+        return
+    deadline = time.monotonic() + 3
+    while await group_alive(process.pid) and time.monotonic() < deadline:
+        await asyncio.sleep(0.05)
+    if await group_alive(process.pid):
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+    await process.wait()
+    deadline = time.monotonic() + 1
+    while await group_alive(process.pid):
+        if time.monotonic() >= deadline:
+            raise RuntimeError('Agent descendants are still alive; cancellation not confirmed')
+        await asyncio.sleep(0.05)
+
+
+async def acquire_session_lock(ctx, backend, session_id):
+    lock = lock_path(backend, session_id).open('a+')
+    deadline = time.monotonic() + 5
+    try:
+        while True:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                lock.seek(0)
+                lock.truncate()
+                lock.write(ctx.job_id)
+                lock.flush()
+                return lock
+            except BlockingIOError:
+                lock.seek(0)
+                previous = lock.read().strip()
+                try:
+                    previous_state = get_task(previous)
+                except (ValueError, FileNotFoundError):
+                    previous_state = {}
+                if previous_state.get('status') not in TERMINAL:
+                    raise RuntimeError(f'该 {backend} 会话已有桥接任务在执行。') from None
+                if time.monotonic() >= deadline:
+                    raise RuntimeError(f'前序 {backend} 已完成但仍未释放会话，请稍后续接。') from None
+                if ctx.cancelled():
+                    raise RuntimeError('Cancelled while waiting for completed session cleanup')
+                await asyncio.sleep(0.05)
+    except BaseException:
+        lock.close()
+        raise
 
 
 class Worker:

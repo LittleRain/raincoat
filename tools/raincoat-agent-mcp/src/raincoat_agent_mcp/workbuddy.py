@@ -1,13 +1,9 @@
 """WorkBuddy CLI adapter; authoritative result frames wake the shared waiters."""
 from __future__ import annotations
 import asyncio
-import fcntl
 import json
 import os
 from pathlib import Path
-import shutil
-import signal
-import subprocess
 import time
 import uuid
 from . import shared, dependencies
@@ -79,52 +75,15 @@ def consume_event(state,event):
 
 
 async def group_alive(group_id):
-    # A leader may exit before its tools, and zombies cannot execute work.
-    result=await asyncio.to_thread(subprocess.run,['ps','-axo','pgid=,stat='],capture_output=True,text=True)
-    if result.returncode:raise RuntimeError('Cannot verify WorkBuddy process group termination')
-    return any(parts[0]==str(group_id) and not parts[1].startswith('Z')
-               for line in result.stdout.splitlines() if len(parts:=line.split())==2)
+    return await shared.group_alive(group_id)
 
 
 async def stop_process(process):
-    try:os.killpg(process.pid,signal.SIGTERM)
-    except ProcessLookupError:
-        await process.wait();return
-    deadline=time.monotonic()+3
-    while await group_alive(process.pid) and time.monotonic()<deadline:
-        await asyncio.sleep(0.05)
-    if await group_alive(process.pid):
-        try:os.killpg(process.pid,signal.SIGKILL)
-        except ProcessLookupError:pass
-    await process.wait()
-    deadline=time.monotonic()+1
-    while await group_alive(process.pid):
-        if time.monotonic()>=deadline:
-            raise RuntimeError('WorkBuddy descendants are still alive; cancellation not confirmed')
-        await asyncio.sleep(0.05)
+    return await shared.stop_process(process)
 
 
 async def acquire_session_lock(ctx,sid):
-    lock=shared.lock_path('workbuddy',sid).open('a+')
-    deadline=time.monotonic()+5
-    try:
-        while True:
-            try:
-                fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
-                lock.seek(0);lock.truncate();lock.write(ctx.job_id);lock.flush()
-                return lock
-            except BlockingIOError:
-                lock.seek(0);previous=lock.read().strip()
-                try:previous_state=shared.get_task(previous)
-                except (ValueError,FileNotFoundError):previous_state={}
-                if previous_state.get('status') not in shared.TERMINAL:
-                    raise RuntimeError('该 WorkBuddy 会话已有桥接任务在执行。') from None
-                if time.monotonic()>=deadline:
-                    raise RuntimeError('前序 WorkBuddy 已完成但仍未释放会话，请稍后续接。') from None
-                if ctx.cancelled():raise RuntimeError('Cancelled while waiting for completed session cleanup')
-                await asyncio.sleep(0.05)
-    except BaseException:
-        lock.close();raise
+    return await shared.acquire_session_lock(ctx,'workbuddy',sid)
 
 
 async def run(ctx):

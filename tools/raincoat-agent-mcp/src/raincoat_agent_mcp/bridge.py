@@ -1,4 +1,4 @@
-"""One local MCP delegates whole tasks to Bitto or WorkBuddy."""
+"""One local MCP delegates whole tasks to Bitto, WorkBuddy or GPT/Codex."""
 from __future__ import annotations
 import argparse
 import asyncio
@@ -14,7 +14,7 @@ from typing import Literal
 import uuid
 from . import bitto, shared
 
-Backend = Literal['bitto', 'workbuddy']
+Backend = Literal['bitto', 'workbuddy', 'gpt']
 
 
 def compact(state, include_details=False):
@@ -44,13 +44,16 @@ def status(backend: Backend):
     if backend == 'workbuddy':
         from . import workbuddy
         return {'backend':'workbuddy', **workbuddy.status()}
-    raise ValueError('backend must be bitto or workbuddy')
+    if backend == 'gpt':
+        from . import gpt
+        return {'backend':'gpt', **gpt.status()}
+    raise ValueError('backend must be bitto, workbuddy or gpt')
 
 
 def submit_task(backend: Backend, prompt: str, title='本地 Agent 委派任务', project='default', model='',
-                cwd='', session_id='', timeout_seconds=10800, allowed_tools=None):
-    if backend not in ('bitto','workbuddy'):
-        raise ValueError('backend must be bitto or workbuddy')
+                cwd='', session_id='', timeout_seconds=10800, allowed_tools=None, sandbox=''):
+    if backend not in ('bitto','workbuddy','gpt'):
+        raise ValueError('backend must be bitto, workbuddy or gpt')
     if not prompt.strip():
         raise ValueError('prompt must not be empty')
     if not 1 <= timeout_seconds <= 86400:
@@ -62,14 +65,17 @@ def submit_task(backend: Backend, prompt: str, title='本地 Agent 委派任务'
     if allowed_tools and (not isinstance(allowed_tools,list) or any(not isinstance(x,str) or not re.fullmatch(r'[A-Za-z][A-Za-z0-9_]*(?:\([^\r\n]*\))?',x) for x in allowed_tools)):
         raise ValueError('allowed_tools must contain explicit tool names or Tool(rule) patterns')
     if allowed_tools and backend != 'workbuddy':
-        raise ValueError('allowed_tools applies only to WorkBuddy; Bitto uses its own permission requests')
+        raise ValueError('allowed_tools applies only to WorkBuddy; use sandbox to authorize GPT file/command access')
+    if sandbox and (backend != 'gpt' or sandbox not in {'read-only','workspace-write','danger-full-access'}):
+        raise ValueError('sandbox applies only to GPT: read-only, workspace-write or danger-full-access')
     request = dict(backend=backend,prompt=prompt,title=title,project=project,model=model,
                    cwd=str(Path(cwd).expanduser()) if cwd else '',session_id=session_id,
-                   timeout_seconds=timeout_seconds,allowed_tools=allowed_tools or [])
+                   timeout_seconds=timeout_seconds,allowed_tools=allowed_tools or [],
+                   sandbox=sandbox or ('read-only' if backend == 'gpt' else ''))
     if backend == 'bitto':
         request.update(ws_url=bitto.discover_ws(), model=model or bitto.settings_model())
         bitto.token()
-    else:
+    elif backend == 'workbuddy':
         request['model'] = model or 'deepseek-v4.1-flash'
         from . import workbuddy
         discovery = workbuddy.status()
@@ -78,6 +84,11 @@ def submit_task(backend: Backend, prompt: str, title='本地 Agent 委派任务'
         if not discovery['execution_ready']:
             raise RuntimeError(discovery['note'])
         workbuddy.validate_model(request['model'])
+    else:
+        from . import gpt
+        discovery = gpt.status()
+        if not discovery['execution_ready']:
+            raise RuntimeError('Codex CLI not installed; install codex and run codex login')
     job_id = uuid.uuid4().hex
     directory = shared.job_dir(job_id)
     shared.atomic_json(directory / 'request.json', request)
@@ -112,7 +123,7 @@ def cancel_task(job_id):
 def respond_permission(job_id,request_id,allow):
     state = shared.get_task(job_id)
     if state['backend'] != 'bitto':
-        raise ValueError('WorkBuddy 非交互授权需提交时明确 allowed_tools；不支持事后自动扩大权限')
+        raise ValueError('仅 Bitto 支持交互授权；WorkBuddy 使用 allowed_tools，GPT 使用 sandbox，均需提交时明确授权')
     pending = state.get('permission',{})
     if state['status'] != 'waiting_permission' or pending.get('requestId',pending.get('request_id')) != request_id:
         raise ValueError('No matching pending permission request')
@@ -128,9 +139,12 @@ async def run_worker(job_id):
             ctx.state.update(status='cancelled',finished_at=time.time());ctx.save();return
         if ctx.request['backend'] == 'bitto':
             await bitto.run(ctx)
-        else:
+        elif ctx.request['backend'] == 'workbuddy':
             from . import workbuddy
             await workbuddy.run(ctx)
+        else:
+            from . import gpt
+            await gpt.run(ctx)
     except Exception as e:
         if ctx.state['status'] not in shared.TERMINAL:
             ctx.state.update(status='interrupted' if ctx.state.get('status') in {'submitted','running','cancelling'} else 'failed',
@@ -141,15 +155,15 @@ async def run_worker(job_id):
 
 def serve_mcp():
     from mcp.server.fastmcp import FastMCP
-    mcp=FastMCP('local_agents',log_level='WARNING',instructions='将完整任务交给所选 backend 的原生运行时。agent_submit_task 默认等待25秒，未完成时立即继续调用 agent_wait_task；不要 sleep、指数退避或稀疏轮询。单次等待超时不取消任务。MCP 不会在调用结束后主动唤醒闲置模型，需保持有界等待。WorkBuddy 工具权限通过 allowed_tools 按用户授权显式给出，不会自动放宽权限。历史 Bitto job_id 仍可查询。')
+    mcp=FastMCP('local_agents',log_level='WARNING',instructions='将完整任务交给所选 backend 的原生运行时：bitto、workbuddy 或 gpt（本机 Codex CLI）。agent_submit_task 默认等待25秒，未完成时立即继续调用 agent_wait_task；不要 sleep、指数退避或稀疏轮询。单次等待超时不取消任务。MCP 不会在调用结束后主动唤醒闲置模型，需保持有界等待。WorkBuddy 工具权限通过 allowed_tools 按用户授权显式给出；GPT 默认只读，写文件需明确 sandbox=workspace-write，不会自动放宽权限。历史 Bitto job_id 仍可查询。')
     @mcp.tool()
     def agent_status(backend: Backend) -> dict:
-        """检查所选本地运行时；不进行模型调用。WorkBuddy CLI 任务不会显示在桌面任务列表。"""
+        """检查所选本地运行时；不进行模型调用。WorkBuddy/Codex CLI 任务不会显示在桌面任务列表。"""
         return status(backend)
     @mcp.tool()
-    async def agent_submit_task(backend: Backend,prompt:str,title:str='本地 Agent 委派任务',project:str='default',model:str='',cwd:str='',session_id:str='',timeout_seconds:int=10800,wait_seconds:float=25,allowed_tools:list[str]|None=None) -> dict:
-        """交给 bitto 或 workbuddy 原生 Agent 执行。默认等待25秒，完成即返回结果；未完成则保存job_id，立即调用 agent_wait_task，勿 sleep。执行超时与本次等待超时独立。WorkBuddy 的 allowed_tools 例 ['Bash(python3:*)']，仅按用户授权设置。"""
-        return await submit_and_wait(backend,prompt,title=title,project=project,model=model,cwd=cwd,session_id=session_id,timeout_seconds=timeout_seconds,wait_seconds=wait_seconds,allowed_tools=allowed_tools)
+    async def agent_submit_task(backend: Backend,prompt:str,title:str='本地 Agent 委派任务',project:str='default',model:str='',cwd:str='',session_id:str='',timeout_seconds:int=10800,wait_seconds:float=25,allowed_tools:list[str]|None=None,sandbox:str='') -> dict:
+        """交给 bitto、workbuddy 或 gpt 原生 Agent 执行。默认等待25秒，未完成立即调用 agent_wait_task。WorkBuddy 用 allowed_tools 授权；GPT 用 sandbox=workspace-write 允许写 cwd，默认 read-only。"""
+        return await submit_and_wait(backend,prompt,title=title,project=project,model=model,cwd=cwd,session_id=session_id,timeout_seconds=timeout_seconds,wait_seconds=wait_seconds,allowed_tools=allowed_tools,sandbox=sandbox)
     @mcp.tool()
     async def agent_wait_task(job_id:str,timeout_seconds:float=25,include_details:bool=False) -> dict:
         """保持等待，后端一完成或需要授权就立即返回。等待超时不取消任务；未完成时立即再次调用本工具，勿 sleep。"""
@@ -179,7 +193,7 @@ def serve_mcp():
     async def bitto_get_task(job_id:str,wait_seconds:float=25) -> dict:
         """兼容旧入口并改为有界等待；完成立即返回，未完成时立即继续调用。"""
         state=shared.get_task(job_id)
-        if state['backend']!='bitto':raise ValueError('This job belongs to WorkBuddy')
+        if state['backend']!='bitto':raise ValueError('This job does not belong to Bitto')
         return compact(await shared.wait_task(job_id,wait_seconds))
     mcp.add_tool(agent_cancel_task,name='bitto_cancel_task')
     mcp.add_tool(agent_respond_permission,name='bitto_respond_permission')
@@ -189,10 +203,11 @@ def serve_mcp():
 def main():
     p=argparse.ArgumentParser(description=__doc__);sub=p.add_subparsers(dest='command',required=True)
     sub.add_parser('mcp')
-    s=sub.add_parser('status');s.add_argument('backend',choices=['bitto','workbuddy'])
-    s=sub.add_parser('submit');s.add_argument('backend',choices=['bitto','workbuddy']);s.add_argument('prompt',nargs='?',default='');s.add_argument('--prompt-file')
+    s=sub.add_parser('status');s.add_argument('backend',choices=['bitto','workbuddy','gpt'])
+    s=sub.add_parser('submit');s.add_argument('backend',choices=['bitto','workbuddy','gpt']);s.add_argument('prompt',nargs='?',default='');s.add_argument('--prompt-file')
     for name,default in [('title','本地 Agent 委派任务'),('project','default'),('model',''),('cwd',''),('session-id','')]:s.add_argument('--'+name,default=default)
     s.add_argument('--timeout-seconds',type=int,default=10800);s.add_argument('--wait-seconds',type=float,default=25);s.add_argument('--allowed-tool',action='append',dest='allowed_tools')
+    s.add_argument('--sandbox',choices=['read-only','workspace-write','danger-full-access'],default='')
     for name in ['get','wait','cancel','_worker']:
         s=sub.add_parser(name);s.add_argument('job_id')
         if name=='wait':s.add_argument('--timeout-seconds',type=float,default=25)

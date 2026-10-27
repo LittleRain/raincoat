@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "raincoat-agent-mcp"
 dynamic = ["version"]
-description = "Delegate MCP tasks to local Bitto and WorkBuddy runtimes"
+description = "Delegate MCP tasks to local Bitto, WorkBuddy and GPT/Codex runtimes"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = ["mcp>=1.20,<2", "websockets>=14,<17", "packaging>=23"]

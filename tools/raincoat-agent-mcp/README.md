@@ -1,12 +1,12 @@
 # Raincoat Agent MCP
 
-把完整任务交给本机 Bitto 或 WorkBuddy，使用对应产品的运行时、模型和登录账号。Codex、DeepSeek Harness 或其他支持 stdio 的 Agent 通过同一个 MCP 的 `backend="bitto" | "workbuddy"` 参数选择后端。
+把完整任务交给本机 Bitto、WorkBuddy 或 GPT（Codex CLI），使用对应产品的运行时、模型和登录账号。Codex、DeepSeek Harness 或其他支持 stdio 的 Agent 通过同一个 MCP 的 `backend="bitto" | "workbuddy" | "gpt"` 参数选择后端。
 
 当前版本 **0.1.0**，后端仅支持 **macOS**。Python 包和发行流程已经准备好，**尚未发布到 PyPI**；现在可分发构建后的 `.whl` 文件。Windows/Linux 的运行时发现、认证和进程管理尚未适配，CLI 会给出明确提示。
 
 ## 给使用者：首次安装
 
-需要 Python 3.11+、[uv](https://docs.astral.sh/uv/getting-started/installation/)，以及已安装并登录的 Bitto 或 WorkBuddy。使用 WorkBuddy 还需 Node.js **22.19+（22 系列）或 24+** 和 npm；这与固定版本凭证辅助模块的要求一致。
+需要 Python 3.11+、[uv](https://docs.astral.sh/uv/getting-started/installation/)，以及已安装并登录的 Bitto、WorkBuddy 或 Codex CLI。使用 WorkBuddy 还需 Node.js **22.19+（22 系列）或 24+** 和 npm；这与固定版本凭证辅助模块的要求一致。GPT 后端只需 Codex CLI，复用其现有登录，不另外配置 API Key。
 
 收到发布者提供的 wheel 后安装。以下路径替换为实际下载位置：
 
@@ -41,14 +41,20 @@ local-agent doctor --backend workbuddy --install-deps
 
 这条命令通过 npm 将 `dsh-workbuddy-connect@0.7.9` 安装到 `~/.local/share/raincoat-agent-mcp/workbuddy/`，不需要安装 DeepSeek Harness，也不读取或复制其他人的凭证。失败会返回非零退出码和具体原因。未安装 Node/npm 时先安装上述受支持版本，再重试。
 
+使用 GPT：安装 Codex CLI 并执行 `codex login`，然后检查运行时和已有登录。支持 ChatGPT 登录，不需要把 API Key 写入 MCP 配置。
+
+```sh
+local-agent doctor --backend gpt
+```
+
 之后可随时运行只做本地检查的命令：
 
 ```sh
 local-agent doctor --backend workbuddy
-local-agent doctor                         # 同时检查两个后端
+local-agent doctor                         # 同时检查三个后端
 ```
 
-Doctor 检查安装、运行时、Node 版本和辅助模块入口，不调用大模型，不验证登录有效性。WorkBuddy 检查成功时会记住本机 Node 路径，避免桌面 Agent 未加载 shell PATH 导致找不到 Node。检查失败返回非零退出码；只启用一个后端时请指定 `--backend`。
+Doctor 检查安装、运行时、Node 版本和辅助模块入口，不调用大模型。WorkBuddy 不验证登录有效性；GPT 通过 `codex login status` 检查已有登录。检查成功时会记住本机 Node / Codex 路径，避免桌面 Agent 未加载 shell PATH 导致找不到运行时。检查失败返回非零退出码；只启用一个后端时请指定 `--backend`。
 
 ### 接入 Agent
 
@@ -140,7 +146,7 @@ local-agent setup --apply
 }
 ```
 
-调用 `agent_submit_task` 时传入这些参数。工具权限需要按用户对任务的授权显式给出，空列表不开放工具，不会自动使用跳过权限模式。
+调用 `agent_submit_task` 时传入这些参数。工具权限需要按用户对任务的授权显式给出：WorkBuddy 的空列表不开放工具，GPT 默认 `read-only` 沙箱，均不会自动使用跳过权限模式。GPT 需要写入 `cwd` 时明确传 `"sandbox": "workspace-write"`；`danger-full-access` 仅适用于已隔离且明确授权的环境。
 
 | 工具 | 用途 |
 |---|---|
@@ -151,7 +157,7 @@ local-agent setup --apply
 | `agent_cancel_task(job_id)` | 请求取消，需再等待终止确认 |
 | `agent_respond_permission(job_id, request_id, allow)` | 回答 Bitto 当前工具授权 |
 
-提交还支持 `title, project, model, cwd, session_id, timeout_seconds, wait_seconds, allowed_tools`。提交的执行上限 `timeout_seconds` 范围 1–86400 秒；`wait_seconds` 和等待工具的 `timeout_seconds` 范围 0–50 秒。单次等待超时不会取消任务。
+提交还支持 `title, project, model, cwd, session_id, timeout_seconds, wait_seconds, allowed_tools, sandbox`。`allowed_tools` 仅用于 WorkBuddy，`sandbox` 仅用于 GPT。提交的执行上限 `timeout_seconds` 范围 1–86400 秒；`wait_seconds` 和等待工具的 `timeout_seconds` 范围 0–50 秒。单次等待超时不会取消任务。
 
 未完成时立即继续调用 `agent_wait_task`，不要 sleep 或指数退避。worker 在保存终态后通过私有 Unix socket 唤醒等待者；默认只返回最终文本和少量工具摘要，完整状态见 `result_path`，也可用 `include_details=true` 读取。
 
@@ -165,6 +171,8 @@ CLI 也支持任务执行：
 local-agent status bitto
 local-agent submit bitto '执行任务并返回结果'
 local-agent submit workbuddy '执行已授权的任务' --allowed-tool 'Bash(python3:*)'
+local-agent submit gpt '读取并总结当前目录' --cwd /absolute/workspace
+local-agent submit gpt '修改并验证当前项目' --cwd /absolute/workspace --sandbox workspace-write
 local-agent wait JOB_ID
 local-agent get JOB_ID
 local-agent cancel JOB_ID
@@ -178,12 +186,15 @@ WorkBuddy 使用应用自带 CLI，任务不出现在桌面任务列表。只接
 
 WorkBuddy 通过固定版本辅助模块只读获取当前用户的桌面登录令牌，在本地子进程内存中传给 `www.workbuddy.cn`；兼容桌面凭证标注的 `www.codebuddy.cn` 域名。包装层对令牌值脱敏，不写入 MCP 配置或任务文件；过期时需重新登录，不自动刷新。用户启用 WorkBuddy 后端即按本机账号执行其明确委派的任务。
 
+GPT 通过 `codex exec --json` 使用 Codex CLI 已保存的登录，支持新任务和 `session_id` 续接；`project` 不生效，`model` 缺省使用 Codex 内置默认模型，`cwd` 缺省为家目录。子进程会移除 `OPENAI_API_KEY` / `CODEX_API_KEY` 环境覆盖，避免意外改用环境变量计费；仍尊重 Codex 自己保存的登录方式。启动时使用 `--ignore-user-config` 隔离用户配置中的 MCP 与 hooks，避免桥接递归或隐式外部动作；认证仍从 `CODEX_HOME` 读取。`turn.completed` 才是成功完成依据，中间 agent message 不会提前结束任务。
+
 非秘密的依赖路径保存在 `~/.config/raincoat-agent-mcp/runtime.json`。以下环境变量可覆盖发现：
 
 | 环境变量 | 用途 |
 |---|---|
 | `LOCAL_AGENT_MCP_STATE_DIR` | 自定义任务目录；旧 `BITTO_BRIDGE_STATE_DIR` 仍兼容 |
 | `LOCAL_AGENT_NODE` | Node 可执行文件绝对路径 |
+| `LOCAL_AGENT_CODEX` | Codex CLI 可执行文件绝对路径 |
 | `WORKBUDDY_CREDENTIAL_HELPER` | 兼容的 0.7.9 辅助模块入口绝对路径 |
 | `BITTO_HOME` | Bitto 本地数据目录 |
 | `BITTO_BRIDGE_WS_URL` | 多实例时指定本机 loopback WebSocket |
@@ -226,5 +237,6 @@ python3 tests/distribution_smoke.py dist/raincoat_agent_mcp-0.1.0-py3-none-any.w
 ```sh
 python3 tests/integration.py bitto
 python3 tests/integration.py workbuddy
+python3 tests/integration.py gpt
 python3 tests/lifecycle.py /private/tmp/local-agent-integration-EXAMPLE
 ```

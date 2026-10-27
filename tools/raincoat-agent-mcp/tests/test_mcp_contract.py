@@ -18,5 +18,8 @@ class ContractTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn('agent_wait_task', tools, '旧接口只返回 job_id，无完成等待工具，调用方只能轮询')
             self.assertIn('wait_seconds', tools['agent_submit_task'].inputSchema['properties'])
             self.assertIn('backend', tools['agent_submit_task'].inputSchema['required'])
+            properties = tools['agent_submit_task'].inputSchema['properties']
+            self.assertIn('gpt', properties['backend']['enum'])
+            self.assertIn('sandbox', properties)
 
 if __name__ == '__main__': unittest.main()

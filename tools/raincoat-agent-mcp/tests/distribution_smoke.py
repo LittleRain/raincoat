@@ -31,6 +31,8 @@ async def handshake(config,env,cwd):
         assert len(tools)==11,tools
         result=await session.call_tool('agent_status',{'backend':'workbuddy'})
         assert not result.isError,result
+        result=await session.call_tool('agent_status',{'backend':'gpt'})
+        assert not result.isError,result
     return len(tools)
 
 
@@ -38,6 +40,7 @@ def main(wheel):
     uv=shutil.which('uv');assert uv,'uv required'
     with zipfile.ZipFile(wheel) as archive:
         assert 'raincoat_agent_mcp/workbuddy.mjs' in archive.namelist()
+        assert 'raincoat_agent_mcp/gpt.py' in archive.namelist()
         assert not any(x.endswith(('state.json','auth.json','runtime.json')) for x in archive.namelist())
         name=next(x for x in archive.namelist() if x.endswith('.dist-info/METADATA'))
         original=email.parser.Parser().parsestr(archive.read(name).decode())['Version']

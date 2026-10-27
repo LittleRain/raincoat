@@ -24,6 +24,7 @@ async def main(backend):
         prompt=f'仅做本验证任务：直接调用以 python3 开头的命令，计算 [7,11,13] 的平方和，在 {output}/result.json 写入 JSON（numbers、sum_of_squares字段），重新读文件校验后回复结果与路径。仅运行 python3；不要先执行ls/pwd/mkdir或任何其他工作流。'
         args={'backend':backend,'prompt':prompt,'cwd':str(output),'title':'Unified MCP result delivery verification','wait_seconds':25,'timeout_seconds':90}
         if backend=='workbuddy':args['allowed_tools']=['Bash(python3:*)']
+        if backend=='gpt':args['sandbox']='workspace-write'
         start=time.monotonic()
         result=value(await session.call_tool('agent_submit_task',args))
         while result['status'] not in {'succeeded','failed','interrupted','cancelled','waiting_permission','waiting_desktop_tool'}:
@@ -38,4 +39,4 @@ async def main(backend):
         print(json.dumps({'backend':backend,'status':result['status'],'completion_delivery_ms':result['completion_delivery_ms'],'wait_transport':result['wait_transport'],'model':result.get('model'),'provider':result.get('provider'),'evidence':str(output)},ensure_ascii=False),flush=True)
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser();p.add_argument('backend',choices=['bitto','workbuddy']);asyncio.run(main(p.parse_args().backend))
+    p=argparse.ArgumentParser();p.add_argument('backend',choices=['bitto','workbuddy','gpt']);asyncio.run(main(p.parse_args().backend))

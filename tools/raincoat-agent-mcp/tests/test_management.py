@@ -40,6 +40,16 @@ class ManagementTests(unittest.TestCase):
             root=Path(tmp)/'.dsh/profiles/desktop/node_modules/dsh-workbuddy-connect/lib'
             root.mkdir(parents=True);(root/'host-heartbeat-example.js').write_text('')
             self.assertIsNone(dependencies.helper_path())
+    def test_gpt_doctor_checks_saved_login_without_calling_a_model(self):
+        from raincoat_agent_mcp import gpt
+        with patch.object(gpt.dependencies,'codex_binary',return_value='/stable/codex'),patch.object(gpt,'authentication',return_value={'authenticated':True,'method':'ChatGPT'}),patch.object(dependencies,'save_settings') as save:
+            result=management.doctor(backend='gpt')
+            self.assertTrue(result['healthy'])
+            self.assertEqual(result['backends']['gpt']['method'],'ChatGPT')
+            save.assert_called_once_with(codex='/stable/codex')
+    def test_gpt_install_deps_does_not_install_workbuddy_helper(self):
+        with self.assertRaisesRegex(ValueError,'仅用于 WorkBuddy'):
+            management.doctor(backend='gpt',install_deps=True)
     def test_update_check_compares_versions(self):
         response=io.BytesIO(json.dumps({'info':{'version':'0.2.0'}}).encode())
         with patch('urllib.request.urlopen',return_value=response):

@@ -43,6 +43,16 @@ def node_binary():
     return None
 
 
+def codex_binary():
+    override = os.environ.get('LOCAL_AGENT_CODEX')
+    if override:
+        return override if Path(override).is_file() else None
+    for value in [settings().get('codex'), shutil.which('codex')]:
+        if value and Path(value).is_file():
+            return value
+    return None
+
+
 def node_check():
     binary=node_binary()
     if not binary:return {'available':False,'error':'WorkBuddy 需要 Node.js 22.19+（22系）或 24+，安装后重新运行 doctor。'}

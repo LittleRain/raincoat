@@ -38,10 +38,10 @@ def setup(client='auto',apply=False,dsh_profile='desktop',output=None):
 
 
 def doctor(backend='all',install_deps=False):
-    if install_deps and backend=='bitto':raise ValueError('--install-deps 仅用于 WorkBuddy')
+    if install_deps and backend in ('bitto','gpt'):raise ValueError('--install-deps 仅用于 WorkBuddy')
     report={'version':__version__,'platform':platform.system(),'python':platform.python_version(),'backends':{}}
     if sys.platform!='darwin':
-        return {**report,'healthy':False,'error':'当前 Bitto/WorkBuddy 后端只支持 macOS；尚未适配 Windows/Linux。'}
+        return {**report,'healthy':False,'error':'当前 Bitto/WorkBuddy/GPT 后端只支持 macOS；尚未适配 Windows/Linux。'}
     if install_deps:dependencies.install_workbuddy_helper()
     healthy=True
     if backend in ('bitto','all'):
@@ -59,4 +59,12 @@ def doctor(backend='all',install_deps=False):
             'authentication_checked':False,'next':'安装并登录 WorkBuddy；缺辅助模块时运行 doctor --backend workbuddy --install-deps。'}
         healthy=healthy and available
         if node['available']:dependencies.save_settings(node=node['path'])
+    if backend in ('gpt','all'):
+        from . import gpt
+        status=gpt.status();authentication=gpt.authentication()
+        available=bool(status['execution_ready'] and authentication['authenticated'])
+        report['backends']['gpt']={**status,**authentication,'available':available,
+            'authentication_checked':True,'next':'安装 Codex CLI 并执行 codex login；无需安装额外依赖。'}
+        healthy=healthy and available
+        if status['codex']:dependencies.save_settings(codex=status['codex'])
     return {**report,'healthy':healthy}
