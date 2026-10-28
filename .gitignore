@@ -17,3 +17,23 @@ skills/**/input/
 
 # generated local report artifact
 skills/gongfang-weekly-report/output/report.html
+
+# local agent state and runtimes
+.workbuddy/
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+# generated skill artifacts; curated examples/assets remain versionable
+skills/**/output/
+skills/**/report.html
+# example configuration must remain distributable
+!.env.example
+!**/.env.example
+
+# migration inventories and local-only agent permissions
+.migration/
+.claude/settings.local.json
+# browser capture profiles must never enter release artifacts
+**/chrome-profile/
+**/wecom-playwright-profile/

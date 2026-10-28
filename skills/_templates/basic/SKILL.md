@@ -1,33 +1,14 @@
 ---
 name: your-skill-name
-description: Short description of what this skill helps an agent do.
+description: "[TODO: Describe the concrete task and when this skill should be selected.]"
+metadata:
+  author: raincoat
+  version: "0.1.0"
+  status: draft
 ---
 
 # Your Skill Name
 
-## Purpose
+[TODO: State the outcome, required input, output and essential decision rules.]
 
-Describe the job this skill is responsible for.
-
-## When To Use
-
-- when the user asks for this capability
-- when the task matches this workflow
-
-## Inputs
-
-- list the expected inputs
-
-## Workflow
-
-1. inspect the relevant context
-2. perform the core task
-3. verify the result
-
-## Constraints
-
-- note important boundaries or safety rules
-
-## References
-
-- add links or local file paths when needed
+[TODO: Describe real dependencies, external effects and a meaningful way to verify the result. Link supporting resources only when needed.]

@@ -8,7 +8,7 @@ Symptom:
 - output contains page shell text but not正文
 
 Fix:
-- ensure local Chrome is logged in
+- ensure the dedicated capture profile is logged in; normal Chrome login is not automatically shared
 - increase `--wait-ms` to 30000~45000
 - verify `*_network_hits.json` contains `dop-api/opendoc`
 
@@ -62,7 +62,7 @@ https://doc.weixin.qq.com/doc/w3_yyy?scode=yyy
 Run:
 
 ```bash
-bash /Users/raincai/Documents/GitHub/raincoat/skills/wxurl2md/scripts/run-wecom-doc.sh \
+bash scripts/run-wecom-doc.sh \
   --url-file /path/to/wecom_urls.txt \
   --out-dir /tmp
 ```

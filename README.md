@@ -1,99 +1,40 @@
-# Raincoat
+# raincoat
 
-<p>
-  <a href="#english">English</a> | <a href="#中文">中文</a>
-</p>
+我是 raincoat，一个持续做产品与插件的 builder。这里汇总我的作品，并孵化可独立使用的 Agent Skills、CLI、本地应用和浏览器插件。
 
----
+优先把可复用工作流做成 Skill；每个对外作品使用 `raincoat-xxx` 命名，明确输入输出、依赖与实测兼容范围。
 
-## English
-<a id="english"></a>
+- [作品目录与当前状态](skills/README.md)
+- [作品与 Skill 规范](docs/skills/conventions.md)
+- [发布与独立导出流程](docs/skills/publishing.md)
+- [体检结果与迁移清单](docs/skills/migration.md)
+- [一级目录迁移计划](docs/plans/root-directory-migration.md)
 
-Raincoat is an incubator repository for AI agent skills.
+## 开始使用
 
-### What This Repository Is For
+第一个按新规范整理的样板是 [raincoat-meeting-summary](skills/raincoat-meeting-summary/README.md)：把会议文本整理为结论、行动项与关键决策。无脚本或账号依赖；其他 Agent 和 Windows 的实测状态见它的 README。
 
-This repository is used to:
+存量作品仍处于孵化与迁移阶段，各自的说明和限制以对应目录为准。
 
-- incubate multiple skills in one place
-- keep each skill self-contained enough to become its own repository later
-- provide lightweight templates, conventions, and export tooling
+## 开发
 
-### Repository Layout
-
-- `skills/`: incubating skills and templates
-- `docs/skills/`: conventions, publishing notes, and roadmap
-- `tooling/scripts/`: helper scripts for scaffolding and export
-
-### Current Skills
-
-- `trade-weekly-report`
-- `create-report`
-- `report-circle-weekly`
-
-See [skills/README.md](/Users/raincai/Documents/GitHub/raincoat/skills/README.md) for the catalog.
-
-### Common Workflows
+需要 Python 3.10+；用系统可用的 `python` 或 `python3`：
 
 ```bash
-./tooling/scripts/new-skill.sh <skill-name>
-./tooling/scripts/export-skill.sh <skill-name> <destination-dir>
-python3 tools/wecom_archive.py --draft /path/to/wecom_doc_decoded_draft.md --structured /path/to/wecom_doc_structured_tables.md --out-dir /tmp
-node tools/wecom_capture_opendoc.js --url "https://doc.weixin.qq.com/doc/w3_xxx?scode=xxx" --out-dir /tmp
+python -m pip install -r tooling/requirements.txt
+python tooling/scripts/skill_tools.py new raincoat-my-tool
+python tooling/scripts/skill_tools.py lint raincoat-meeting-summary --release
+python tooling/scripts/skill_tools.py export raincoat-meeting-summary /path/outside/repository/raincoat-meeting-summary
+python -m unittest discover -s tooling/tests -p 'test_*.py'
 ```
 
-### Design Rules
+新建命令只生成待填写的最小模板，不自动授予许可证或标记兼容性已验证。完整存量体检使用 `python tooling/scripts/skill_tools.py lint`，会报告尚未迁移的问题。
 
-- one directory under `skills/` equals one skill
-- use kebab-case for skill names
-- keep skill logic inside the skill directory whenever possible
-- only extract shared tooling when reuse is clear
+## 仓库结构
 
----
+- `skills/`：Skill 与最小模板。
+- `apps/`：独立应用与插件，包含 [Sport Cut Studio](apps/football-ai-studio/README.md) 和 [raincoat-wecom-clipper](apps/raincoat-wecom-clipper/README.md)。
+- `tooling/`：脚手架、校验、导出与测试。
+- `docs/skills/`：约定、发布流程与迁移记录。
 
-## 中文
-<a id="中文"></a>
-
-Raincoat 是一个用于孵化 AI Agent Skills 的仓库。
-
-### 仓库用途
-
-本仓库用于：
-
-- 在一个仓库中孵化多个 skill
-- 保持每个 skill 足够自包含，后续可独立拆仓
-- 提供轻量模板、规范和导出工具
-
-### 目录结构
-
-- `skills/`：skill 与模板
-- `docs/skills/`：规范、发布说明和路线图
-- `tooling/scripts/`：脚手架与导出辅助脚本
-
-### 当前技能
-
-- `trade-weekly-report`
-- `create-report`
-- `report-circle-weekly`
-
-完整目录见 [skills/README.md](/Users/raincai/Documents/GitHub/raincoat/skills/README.md)。
-
-### 常用流程
-
-```bash
-./tooling/scripts/new-skill.sh <skill-name>
-./tooling/scripts/export-skill.sh <skill-name> <destination-dir>
-python3 tools/wecom_archive.py --draft /path/to/wecom_doc_decoded_draft.md --structured /path/to/wecom_doc_structured_tables.md --out-dir /tmp
-node tools/wecom_capture_opendoc.js --url "https://doc.weixin.qq.com/doc/w3_xxx?scode=xxx" --out-dir /tmp
-```
-
-### 设计规则
-
-- `skills/` 下一个目录对应一个 skill
-- skill 名称统一使用 kebab-case
-- 尽量把 skill 逻辑放在 skill 目录内部
-- 只有复用价值明确时才抽取共享工具
-
-## Local applications / 本地应用
-
-- [Football AI Studio P0](apps/football-ai-studio/README.md)：本地足球训练视频工作台，提供场次管理、视频导入、FFmpeg 代理/缩略图与持久化任务队列。当前未实现 AI 识别。
+许可证按作品指定。目前样板自带 MIT 许可证，不代表其他存量代码、业务资料或第三方资源也采用 MIT。

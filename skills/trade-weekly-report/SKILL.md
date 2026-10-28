@@ -1,14 +1,15 @@
 ---
 name: trade-weekly-report
-version: "2.0"
 description: |
   基于内容电商平台的交易业务周报生成。
   触发词：交易周报、交易周数据、周报生成、内容电商报告、GMV报告、
   行业拆解、商家拆解、流量渠道分析、内容类型分析、小店自营、
   控比、买家数趋势、GPM分析、天马推荐、商城feed
   触发场景：(1)用户提供数据文件路径 (2)要求生成周报 (3)周报数据分析
-level: L1
-base_dir: /Users/raincai/.workbuddy/skills/trade-weekly-report
+metadata:
+  version: "0.1.0"
+  status: beta
+  level: L1
 ---
 
 # Trade Weekly Report Skill
@@ -114,12 +115,12 @@ base_dir: /Users/raincai/.workbuddy/skills/trade-weekly-report
 
 ```bash
 # 方式1：直接调用 Python 脚本
-python3 ~/.workbuddy/skills/trade-weekly-report/scripts/generate_report.py \
+python scripts/generate_report.py \
   --data-dir /path/to/data \
   --output trade-weekly-report.html
 
-# 方式2：使用 Shell 脚本（内置依赖检查）
-bash ~/.workbuddy/skills/trade-weekly-report/scripts/run-report.sh /path/to/data output.html
+# 方式2：可选 Bash 入口；先按 README 安装依赖
+bash scripts/run-report.sh /path/to/data output.html
 ```
 
 ## AI 执行流程
@@ -127,10 +128,9 @@ bash ~/.workbuddy/skills/trade-weekly-report/scripts/run-report.sh /path/to/data
 当用户触发此 skill 时：
 
 1. **确认数据目录**：询问或从上下文推断 6 个数据文件的存放目录
-2. **确认输出路径**：默认在工作区目录生成 `trade-weekly-report.html`
+2. **确认输出路径**：使用用户指定输出；直接生成器默认写入数据目录。资源相对于安装位置解析，不依赖 Raincoat 仓库。
 3. **执行脚本**：调用 `generate_report.py --data-dir <dir> --output <path>`
-4. **预览报告**：启动本地服务器，用 `preview_url` 预览结果
-5. **投递附件**：调用 `deliver_attachments` 将 HTML 发送给用户
+4. **交付报告**：返回生成文件路径。只有宿主提供文件展示能力时才使用；不假设存在 preview_url 或 deliver_attachments，不自动发送消息或上传报告。
 
 ## 样式规范
 
@@ -142,5 +142,9 @@ bash ~/.workbuddy/skills/trade-weekly-report/scripts/run-report.sh /path/to/data
 ## 踩坑经验
 
 - 商家标签.xlsx 字段名变更（2026-04-17）：`merchant_id/owner_ld/owner_cate` → `商家id/行业负责人/行业`，脚本已自动兼容新旧版本
-- 行业.xlsx 无 GPM 字段：需要由 `GMV / 商品曝光PV * 1000` 计算，脚本中 `add_gpm()` 函数负责此逻辑
-- 商家ID 类型不一致：商家标签里 `商家id` 为整型，行业.xlsx `商家ID` 有时为字符串，merge 前需统一 `.astype(str)`
+- 行业.xlsx 无 GPM 字段：需要由 `GMV / 商品曝光PV * 1000` 计算，脚本在 `load_all()` 中计算该字段
+- 商家ID 类型不一致：商家标签里 `商家id` 为整型，行业.xlsx `商家ID` 有时为字符串，遇到类型不一致时应先核对输入字段类型，不能假设脚本已自动统一
+
+## 安装与验证
+
+先按 [README.md](README.md) 安装声明依赖。商家标签的工作表名称为 `sheet`；输入至少覆盖两个完整周期。本次目录迁移以合成数据核对 GMV 与环比，不代表所有业务口径已验收。旧四文件合同入口保留在 `scripts/legacy/`，不得将两套输入混用。

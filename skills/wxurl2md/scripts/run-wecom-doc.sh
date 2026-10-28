@@ -3,11 +3,12 @@ set -euo pipefail
 
 URL=""
 URL_FILE=""
-OUT_DIR="/tmp"
+OUT_DIR="${TMPDIR:-${TEMP:-/tmp}}"
 WAIT_MS="12000"
-OPEN_CHROME="1"
 
-CAPTURE_SCRIPT_DEFAULT="/Users/raincai/Documents/GitHub/raincoat/tools/wecom_capture_opendoc.js"
+
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+CAPTURE_SCRIPT_DEFAULT="$SCRIPT_DIR/wecom_capture_opendoc.js"
 CAPTURE_SCRIPT="${WXURL2MD_CAPTURE_SCRIPT:-$CAPTURE_SCRIPT_DEFAULT}"
 
 while [[ $# -gt 0 ]]; do
@@ -29,7 +30,7 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     --no-open)
-      OPEN_CHROME="0"
+      : # compatibility option; the capture process launches its own Chrome
       shift 1
       ;;
     *)
@@ -56,15 +57,10 @@ if [[ ! -f "$CAPTURE_SCRIPT" ]]; then
   exit 1
 fi
 
-if [[ "$OPEN_CHROME" == "1" ]]; then
-  osascript -e 'tell application "Google Chrome" to activate' >/dev/null
-fi
+mkdir -p "$OUT_DIR"
 
 run_one() {
   local one_url="$1"
-  if [[ "$OPEN_CHROME" == "1" ]]; then
-    osascript -e "tell application \"Google Chrome\" to open location \"$one_url\"" >/dev/null
-  fi
   node "$CAPTURE_SCRIPT" \
     --url "$one_url" \
     --out-dir "$OUT_DIR" \
@@ -89,6 +85,7 @@ REPORT_FILE="${OUT_DIR}/wxurl2md_batch_report_$(date +%Y%m%d_%H%M%S).txt"
 touch "$REPORT_FILE"
 
 index=0
+failures=0
 while IFS= read -r raw || [[ -n "$raw" ]]; do
   line="$(echo "$raw" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
   [[ -z "$line" ]] && continue
@@ -104,7 +101,10 @@ while IFS= read -r raw || [[ -n "$raw" ]]; do
     echo "  - VERIFY: ${OUT_DIR}/${PREFIX}_keyframe.json" | tee -a "$REPORT_FILE"
   else
     echo "[${index}] FAIL ${line}" | tee -a "$REPORT_FILE"
+    failures=$((failures + 1))
   fi
 done < "$URL_FILE"
 
 echo "Batch report: $REPORT_FILE"
+
+[[ "$failures" -eq 0 ]]

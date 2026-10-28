@@ -1,0 +1,12 @@
+{
+  "dependencies": {
+    "playwright": "^1.59.1"
+  },
+  "name": "wxurl2md",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Standalone WeCom document capture helpers",
+  "engines": {
+    "node": ">=18"
+  }
+}

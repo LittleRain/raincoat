@@ -1,110 +1,19 @@
-# Raincoat Skills
+# raincoat 作品目录
 
-<p>
-  <a href="#english">English</a> | <a href="#中文">中文</a>
-</p>
+新规范与发布边界见 [conventions.md](../docs/skills/conventions.md)。下表是当前仓库入口，不代表全部作品已发布；未完成独立性与兼容性验收的作品保留旧名称。
 
----
+| 作品 | 用途 | 当前交付状态 |
+| --- | --- | --- |
+| [raincoat-meeting-summary](raincoat-meeting-summary/README.md) | 会议文本 → 结论、行动项、关键决策 | 新规范样板 / beta；Windows 与其他宿主未实测 |
+| [rain-badminton-cut](rain-badminton-cut/SKILL.md) | 羽毛球视频候选片段与本地剪辑 | 开发中；待迁移 |
+| [trade-weekly-report](trade-weekly-report/README.md) | 交易业务周报 | 合成数据回归已通过；待业务口径与发布验收 |
+| [create-report](create-report/SKILL.md) | 生成业务报告 Skill | 存量；待独立性验收 |
+| [report-circle-weekly](report-circle-weekly/README.md) | 圈子业务周报 | 存量；待业务资料公开范围确认 |
+| [report-circle-daily](report-circle-daily/README.md) | 圈子业务日报 | 存量；待业务资料公开范围确认 |
+| [gongfang-weekly-report](gongfang-weekly-report/README.md) | 工房双周报 | 存量；待发布验收 |
+| [circle-content-analyzer](circle-content-analyzer/README.md) | 漫展圈内容类型分析 | 协议层草案；待格式与运行时完善 |
+| [wxurl2md](wxurl2md/SKILL.md) | 企微文档 → Markdown | 脚本与依赖已独立；真实浏览器与 Windows 未实测 |
+| [skill-health](skill-health/README.md) | 已安装 Skill 的健康与使用情况分析 | 有 Hermes 接入要求；待声明宿主边界 |
+| [skill-quality-review](skill-quality-review/README.md) | Skill 编写质量审阅 | 存量；待发布验收 |
 
-## English
-<a id="english"></a>
-
-Raincoat is the incubator repository for AI agent skills.
-
-### Why This Directory Exists
-
-This repository is used to incubate multiple skills in one place before some of
-them are published as standalone open source repositories.
-
-Goals:
-
-- keep each skill easy to understand and evolve
-- keep shared conventions in one place
-- make it cheap to export a mature skill into its own Git repository
-
-### Skill Catalog
-
-| Skill | Status | Summary | Publish |
-| --- | --- | --- | --- |
-| `trade-weekly-report` | beta | Generate trading business weekly HTML reports | incubating |
-| `create-report` | draft | Generate validated downstream HTML weekly-report skills | internal |
-| `report-circle-weekly` | draft | Golden-sample downstream skill for circle weekly HTML reports | internal |
-| `wxurl2md` | draft | Archive WeCom docs from logged-in Chrome into AI-ready markdown | internal |
-| `anime-expo-ops-agent` | draft | 运营漫展行业情报、活动草稿、业务指标和动作建议 | incubating |
-
-### Directory Layout
-
-- `skills/<skill-name>`: one incubating skill that can evolve into its own repository
-- `skills/_templates/basic`: starter template for new skills
-
-### Create A New Skill
-
-Copy `skills/_templates/basic` into `skills/<skill-name>` and then update:
-
-- `SKILL.md`
-- `README.md`
-- `skill.json`
-
-Use kebab-case for skill directory names.
-
-### Publish A Skill
-
-Intended flow:
-
-1. build and iterate inside this repository
-2. keep the skill self-contained
-3. export the skill into its own repository when it becomes stable
-
-See `docs/skills/publishing.md` for publishing rules.
-
----
-
-## 中文
-<a id="中文"></a>
-
-Raincoat 是 AI Agent Skills 的孵化仓库。
-
-### 为什么有这个目录
-
-`skills/` 用于在同一仓库中孵化多个 skill，成熟后再按需拆分为独立开源仓库。
-
-目标：
-
-- 让每个 skill 易于理解和迭代
-- 把共享规范集中维护
-- 让成熟 skill 可以低成本导出为独立 Git 仓库
-
-### 技能目录
-
-| Skill | 状态 | 简介 | 发布属性 |
-| --- | --- | --- | --- |
-| `trade-weekly-report` | beta | 生成交易业务周报 HTML | incubating |
-| `create-report` | draft | 生成经过校验的下游 HTML 周报 skill | internal |
-| `report-circle-weekly` | draft | 圈子周报 HTML 的黄金样例下游 skill | internal |
-| `wxurl2md` | draft | 从登录态 Chrome 抓取企微文档并导出 AI 可用 Markdown | internal |
-| `anime-expo-ops-agent` | draft | 运营漫展行业情报、活动草稿、业务指标和动作建议 | incubating |
-
-### 目录结构
-
-- `skills/<skill-name>`：一个可独立演进的 skill 目录
-- `skills/_templates/basic`：新 skill 的起始模板
-
-### 新建 Skill
-
-将 `skills/_templates/basic` 拷贝到 `skills/<skill-name>`，然后更新：
-
-- `SKILL.md`
-- `README.md`
-- `skill.json`
-
-skill 目录名统一使用 kebab-case。
-
-### 发布 Skill
-
-推荐流程：
-
-1. 在本仓库内开发与迭代
-2. 保持 skill 自包含
-3. 稳定后导出为独立仓库
-
-发布规则见 `docs/skills/publishing.md`。
+`skill-panel/` 在本次快照中仅有缓存文件，没有 Skill 入口，不作为可用作品展示。

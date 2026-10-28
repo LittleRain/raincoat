@@ -11,15 +11,17 @@ Convert WeCom docs to local markdown with login-state browser capture, then prod
 
 - One WeCom doc URL: `https://doc.weixin.qq.com/doc/w3_xxx?scode=xxx`
 - Or a URL file (one URL per line, `#` comments allowed)
-- Optional output dir (default `/tmp`)
+- Optional output dir (default: the system temporary directory)
 - Optional capture wait time in ms (default `12000`)
 
 ## Run
 
+Resolve paths from the installed skill directory; commands below assume that directory as cwd. For Windows, use the direct Node command below; Bash is optional.
+
 Use the bundled script:
 
 ```bash
-bash /Users/raincai/Documents/GitHub/raincoat/skills/wxurl2md/scripts/run-wecom-doc.sh \
+bash scripts/run-wecom-doc.sh \
   --url "https://doc.weixin.qq.com/doc/w3_xxx?scode=xxx" \
   --out-dir /tmp
 ```
@@ -27,7 +29,7 @@ bash /Users/raincai/Documents/GitHub/raincoat/skills/wxurl2md/scripts/run-wecom-
 Batch mode:
 
 ```bash
-bash /Users/raincai/Documents/GitHub/raincoat/skills/wxurl2md/scripts/run-wecom-doc.sh \
+bash scripts/run-wecom-doc.sh \
   --url-file /path/to/wecom_urls.txt \
   --out-dir /tmp
 ```
@@ -35,7 +37,7 @@ bash /Users/raincai/Documents/GitHub/raincoat/skills/wxurl2md/scripts/run-wecom-
 If needed, run the capture script directly:
 
 ```bash
-node /Users/raincai/Documents/GitHub/raincoat/tools/wecom_capture_opendoc.js \
+node scripts/wecom_capture_opendoc.js \
   --url "https://doc.weixin.qq.com/doc/w3_xxx?scode=xxx" \
   --out-dir /tmp \
   --wait-ms 12000
@@ -43,7 +45,7 @@ node /Users/raincai/Documents/GitHub/raincoat/tools/wecom_capture_opendoc.js \
 
 ## Workflow
 
-1. Open the target URL in local Chrome with login state.
+1. Install the declared dependencies as described in [README.md](README.md). Use installed Chrome and a dedicated profile; existing login in the normal Chrome profile is not automatically shared. Reuse a previously authorized capture profile with `--profile-dir` if needed.
 2. Capture network + runtime payload (`opendoc`, keyframe when available).
 3. Generate outputs and use `*_for_ai.md` as primary AI input.
 4. If content seems missing, verify against `*_keyframe.json` and `*_full_fidelity_clean.md` before concluding capture failure.
@@ -67,4 +69,4 @@ node /Users/raincai/Documents/GitHub/raincoat/tools/wecom_capture_opendoc.js \
 ## Troubleshooting Reference
 
 For common failure modes and fixes, read:
-[runbook.md](/Users/raincai/Documents/GitHub/raincoat/skills/wxurl2md/references/runbook.md)
+[runbook.md](references/runbook.md)

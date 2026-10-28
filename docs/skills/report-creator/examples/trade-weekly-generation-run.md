@@ -1,5 +1,7 @@
 # 交易业务周报生成记录
 
+> 历史记录：文中旧周报路径反映当时状态。运行代码现位于 `skills/trade-weekly-report/scripts/legacy/`，真实样本已归档至仓库外；当前入口与合成验证见 [Skill README](../../../../skills/trade-weekly-report/README.md)。
+
 ## 目标
 
 使用周报生产器 skill 与源需求文档

@@ -96,4 +96,4 @@ bash skills/report-circle-weekly/scripts/run-report.sh \
 
 - 更严格的输入文件校验
 - 更稳定的依赖锁定
-- 更标准的 `tools/reports` 场景注册
+- 未来如需场景注册，需另行实现；原方案仅作历史设计

@@ -23,10 +23,10 @@ parser.add_argument('--output', type=str, default=None,
                     help='输出 HTML 路径（默认与 data-dir 同目录）')
 args = parser.parse_args(sys.argv[1:] if __name__ == '__main__' else [])
 
-DEFAULT_DATA_DIR = Path('/Users/raincai/Downloads/4.17')
+DEFAULT_DATA_DIR = Path.cwd()
 DATA_DIR = Path(args.data_dir) if args.data_dir else DEFAULT_DATA_DIR
 OUTPUT_PATH = Path(args.output) if args.output else (DATA_DIR / 'trade-weekly-report.html')
-SKILL_DIR = Path('/Users/raincai/.workbuddy/skills/trade-weekly-report/assets')
+SKILL_DIR = Path(__file__).resolve().parents[1] / 'assets'
 
 # ── 结论生成 ──────────────────────────────────────────────────────────────────
 
@@ -377,8 +377,8 @@ SHOP_IND_DISPLAY = {'南征': '南征', 'allen': 'allen', '孙悟饭': '孙悟�
 ZIYING_INDUSTRIES = ['ACG自营-南征', 'ACG自营-allen', '自营-其他']
 
 # ── 读取CSS和JS ────────────────────────────────────────────────────────────────
-with open(SKILL_DIR / 'base-report.css') as f: CSS = f.read()
-with open(SKILL_DIR / 'chart-defaults.js') as f: CHART_JS = f.read()
+with open(SKILL_DIR / 'base-report.css', encoding='utf-8') as f: CSS = f.read()
+with open(SKILL_DIR / 'chart-defaults.js', encoding='utf-8') as f: CHART_JS = f.read()
 
 print(f"[INFO] 当前周: W{CUR_W}, 上周: W{PREV_W}")
 print(f"[INFO] 周期: {WEEK_LABELS}")
@@ -2093,6 +2093,7 @@ HTML_PARTS.append('''
 
 # ── 写出文件 ──
 html_content = '\n'.join(HTML_PARTS)
+OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
 with open(OUTPUT_PATH, 'w', encoding='utf-8') as f:
     f.write(html_content)
 

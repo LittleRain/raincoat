@@ -13,7 +13,7 @@
 - `requirements.txt`
   - Python 依赖
 - `manifest.yaml`
-  - 脚本包说明，便于后续接入 `tools/reports`
+  - 脚本包说明，未来可用于尚未实现的报表托管方案
 
 ## 用法
 

@@ -1,19 +1,15 @@
 # Your Skill Name
 
-Short introduction for humans.
+[TODO: Explain the user outcome and provide one realistic invocation.]
 
-## What It Does
+## Install and run
 
-Explain the main outcome of the skill in one or two paragraphs.
+[TODO: Document standalone installation, dependencies and input/output.]
 
-## Directory Layout
+## Compatibility
 
-- `SKILL.md`: agent-facing instructions
-- `skill.json`: metadata
-- `scripts/`: helper scripts
-- `assets/`: prompts and static resources
-- `examples/`: sample inputs and outputs
+[TODO: List tested agents and Windows/macOS results separately from assumptions.]
 
-## Notes
+## Release
 
-Add installation, dependencies, or usage notes here when needed.
+[TODO: Choose and bundle a license; add license to SKILL.md. Record a realistic acceptance result and known limitations.]
