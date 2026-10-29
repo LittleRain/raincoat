@@ -11,9 +11,9 @@
 | [report-circle-weekly](report-circle-weekly/README.md) | 圈子业务周报 | 存量；待业务资料公开范围确认 |
 | [report-circle-daily](report-circle-daily/README.md) | 圈子业务日报 | 存量；待业务资料公开范围确认 |
 | [gongfang-weekly-report](gongfang-weekly-report/README.md) | 工房双周报 | 存量；待发布验收 |
-| [circle-content-analyzer](circle-content-analyzer/README.md) | 漫展圈内容类型分析 | 协议层草案；待格式与运行时完善 |
+| [circle-content-analyzer](circle-content-analyzer/README.md) | 漫展圈内容类型分析 | 协议层草案；基础格式已整理，运行时待恢复 |
 | [wxurl2md](wxurl2md/SKILL.md) | 企微文档 → Markdown | 脚本与依赖已独立；真实浏览器与 Windows 未实测 |
 | [skill-health](skill-health/README.md) | 已安装 Skill 的健康与使用情况分析 | 有 Hermes 接入要求；待声明宿主边界 |
 | [skill-quality-review](skill-quality-review/README.md) | Skill 编写质量审阅 | 存量；待发布验收 |
 
-`skill-panel/` 在本次快照中仅有缓存文件，没有 Skill 入口，不作为可用作品展示。
+原 `skill-panel/` 仅有两份本地缓存，没有受版本管理的实现或 Skill 入口；缓存已保留到被忽略的 `.migration/local-cache/skill-panel/`，不作为可用作品展示。

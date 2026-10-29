@@ -97,3 +97,7 @@ bash skills/report-circle-weekly/scripts/run-report.sh \
 - 更严格的输入文件校验
 - 更稳定的依赖锁定
 - 未来如需场景注册，需另行实现；原方案仅作历史设计
+
+## 本地业务数据
+
+历史输入表格已备份到仓库外，并停止 Git 跟踪；当前机器保留的 `docs/*.xlsx` 仅为本地输入，不随克隆或发布分发。新环境需自行准备数据，通过 `--input-dir` 指定目录。离线回归使用 `bash tooling/tests/report-circle-weekly.sh` 生成合成 CSV，不依赖这些业务表格。

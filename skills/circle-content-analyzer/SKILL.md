@@ -1,17 +1,15 @@
 ---
 name: circle-content-analyzer
 description: Use when analyzing B站会员购漫展圈三张曝光点击 Excel（票务商详讨论区、票务商详进入圈子、T3 入口进入圈子），用户要求识别内容类型、比较内容偏好、做历史趋势对比，或生成 HTML/JSON 分析报告时。
-triggers:
-  - B站漫展圈内容分析
-  - 票务商详讨论区
-  - 圈子入口进入圈子后
-  - T3入口进入圈子
-  - 漫展内容偏好分析
-  - 三张Excel内容分析
-  - 圈子内容CTR分析
+metadata:
+  status: "draft"
 ---
 
 # Circle Content Analyzer
+
+## 当前状态
+
+本包仅包含分析协议与分类参考，尚未提供正式生成脚本。执行前确认宿主具备 Excel 读取与计算能力；不能将本文或结构检查通过当作已生成报告、完成运行时验证的证据。
 
 ## 目的
 
@@ -91,7 +89,7 @@ triggers:
 13. 经验分享
 14. 其他
 
-详细边界、优先级与错判修正规则见 [references/content_types.md](/Users/raincai/.codex/worktrees/15b7/raincoat/skills/circle-content-analyzer/references/content_types.md)。
+详细边界、优先级与错判修正规则见 [references/content_types.md](references/content_types.md)。
 
 ### 路径视角
 
@@ -107,7 +105,7 @@ triggers:
    - `title` / `content_text` 是否有可用样例
    - `start_time` / `log_date` 是否混型
    - 表 2、表 3 是否存在 `fliter_text` 或 `filter_text`
-3. 按 [references/content_types.md](/Users/raincai/.codex/worktrees/15b7/raincoat/skills/circle-content-analyzer/references/content_types.md) 的优先级解释分类结果，不要临时发明新大类。
+3. 按 [references/content_types.md](references/content_types.md) 的优先级解释分类结果，不要临时发明新大类。
 4. 输出时区分：
    - 全量概览
    - `uv_expose > 100` 的结论层分析
@@ -125,7 +123,7 @@ triggers:
 
 ## 资源地图
 
-- [references/content_types.md](/Users/raincai/.codex/worktrees/15b7/raincoat/skills/circle-content-analyzer/references/content_types.md)：14 类内容类型定义、边界、优先级和错判修正
+- [references/content_types.md](references/content_types.md)：14 类内容类型定义、边界、优先级和错判修正
 - `scripts/`：正式脚本入口应放在这里；如果运行时未随包提供，应明确说明缺失实现，而不是伪造结果
 
 ## 验证

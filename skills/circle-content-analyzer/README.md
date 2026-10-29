@@ -4,6 +4,8 @@
 
 ## 当前状态
 
+当前是协议层草案，尚未提供正式运行脚本；未完成报告生成、Windows 或跨 Agent 实测。基础格式检查不代表运行能力验收。
+
 这个目录先收敛 skill 协议层：
 
 - 统一触发条件
@@ -40,7 +42,7 @@
 13. 经验分享
 14. 其他
 
-详细规则见 [references/content_types.md](/Users/raincai/.codex/worktrees/15b7/raincoat/skills/circle-content-analyzer/references/content_types.md)。
+详细规则见 [references/content_types.md](references/content_types.md)。
 
 ### 结论层过滤
 

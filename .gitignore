@@ -37,3 +37,6 @@ skills/**/report.html
 # browser capture profiles must never enter release artifacts
 **/chrome-profile/
 **/wecom-playwright-profile/
+
+# private weekly-report inputs retained locally after verified archive
+skills/report-circle-weekly/docs/*.xlsx

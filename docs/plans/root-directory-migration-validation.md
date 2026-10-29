@@ -34,7 +34,7 @@
 | trade-weekly-report unittest | 3 项通过：缺文件失败、默认六文件合同和旧四文件合同；小店 GMV 均为 15000→30000，默认输出环比 +100% |
 | 两个 Skill 的过滤后导出 | 使用 --draft 导出至仓库外，分别运行自身 5 项与 3 项测试通过；这是草案包验证，不是正式发布许可 |
 | 定向 lint | raincoat-meeting-summary、trade-weekly-report、wxurl2md 通过基础检查；会议纪要样板发布检查通过 |
-| 文档与差异检查 | 52 个本地链接有效，git diff --check 通过；全仓基础检查剩 circle-content-analyzer 的 triggers 和无入口的 skill-panel 两项既有问题 |
+| 文档与差异检查 | 52 个本地链接有效，git diff --check 通过；迁移验收当时全仓基础检查剩 circle-content-analyzer 的 triggers 和无入口的 skill-panel 两项既有问题；后续处理见下节 |
 | 无关改动保护 | 与本轮前哈希记录核对，应用与羽毛球 Skill 的 50 个既有改动文件保持一致 |
 
 真实 Chrome 登录抓取、插件重新安装/目录授权、Windows、跨 Agent 和报告全部图表交互均未实测。Luna 实施子 Agent 因额度限制未启动，后续由主 Agent 执行，未声称完成独立 Agent 审阅。
@@ -46,3 +46,19 @@
 归档根目录的 `archive-manifest.json` 记录复制核验结果与原位置；仓库内被忽略的 `.migration/legacy-archive-manifest.json` 另记录源文件已移除。归档副本与清单保留，执行用临时脚本已删除。
 
 阶段 4 的数据归档和阶段 5 的目录收敛已完成。本次续做重新核验 17 个归档副本、50 个受保护文件及差异格式；未因数据搬迁重复运行已通过的代码测试。其他 Skill 中仍有 7 个已跟踪业务表格和 2 个 pyc，保留在原位置，属于后续存量治理范围。真实浏览器与 Windows 等未实测项仍如上所列，不影响本轮文件归位结果。
+
+## 后续：基础检查遗留项已修复
+
+`circle-content-analyzer` 移除非标准顶层 `triggers`，保留 description 与正文的触发条件，新增 `metadata.status: draft`；四处旧 worktree 引用及 README 链接改为包内相对路径。入口和 README 明确未随包提供正式运行脚本，不将结构通过描述为报告生成能力已验收。
+
+`skill-panel/` 没有受版本管理的文件，仅有两份本地 pyc。目录已移至被 Git 忽略的 `.migration/local-cache/skill-panel/`，移动前后 SHA-256 一致，本地清单保存在 `.migration/skill-panel-cache-manifest.json`。未更改 lint 的扫描规则，也未补造 Skill 入口。
+
+本次验证：全仓 11 个 Skill 基础 lint 通过；skill-creator quick_validate 检查 circle-content-analyzer 通过；修改文件的本地链接与 git diff --check 通过。未新增运行时代码，不重复迁移代码测试；50 个其他任务文件仍保持原哈希。
+
+## 后续：剩余业务表格与已跟踪缓存
+
+2026-10-29，将 report-circle-weekly 的 7 个 Excel 与 gongfang-weekly-report、report-circle-daily 的 2 个 pyc 复制至此前选定的仓库外归档根目录，保留仓库相对路径。9 个副本均通过大小和 SHA-256 校验，清单为归档根目录 `remaining-data-manifest.json`，本地忽略目录另存同名清单。
+
+仅停止 Git 跟踪，保留磁盘原件；周报 docs 下 Excel 增加定向忽略规则，pyc 使用既有忽略规则。运行代码与输入参数未改动，仓库克隆后由使用者提供私有输入，不分发这些表格。未改写历史。
+
+本次验证：圈子周报合成 CSV 回归生成 HTML 通过；全仓 11 个 Skill 基础 lint 通过；9 个原件与归档副本哈希一致且全部被忽略，Git 索引不再跟踪 XLSX 或 pyc；50 个受保护文件哈希保持一致；工作区与暂存区 diff --check 通过。

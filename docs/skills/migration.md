@@ -28,11 +28,11 @@
 
 | 项目 | 下一步与验收条件 |
 | --- | --- |
-| 全仓基础检查 | 当前剩 2 个目录报错：circle-content-analyzer 顶层 triggers；skill-panel 无 SKILL.md。trade-weekly-report 的元数据已整理。保留可见失败，不为获得绿灯掩盖存量问题。 |
-| tracked 数据 | 旧周报 17 个文件已归档移出工作区；当前仍有 7 个 xlsx 和 2 个 pyc 留在其他 Skill，后续确认表格可公开范围并决定归档或合成替换。忽略规则不会移除已跟踪文件，也不会清除历史。 |
+| 全仓基础检查 | circle-content-analyzer 移除非标准 triggers，触发条件保留在 description 与正文；仅有缓存的 skill-panel 移至本地忽略目录，不补造入口。全仓基础检查通过仅代表结构有效。 |
+| tracked 数据 | 旧周报 17 个文件已归档移出工作区；剩余 7 个 xlsx 和 2 个 pyc 已于 2026-10-29 备份核验并停止跟踪，原位置文件保留且已被忽略。忽略规则不会移除已跟踪文件，也不会清除历史。 |
 | 许可证 | 其他作品尚未完成权属与第三方资源许可梳理，不能因样板使用 MIT 就认为整个仓库采用 MIT。 |
 | wxurl2md | 脚本与 npm 依赖已移入 Skill，已去除作者路径和 AppleScript；离线独立安装与导出测试通过。真实浏览器与 Windows 实测仍待完成。 |
-| circle-content-analyzer | 整理 frontmatter、修正旧 worktree 链接；README 说明运行时尚待恢复，不能把协议层当完整工具发布。 |
+| circle-content-analyzer | frontmatter 与旧 worktree 链接已修复，显式标为 draft；README 与入口说明运行时尚待恢复，不能把协议层当完整工具发布。 |
 | trade-weekly-report | 元数据、路径、随包样式和实际输入合同已整理；新旧生成器的合成数据回归通过。业务完整口径、图表交互、许可与品牌改名仍待验收。 |
 | report-circle-weekly / daily | 将必要需求与契约纳入 Skill 自身，去掉本机绝对路径；确认业务资料许可，独立导出复验。 |
 | skill-health | 明确通用核心与 Hermes usage 接入边界，分别列出实测能力与依赖。 |
