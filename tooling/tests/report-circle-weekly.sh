@@ -59,7 +59,7 @@ cat > "$INPUT_DIR/头部UPlist.csv" <<'EOF'
 101
 EOF
 
-"$ROOT_DIR/skills/report-circle-weekly/scripts/run-report.sh" \
+"$ROOT_DIR/skills/raincoat-report-circle-weekly/scripts/run-report.sh" \
   --input-dir "$INPUT_DIR" \
   --output-dir "$OUTPUT_DIR" \
   --run-id test-run

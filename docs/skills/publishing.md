@@ -31,7 +31,7 @@ python -m unittest discover -s tooling/tests -p 'test_*.py'
 导出仅纳入以下根文件与目录：
 
 - `SKILL.md`、`README.md`、`LICENSE` / `LICENSE.md` / `LICENSE.txt`、`.gitignore`。
-- 可选 `skill.json`、`plugin.json`、`requirements.txt`、`pyproject.toml`、`package.json`、`package-lock.json`、`uv.lock`、`config.example.yaml`、`.env.example`。
+- 可选 `skill.json`、`plugin.json`、`requirements.txt`、`pyproject.toml`、`package.json`、`package-lock.json`、`uv.lock`、`config.example.yaml`、`.env.example`、`skill-manifest.yaml`。
 - `scripts/`、`references/`、`assets/`、`examples/`、`agents/`、`tests/`。
 
 排除输入输出目录、依赖目录、缓存、环境文件（保留 `.env.example`）、表格、CSV、媒体与数据库，并列出排除项；如作品确实依赖这些格式的合法资源，先扩展打包规则及测试，不把它们偷偷放入运行包。拒绝进入交付包的符号链接；已排除的本地输入/输出目录中的链接既不跟随也不打包。不覆盖非空目的地，不允许导出回本仓库。保留原有 `.gitignore` 并补充本地产物规则。

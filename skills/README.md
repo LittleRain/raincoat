@@ -4,16 +4,18 @@
 
 | 作品 | 用途 | 当前交付状态 |
 | --- | --- | --- |
-| [raincoat-meeting-summary](raincoat-meeting-summary/README.md) | 会议文本 → 结论、行动项、关键决策 | 新规范样板 / beta；Windows 与其他宿主未实测 |
-| [rain-badminton-cut](rain-badminton-cut/SKILL.md) | 羽毛球视频候选片段与本地剪辑 | 开发中；待迁移 |
-| [trade-weekly-report](trade-weekly-report/README.md) | 交易业务周报 | 合成数据回归已通过；待业务口径与发布验收 |
-| [create-report](create-report/SKILL.md) | 生成业务报告 Skill | 存量；待独立性验收 |
-| [report-circle-weekly](report-circle-weekly/README.md) | 圈子业务周报 | 存量；待业务资料公开范围确认 |
-| [report-circle-daily](report-circle-daily/README.md) | 圈子业务日报 | 存量；待业务资料公开范围确认 |
-| [gongfang-weekly-report](gongfang-weekly-report/README.md) | 工房双周报 | 存量；待发布验收 |
-| [circle-content-analyzer](circle-content-analyzer/README.md) | 漫展圈内容类型分析 | 协议层草案；基础格式已整理，运行时待恢复 |
-| [wxurl2md](wxurl2md/SKILL.md) | 企微文档 → Markdown | 脚本与依赖已独立；真实浏览器与 Windows 未实测 |
-| [skill-health](skill-health/README.md) | 已安装 Skill 的健康与使用情况分析 | 有 Hermes 接入要求；待声明宿主边界 |
-| [skill-quality-review](skill-quality-review/README.md) | Skill 编写质量审阅 | 存量；待发布验收 |
+| [raincoat-meeting-summary](raincoat-meeting-summary/README.md) | 会议纪要与行动项 | beta；独立包与 Luna 合成验证通过 |
+| [raincoat-create-report](raincoat-create-report/README.md) | 生成报告 Skill 草案及校验清单 | draft；独立 Python 脚手架 |
+| [raincoat-trade-weekly-report](raincoat-trade-weekly-report/README.md) | 交易周报 | draft；新旧合同分离，合成回归 |
+| [raincoat-report-circle-weekly](raincoat-report-circle-weekly/README.md) | 圈子周报 | draft；私有输入由使用者提供 |
+| [raincoat-report-circle-daily](raincoat-report-circle-daily/README.md) | 圈子日报 | draft；私有输入由使用者提供 |
+| [raincoat-gongfang-weekly-report](raincoat-gongfang-weekly-report/README.md) | 工房双周报 | draft；六文件合同 |
+| [raincoat-circle-content-analyzer](raincoat-circle-content-analyzer/README.md) | 漫展圈分类协议 | draft；没有正式运行脚本 |
+| [raincoat-wxurl2md](raincoat-wxurl2md/README.md) | 企微文档转 Markdown | draft；离线测试，真实抓取未实测 |
+| [raincoat-skill-health](raincoat-skill-health/README.md) | 本地 Skill 健康检查 | draft；Hermes usage 为可选数据源 |
+| [raincoat-skill-quality-review](raincoat-skill-quality-review/README.md) | Skill 编写质量审阅 | draft；指令型 |
+| [rain-badminton-cut](rain-badminton-cut/SKILL.md) | 羽毛球视频剪辑 | 独立开发任务，本轮不改名 |
 
-原 `skill-panel/` 仅有两份本地缓存，没有受版本管理的实现或 Skill 入口；缓存已保留到被忽略的 `.migration/local-cache/skill-panel/`，不作为可用作品展示。
+迁移存量作品许可待确认，不能正式发布。所有作品的 Windows、其他宿主原生安装与自动发现仍需实测，具体边界见各 README。旧名到新名映射见 [迁移验收](../docs/plans/remaining-migration-validation.md)。
+
+原 skill-panel 只有缓存，已保存在本地忽略目录，不作为作品。

@@ -1,0 +1,66 @@
+# Weekly Report Requirement Template
+
+Use this file as the only onboarding template for downstream report skill
+creation. Do not start with multi-round questioning. Ask the user to fill this
+template first, then import the completed markdown into
+`assets/intake-wizard.html` to produce structured spec output.
+
+This file mirrors `assets/weekly-report-requirement-template.md`.
+
+# 周报需求模板
+
+## 任务目标
+
+如：基于一个内容电商平台，做一个交易业务双周周报。基于本文档描述的业务背景、数据源、分析逻辑输出一个可交互的html
+
+**业务介绍：** 如：这是一个用户个人开店，平台提供交易工具和流量给用户成交，重点品类有绘画、VUP周边、绘画周边、知识&服务、手工，重点流量渠道有商品、视频、动态、直播
+
+名词定义：
+
+如：
+- **核心成交体裁**：根据表格中的"内容类型"字段区分，分别为：商品、视频、动态、直播、其他
+- **流量渠道**：商品-商品feed流场域、视频-内容场域的视频带货、动态-内容场域的图文内容带货、直播-直播间带货
+- **行业**：绘画、VUP周边、绘画周边、知识&服务、手工、极客创造、手办模玩，重点是绘画、VUP周边
+
+时间段定义:
+
+- 每周五到周四，对比当周和上周，如：
+  - 本周 12 周（3月13日 ~ 3月19日）
+  - 上周 11 周（3月6日 ~ 3月12日）
+
+
+## 输出的周报格式
+
+以下为举例，调整为实际需求（维度指横轴）
+
+### ① 核心数据趋势
+
+
+**目的：** 看清交易规模变化 by周
+
+**图表：**
+
+| 图表类型 | 维度 | 内容 | 数据源 |
+|--------|------|------|------|
+| 柱状图 | 周 |  GMV 周维度变化 | 文档1 |
+| 柱状图 | 周 |  买家数 周维度变化 | 文档1 |
+| 折线图 | 周 |  下单转化率 周维度变化 | 文档1 |
+| 折线图 | 周 |  商品曝光PV 周维度变化 | 文档1 |
+
+**数据周期：** by周
+
+**得出结论：** 波动超过5%的指标（GMV、订单数、买家数、支付转化率）
+
+---
+
+
+
+## 数据源文档
+
+### 1. 整体数据
+
+4周数据
+
+**字段：** 周五-周四周	PVCTR 商品曝光PV 商详UV	支付订单数	支付订单买家数	GMV（不减退款）	商详支付转化率-UV	GPM
+
+**文件名格式：** 整体数据

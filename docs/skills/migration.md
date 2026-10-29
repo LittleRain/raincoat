@@ -1,6 +1,6 @@
 # Raincoat 体检与迁移记录
 
-日期：2026-10-28。范围：当前工作目录，包含尚未提交的其他任务改动；不代表 main 或线上状态。
+日期：2026-10-28，更新于 2026-10-29。范围：当前工作目录，包含尚未提交的其他任务改动；不代表 main 或线上状态。
 
 ## 本轮完成
 
@@ -28,17 +28,23 @@
 
 | 项目 | 下一步与验收条件 |
 | --- | --- |
-| 全仓基础检查 | circle-content-analyzer 移除非标准 triggers，触发条件保留在 description 与正文；仅有缓存的 skill-panel 移至本地忽略目录，不补造入口。全仓基础检查通过仅代表结构有效。 |
+| 全仓基础检查 | raincoat-circle-content-analyzer 移除非标准 triggers，触发条件保留在 description 与正文；仅有缓存的 skill-panel 移至本地忽略目录，不补造入口。全仓基础检查通过仅代表结构有效。 |
 | tracked 数据 | 旧周报 17 个文件已归档移出工作区；剩余 7 个 xlsx 和 2 个 pyc 已于 2026-10-29 备份核验并停止跟踪，原位置文件保留且已被忽略。忽略规则不会移除已跟踪文件，也不会清除历史。 |
 | 许可证 | 其他作品尚未完成权属与第三方资源许可梳理，不能因样板使用 MIT 就认为整个仓库采用 MIT。 |
-| wxurl2md | 脚本与 npm 依赖已移入 Skill，已去除作者路径和 AppleScript；离线独立安装与导出测试通过。真实浏览器与 Windows 实测仍待完成。 |
-| circle-content-analyzer | frontmatter 与旧 worktree 链接已修复，显式标为 draft；README 与入口说明运行时尚待恢复，不能把协议层当完整工具发布。 |
-| trade-weekly-report | 元数据、路径、随包样式和实际输入合同已整理；新旧生成器的合成数据回归通过。业务完整口径、图表交互、许可与品牌改名仍待验收。 |
-| report-circle-weekly / daily | 将必要需求与契约纳入 Skill 自身，去掉本机绝对路径；确认业务资料许可，独立导出复验。 |
-| skill-health | 明确通用核心与 Hermes usage 接入边界，分别列出实测能力与依赖。 |
+| raincoat-wxurl2md | 脚本与 npm 依赖已移入 Skill，已去除作者路径和 AppleScript；离线独立安装与导出测试通过。真实浏览器与 Windows 实测仍待完成。 |
+| raincoat-circle-content-analyzer | frontmatter 与旧 worktree 链接已修复，显式标为 draft；README 与入口说明运行时尚待恢复，不能把协议层当完整工具发布。 |
+| raincoat-trade-weekly-report | 元数据、路径、随包样式和实际输入合同已整理；新旧生成器的合成数据回归通过。业务完整口径、图表交互、许可与品牌改名仍待验收。 |
+| raincoat-report-circle-weekly / daily | 将必要需求与契约纳入 Skill 自身，去掉本机绝对路径；确认业务资料许可，独立导出复验。 |
+| raincoat-skill-health | 明确通用核心与 Hermes usage 接入边界，分别列出实测能力与依赖。 |
 | 其他存量 Skill | 补齐适用许可证、输入输出、依赖、独立安装和实际兼容性证据后再改名。 |
 | 开发中的应用与羽毛球 Skill | 保留本轮前已有修改，由各自开发任务按新规范完成发布验收。 |
 
 目标名称默认采用 `raincoat-` 加原能力名；现有 `rain-` 前缀替换为 `raincoat-`。不要为命名整齐直接迁移正在开发的目录或用户已安装的副本。改名时需同步代码、文档、清单、测试、安装说明及实际调用入口。
 
 目录迁移在 `codex/raincoat-directory-migration` 上进行。迁移相关文件单独形成提交检查点，不推送、发布、清理其他 worktree 或变更用户本机已安装的 Skill。
+
+2026-10-29：raincoat-meeting-summary 完成仓库外导出包校验与 Luna 独立合成任务验证，结果见该 Skill 的 references/validation.md；维持 beta，Windows、原生安装发现及 Bitto 集成未实测。
+
+## 剩余迁移已实施
+
+九个存量 Skill 已按 raincoat- 前缀改名，运行资源与合同已归包内。当前名称、执行检查、旧安装迁移及未决许可见 [最终验收](../plans/remaining-migration-validation.md)。上文体检过程和历史验证保留；当前状态以最终验收与各作品 README 为准。

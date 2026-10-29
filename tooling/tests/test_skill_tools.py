@@ -99,7 +99,7 @@ class TestExport(Fixture):
         self.assertEqual(private.read_text(), "private")
 
     def test_package_excludes_runtime_data_and_preserves_resources_and_ignore(self):
-        for name in ("scripts/run.py", "references/rules.md", "examples/summary.md", "assets/template.html", ".env.example", ".gitignore"):
+        for name in ("scripts/run.py", "references/rules.md", "examples/summary.md", "assets/template.html", ".env.example", ".gitignore", "skill-manifest.yaml"):
             path = self.skill / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("custom-rule\n")
@@ -110,6 +110,7 @@ class TestExport(Fixture):
         dest = self.base / "export"
         tools.package(self.skill, dest)
         self.assertTrue((dest / "assets/template.html").is_file())
+        self.assertTrue((dest / "skill-manifest.yaml").is_file())
         self.assertTrue((dest / ".env.example").is_file())
         self.assertIn("custom-rule", (dest / ".gitignore").read_text())
         self.assertFalse(any("private" in p.read_text() for p in dest.rglob("*") if p.is_file()))

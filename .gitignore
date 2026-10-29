@@ -7,16 +7,16 @@ coverage
 .env
 .env.*
 
-# trade-weekly-report local runtime artifacts
-skills/trade-weekly-report/input/
-skills/trade-weekly-report/output/
-skills/trade-weekly-report/scripts/__pycache__/
+# raincoat-trade-weekly-report local runtime artifacts
+skills/raincoat-trade-weekly-report/input/
+skills/raincoat-trade-weekly-report/output/
+skills/raincoat-trade-weekly-report/scripts/__pycache__/
 
 # all skill local input artifacts
 skills/**/input/
 
 # generated local report artifact
-skills/gongfang-weekly-report/output/report.html
+skills/raincoat-gongfang-weekly-report/output/report.html
 
 # local agent state and runtimes
 .workbuddy/
@@ -39,4 +39,7 @@ skills/**/report.html
 **/wecom-playwright-profile/
 
 # private weekly-report inputs retained locally after verified archive
-skills/report-circle-weekly/docs/*.xlsx
+skills/raincoat-report-circle-weekly/docs/*.xlsx
+
+# generated Skill execution logs
+skills/**/run.log

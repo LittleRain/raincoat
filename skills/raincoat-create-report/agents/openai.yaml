@@ -1,0 +1,16 @@
+version: 1
+interface:
+  display_name: Create Report Skill
+  short_description: Normalize report requirements into validated reusable HTML report skills.
+  default_prompt: |
+    Use $raincoat-create-report. Enforce template-first onboarding: provide
+    assets/weekly-report-requirement-template.md, ask the user to self-fill,
+    import the completed markdown via assets/intake-wizard.html, then normalize
+    against the packaged contract. Stop on missing execution-critical facts, and
+    generate or update the downstream report skill only after output inventory
+    and level evidence are valid.
+    For first-time or ambiguous requirement sessions, prioritize wizard upload
+    of the filled markdown template and avoid long back-and-forth requirement
+    interviews in chat.
+    Before wizard import output is available, do not search local directories
+    for candidate source data files.

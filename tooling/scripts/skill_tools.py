@@ -15,7 +15,7 @@ FIELDS = {"name", "description", "license", "compatibility", "metadata", "allowe
 DIRECTORIES = {"scripts", "references", "assets", "examples", "agents", "tests"}
 FILES = {"SKILL.md", "README.md", "LICENSE", "LICENSE.txt", "LICENSE.md", ".gitignore",
          "skill.json", "plugin.json", "requirements.txt", "pyproject.toml", "package.json",
-         "package-lock.json", "uv.lock", "config.example.yaml", ".env.example"}
+         "package-lock.json", "uv.lock", "config.example.yaml", ".env.example", "skill-manifest.yaml"}
 IGNORED = {"__pycache__", ".git", ".venv", "venv", "node_modules", "input", "output",
            "dist", "coverage", ".pytest_cache", ".DS_Store"}
 DATA_SUFFIXES = {".pyc", ".pyo", ".xlsx", ".xls", ".csv", ".mp4", ".mov", ".mp3",

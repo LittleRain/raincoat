@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 set -euo pipefail
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
-exec python3 -m unittest discover -s "$ROOT_DIR/skills/trade-weekly-report/tests" -p 'test_*.py'
+exec python3 -m unittest discover -s "$ROOT_DIR/skills/raincoat-trade-weekly-report/tests" -p 'test_*.py'

@@ -39,8 +39,8 @@ raincoat/
 | [AGENTS.md](../../AGENTS.md) | 当前存在其他任务的未提交修改，尤其应用与羽毛球 Skill | 不清理、覆盖、切换分支或混入无关提交 |
 | [根任务记录](../../apps/football-ai-studio/docs/history/p0/task_plan.md) | task_plan、progress、findings 属于 Football AI Studio P0 | 归入应用历史，保留日期和原验证范围 |
 | [插件安装说明](../../apps/raincoat-wecom-clipper/README.md)、[manifest](../../apps/raincoat-wecom-clipper/manifest.json) | 是可独立加载的 Chrome MV3 插件，具备本地 verify 脚本 | 迁入 apps，更新安装说明并验证清单资源 |
-| [抓取脚本](../../skills/wxurl2md/scripts/wecom_capture_opendoc.js)、[归档脚本](../../skills/wxurl2md/scripts/wecom_archive.py) | JS 依赖 Playwright，通过自身目录寻找 Python 归档脚本 | 两脚本作为一个依赖单元迁移 |
-| [wxurl2md 包装器](../../skills/wxurl2md/scripts/run-wecom-doc.sh) | 写死 tools 下作者路径，并使用 osascript | 先闭合调用与依赖，再撤销根 npm 依赖 |
+| [抓取脚本](../../skills/raincoat-wxurl2md/scripts/wecom_capture_opendoc.js)、[归档脚本](../../skills/raincoat-wxurl2md/scripts/wecom_archive.py) | JS 依赖 Playwright，通过自身目录寻找 Python 归档脚本 | 两脚本作为一个依赖单元迁移 |
+| [wxurl2md 包装器](../../skills/raincoat-wxurl2md/scripts/run-wecom-doc.sh) | 写死 tools 下作者路径，并使用 osascript | 先闭合调用与依赖，再撤销根 npm 依赖 |
 | [交易周报测试](../../tooling/tests/trade-weekly-report.sh) | INPUT_DIR 直接指向 docs/周报生成器_v3/docs | 替代测试数据先通过，再拆解旧目录 |
 | [报表脚手架说明](../skills/report-creator/history/reports-scaffold.md)、[设计稿](../skills/report-creator/history/reports-system-design.md) | tools/reports 目前只有说明，没有已实现注册平台 | 整理为历史设计，不能描述为已运行服务 |
 | [打包工具](../../tooling/scripts/skill_tools.py) | 支持 Skill 内 package.json；过滤表格、CSV 与运行产物 | 合成测试数据优先由脚本生成到临时目录，不能因过滤丢资源 |
@@ -157,3 +157,5 @@ wxurl2md、trade-weekly-report 的名称暂不因归位自动更改，避免把�
 实施时按阶段记录“待开始 / 进行中 / 已验证 / 受阻”及实际结果。每阶段适合作为一个独立审阅批次；本轮提交范围仅含迁移相关文件，不推送；独立阶段的实际结果见执行记录。
 
 实施状态：阶段 1 完成；阶段 2 完成代码归位与离线验证，浏览器重新安装未实测；阶段 3 完成离线独立安装及导出验证，真实抓取未实测；阶段 4 已完成代码、测试、设计文档归位及数据归档；阶段 5 已完成入口、规则和旧数据目录清理。
+
+2026-10-29 后续名称与独立性迁移已完成，当前入口及实测边界以 [剩余迁移验收](remaining-migration-validation.md) 为准；上文保留实施当时记录。

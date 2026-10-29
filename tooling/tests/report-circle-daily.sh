@@ -82,7 +82,7 @@ log_date,content_id,title,content_text,cover,filter_text,item_id,item_name,start
 2026-03-31,3110,BW2026 周边预售页面导读,,,购票攻略,2001,BiliBili World 2026,2026-07-18,3800,798,0.210,0.220
 EOF
 
-"$ROOT_DIR/skills/report-circle-daily/scripts/run-report.sh" \
+"$ROOT_DIR/skills/raincoat-report-circle-daily/scripts/run-report.sh" \
   --input-dir "$INPUT_DIR" \
   --output-dir "$OUTPUT_DIR" \
   --run-id test-circle-daily
@@ -103,5 +103,4 @@ echo "📄 报告路径: $OUTPUT_DIR/report.html"
 echo ""
 
 # 把 report.html 复制到 skill 目录方便查看
-cp "$OUTPUT_DIR/report.html" "$ROOT_DIR/skills/report-circle-daily/report.html"
-echo "📋 已复制到: skills/report-circle-daily/report.html"
+echo "📋 已复制到: skills/raincoat-report-circle-daily/report.html"

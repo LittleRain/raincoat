@@ -1,0 +1,18 @@
+{
+  "name": "raincoat-trade-weekly-report",
+  "title": "Trade Weekly Report",
+  "description": "Generate an interactive HTML weekly report for trade commerce using weekly Excel or CSV datasets.",
+  "version": "0.1.0",
+  "status": "draft",
+  "visibility": "internal",
+  "entry": "SKILL.md",
+  "tags": [
+    "reports",
+    "weekly",
+    "html",
+    "trade-commerce",
+    "excel",
+    "csv"
+  ],
+  "author": "raincai"
+}

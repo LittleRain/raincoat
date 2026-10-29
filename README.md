@@ -2,7 +2,7 @@
 
 我是 raincoat，一个持续做产品与插件的 builder。这里汇总我的作品，并孵化可独立使用的 Agent Skills、CLI、本地应用和浏览器插件。
 
-优先把可复用工作流做成 Skill；每个对外作品使用 `raincoat-xxx` 命名，明确输入输出、依赖与实测兼容范围。
+优先把可复用工作流做成 Skill；每个新作品与本轮迁移作品使用 `raincoat-xxx` 命名，明确输入输出、依赖与实测兼容范围。
 
 - [作品目录与当前状态](skills/README.md)
 - [作品与 Skill 规范](docs/skills/conventions.md)

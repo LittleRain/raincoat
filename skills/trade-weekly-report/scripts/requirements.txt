@@ -1,4 +1,0 @@
-# Python dependencies for trade-weekly-report
-pandas>=1.5.0
-openpyxl>=3.0.0
-numpy>=1.23.0
