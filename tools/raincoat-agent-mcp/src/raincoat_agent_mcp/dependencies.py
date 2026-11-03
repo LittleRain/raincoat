@@ -44,12 +44,34 @@ def node_binary():
 
 
 def codex_binary():
+    def executable(value):
+        if not value:
+            return None
+        path = Path(value).expanduser()
+        if not path.is_file():
+            return None
+        if sys.platform != 'win32' or path.suffix.lower() == '.exe':
+            return str(path)
+        if path.suffix.lower() not in {'.cmd', '.bat'}:
+            return None
+        # npm exposes codex.cmd on Windows. Invoke its native binary directly so
+        # model and workspace arguments never pass through cmd.exe parsing.
+        for arch, package in (('x86_64-pc-windows-msvc', 'codex-win32-x64'),
+                              ('aarch64-pc-windows-msvc', 'codex-win32-arm64')):
+            for root in (path.parent / 'node_modules/@openai/codex',
+                         path.parent / 'node_modules/@openai/codex/node_modules/@openai' / package):
+                binary = root / 'vendor' / arch / 'bin/codex.exe'
+                if binary.is_file():
+                    return str(binary)
+        return None
+
     override = os.environ.get('LOCAL_AGENT_CODEX')
     if override:
-        return override if Path(override).is_file() else None
-    for value in [settings().get('codex'), shutil.which('codex')]:
-        if value and Path(value).is_file():
-            return value
+        return executable(override)
+    for value in [settings().get('codex'), shutil.which('codex.exe'), shutil.which('codex')]:
+        resolved = executable(value)
+        if resolved:
+            return resolved
     return None
 
 
@@ -69,7 +91,7 @@ def node_check():
 def install_workbuddy_helper():
     node=node_check()
     if not node['available']:raise RuntimeError(node['error'])
-    npm=Path(node['path']).parent/'npm'
+    npm=Path(node['path']).parent/('npm.cmd' if sys.platform == 'win32' else 'npm')
     if not npm.is_file():
         discovered=shutil.which('npm')
         if not discovered:raise RuntimeError('npm 不可用，请安装包含 npm 的 Node.js。')

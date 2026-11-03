@@ -40,8 +40,8 @@ def setup(client='auto',apply=False,dsh_profile='desktop',output=None):
 def doctor(backend='all',install_deps=False):
     if install_deps and backend in ('bitto','gpt'):raise ValueError('--install-deps 仅用于 WorkBuddy')
     report={'version':__version__,'platform':platform.system(),'python':platform.python_version(),'backends':{}}
-    if sys.platform!='darwin':
-        return {**report,'healthy':False,'error':'当前 Bitto/WorkBuddy/GPT 后端只支持 macOS；尚未适配 Windows/Linux。'}
+    if sys.platform not in ('darwin','win32'):
+        return {**report,'healthy':False,'error':'当前后端只支持 macOS 和 Windows；尚未适配 Linux。'}
     if install_deps:dependencies.install_workbuddy_helper()
     healthy=True
     if backend in ('bitto','all'):

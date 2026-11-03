@@ -122,7 +122,7 @@ class RunnerTests(unittest.IsolatedAsyncioTestCase):
             shared.atomic_json(self.ctx.directory / 'cancel.json', {})
             await asyncio.wait_for(running, 4)
             self.assertEqual(self.ctx.state['status'], 'cancelled')
-            with self.assertRaises(ProcessLookupError):
+            with self.assertRaises(OSError):
                 os.kill(pid, 0)
 
     async def test_api_key_environment_does_not_override_saved_chatgpt_login(self):

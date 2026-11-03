@@ -27,9 +27,11 @@ class CompletionWaitTests(unittest.IsolatedAsyncioTestCase):
         await asyncio.sleep(0.05);self.complete()
         results=await asyncio.gather(a,b)
         for r in results:
-            self.assertEqual(r['status'],'succeeded');self.assertEqual(r['wait_transport'],'unix_socket')
+            self.assertEqual(r['status'],'succeeded')
+            self.assertEqual(r['wait_transport'],'snapshot' if shared.IS_WINDOWS else 'unix_socket')
             self.assertLess(r['completion_delivery_ms'],250)
             self.assertEqual(shared.read_json(self.ctx.directory/'state.json')['status'],'succeeded')
+    @unittest.skipIf(shared.IS_WINDOWS, 'Windows uses bounded snapshot waits')
     async def test_finish_between_initial_read_and_subscription_is_not_lost(self):
         original=asyncio.open_unix_connection
         async def complete_before_subscribe(*args,**kwargs):
@@ -68,6 +70,7 @@ class CompletionWaitTests(unittest.IsolatedAsyncioTestCase):
         session='12345678-1234-1234-1234-123456789abc'
         self.assertEqual(shared.lock_path('bitto',session),shared.STATE/'locks'/session)
         self.assertNotEqual(shared.lock_path('workbuddy',session),shared.lock_path('bitto',session))
+    @unittest.skipIf(shared.IS_WINDOWS, 'Windows does not expose POSIX zombie state')
     async def test_zombie_worker_is_interrupted(self):
         import subprocess
         process=subprocess.Popen([sys.executable,'-c','pass'])

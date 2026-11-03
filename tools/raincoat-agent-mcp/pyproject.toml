@@ -9,7 +9,7 @@ description = "Delegate MCP tasks to local Bitto, WorkBuddy and GPT/Codex runtim
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = ["mcp>=1.20,<2", "websockets>=14,<17", "packaging>=23"]
-classifiers = ["Programming Language :: Python :: 3", "Operating System :: MacOS"]
+classifiers = ["Programming Language :: Python :: 3", "Operating System :: MacOS", "Operating System :: Microsoft :: Windows"]
 
 [project.scripts]
 local-agent = "raincoat_agent_mcp.cli:main"

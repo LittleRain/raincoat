@@ -65,7 +65,8 @@ class RunnerTests(unittest.IsolatedAsyncioTestCase):
             shared.atomic_json(self.ctx.directory/'cancel.json',{})
             await asyncio.wait_for(running,4)
             self.assertEqual(self.ctx.state['status'],'cancelled')
-            with self.assertRaises(ProcessLookupError):os.kill(pid,0)
+            with self.assertRaises(OSError):os.kill(pid,0)
+    @unittest.skipIf(shared.IS_WINDOWS, 'POSIX signal semantics')
     async def test_term_ignoring_descendant_is_killed_after_leader_exits(self):
         marker=Path(self.tmp.name)/'child.pid'
         child="import signal,time,os;signal.signal(signal.SIGTERM,signal.SIG_IGN);open("+repr(str(marker))+",'w').write(str(os.getpid()));time.sleep(30)"
@@ -80,6 +81,7 @@ class RunnerTests(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(await workbuddy.group_alive(process.pid))
         finally:
             await workbuddy.stop_process(process)
+    @unittest.skipIf(shared.IS_WINDOWS, 'fcntl-specific test')
     async def test_immediate_resume_waits_for_completed_predecessor_cleanup(self):
         import fcntl
         sid='12345678-1234-1234-1234-123456789abc'
@@ -92,6 +94,7 @@ class RunnerTests(unittest.IsolatedAsyncioTestCase):
         release_task=asyncio.create_task(release())
         acquired=await workbuddy.acquire_session_lock(self.ctx,sid)
         acquired.close();await release_task
+    @unittest.skipIf(shared.IS_WINDOWS, 'fcntl-specific test')
     async def test_running_session_is_not_queued_as_resume(self):
         import fcntl
         sid='12345678-1234-1234-1234-123456789abc'

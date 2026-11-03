@@ -1,7 +1,6 @@
 """Persistent jobs, process cleanup and bounded waits shared by all runtimes."""
 from __future__ import annotations
 import asyncio
-import fcntl
 import hashlib
 import json
 import os
@@ -12,6 +11,11 @@ import stat
 import subprocess
 import time
 import uuid
+
+if os.name != 'nt':
+    import fcntl
+
+IS_WINDOWS = os.name == 'nt'
 
 STATE = Path(os.environ.get('LOCAL_AGENT_MCP_STATE_DIR', os.environ.get('BITTO_BRIDGE_STATE_DIR', '~/.local/state/bitto-agent-bridge'))).expanduser()
 TERMINAL = {'succeeded', 'failed', 'cancelled', 'interrupted'}
@@ -47,6 +51,8 @@ def lock_path(backend, session_id):
 
 
 def socket_path(job_id):
+    if IS_WINDOWS:
+        return None
     # macOS sockaddr_un is short; do not put sockets under arbitrarily long STATE paths.
     root = Path('/private/tmp') / f'local-agent-mcp-{os.getuid()}'
     try:
@@ -71,9 +77,10 @@ def get_task(job_id):
         try:
             os.kill(pid, 0)
             # Legacy workers may be unreaped children of a still-running MCP.
-            probe = subprocess.run(['ps', '-p', str(pid), '-o', 'stat='], capture_output=True, text=True)
-            if probe.returncode == 1 or probe.stdout.strip().startswith('Z'):
-                raise ProcessLookupError
+            if not IS_WINDOWS:
+                probe = subprocess.run(['ps', '-p', str(pid), '-o', 'stat='], capture_output=True, text=True)
+                if probe.returncode == 1 or probe.stdout.strip().startswith('Z'):
+                    raise ProcessLookupError
         except ProcessLookupError:
             state.update(status='interrupted', error='桥接 worker 已退出；后端任务可能仍在执行，请先检查会话，勿自动重提交。')
     return state
@@ -103,6 +110,9 @@ async def wait_task(job_id, timeout_seconds=25):
         if ready(state) or time.monotonic() >= deadline:
             return returned(state, 'snapshot')
         remaining = deadline - time.monotonic()
+        if IS_WINDOWS:
+            await asyncio.sleep(min(0.05, remaining))
+            continue
         try:
             reader, writer = await asyncio.open_unix_connection(str(socket_path(job_id)), limit=16 * 1024 * 1024)
         except (FileNotFoundError, ConnectionRefusedError):
@@ -133,7 +143,28 @@ async def group_alive(group_id):
                for line in result.stdout.splitlines() if len(parts := line.split()) == 2)
 
 
+def spawn_options():
+    if IS_WINDOWS:
+        return {'creationflags': subprocess.CREATE_NEW_PROCESS_GROUP}
+    return {'start_new_session': True}
+
+
 async def stop_process(process):
+    if IS_WINDOWS:
+        if process.returncode is not None:
+            await process.wait()
+            return
+        result = await asyncio.to_thread(
+            subprocess.run, ['taskkill', '/PID', str(process.pid), '/T', '/F'],
+            capture_output=True, text=True,
+        )
+        try:
+            await asyncio.wait_for(process.wait(), timeout=5)
+        except TimeoutError as error:
+            raise RuntimeError('Windows agent process did not stop') from error
+        if result.returncode and process.returncode is None:
+            raise RuntimeError('Cannot confirm Windows agent process termination')
+        return
     try:
         os.killpg(process.pid, signal.SIGTERM)
     except ProcessLookupError:
@@ -155,19 +186,38 @@ async def stop_process(process):
         await asyncio.sleep(0.05)
 
 
+def try_lock_file(lock):
+    if IS_WINDOWS:
+        import msvcrt
+        lock.seek(0)
+        try:
+            msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
+        except OSError as error:
+            raise BlockingIOError('Session lock is held') from error
+    else:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+
 async def acquire_session_lock(ctx, backend, session_id):
     lock = lock_path(backend, session_id).open('a+')
     deadline = time.monotonic() + 5
     try:
         while True:
             try:
-                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                try_lock_file(lock)
                 lock.seek(0)
                 lock.truncate()
                 lock.write(ctx.job_id)
                 lock.flush()
                 return lock
             except BlockingIOError:
+                if IS_WINDOWS:
+                    if time.monotonic() >= deadline:
+                        raise RuntimeError(f'该 {backend} 会话已有任务在执行，或前序任务仍在清理。') from None
+                    if ctx.cancelled():
+                        raise RuntimeError('Cancelled while waiting for session cleanup')
+                    await asyncio.sleep(0.05)
+                    continue
                 lock.seek(0)
                 previous = lock.read().strip()
                 try:
@@ -200,8 +250,9 @@ class Worker:
         self.path = socket_path(job_id)
 
     async def start(self):
-        self.path.unlink(missing_ok=True)
-        self.server = await asyncio.start_unix_server(self.handle_waiter, str(self.path), limit=1024)
+        if self.path:
+            self.path.unlink(missing_ok=True)
+            self.server = await asyncio.start_unix_server(self.handle_waiter, str(self.path), limit=1024)
         self.save()
 
     def save(self, *, streaming=False):
@@ -251,7 +302,8 @@ class Worker:
             event.set()
         if self.handlers:
             await asyncio.gather(*list(self.handlers), return_exceptions=True)
-        self.path.unlink(missing_ok=True)
+        if self.path:
+            self.path.unlink(missing_ok=True)
 
     def log_event(self, message):
         message = {**message, 'bridge_received_at': time.time()}

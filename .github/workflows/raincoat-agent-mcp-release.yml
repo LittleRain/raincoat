@@ -44,8 +44,27 @@ jobs:
           path: dist-raincoat-agent-mcp/*
           if-no-files-found: error
 
+  windows-test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: astral-sh/setup-uv@v6
+      - name: Install test dependencies
+        run: python -m pip install -e tools/raincoat-agent-mcp
+      - name: Windows regression tests
+        run: python -m unittest discover -s tools/raincoat-agent-mcp/tests -v
+      - name: Build Windows wheel
+        run: uv build tools/raincoat-agent-mcp --wheel --out-dir dist-raincoat-agent-mcp
+      - name: Windows isolated install and MCP handshake
+        run: |
+          $wheel = (Get-ChildItem 'dist-raincoat-agent-mcp/*.whl' | Select-Object -First 1).FullName
+          python tools/raincoat-agent-mcp/tests/distribution_smoke.py $wheel
+
   publish:
-    needs: build
+    needs: [build, windows-test]
     if: startsWith(github.ref, 'refs/tags/raincoat-agent-mcp/v') && vars.LOCAL_AGENT_MCP_PYPI_ENABLED == 'true'
     runs-on: ubuntu-latest
     environment: pypi

@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from unittest.mock import patch
+from packaging.version import Version
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'src'))
 from raincoat_agent_mcp import management, dependencies, updates, __version__
 
@@ -25,9 +26,9 @@ class ManagementTests(unittest.TestCase):
         result=management.setup(client='generic')
         self.assertEqual(result['mcpServers']['local_agents']['args'],['-m','raincoat_agent_mcp','mcp'])
     def test_unsupported_platform_is_explicit(self):
-        with patch.object(sys,'platform','win32'):
+        with patch.object(sys,'platform','linux'):
             result=management.doctor()
-            self.assertFalse(result['healthy']);self.assertIn('macOS',result['error'])
+            self.assertFalse(result['healthy']);self.assertIn('macOS 和 Windows',result['error'])
     def test_supported_node_range_matches_pinned_helper(self):
         for version,expected in [('v22.18.0',False),('v22.19.0',True),('v23.1.0',False),('v24.0.0',True)]:
             with self.subTest(version=version),patch.object(dependencies,'node_binary',return_value='/node'),patch('subprocess.run',return_value=subprocess.CompletedProcess([],0,version,'')):
@@ -51,7 +52,9 @@ class ManagementTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'仅用于 WorkBuddy'):
             management.doctor(backend='gpt',install_deps=True)
     def test_update_check_compares_versions(self):
-        response=io.BytesIO(json.dumps({'info':{'version':'0.2.0'}}).encode())
+        current=Version(__version__)
+        newer=f'{current.major}.{current.minor}.{current.micro+1}'
+        response=io.BytesIO(json.dumps({'info':{'version':newer}}).encode())
         with patch('urllib.request.urlopen',return_value=response):
             self.assertTrue(updates.check_update()['update_available'])
     def test_offline_update_check_has_clear_error(self):

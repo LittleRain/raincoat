@@ -47,6 +47,9 @@ def command(request):
         # Do not recursively load this bridge or other user-configured MCP servers/hooks.
         # CODEX_HOME authentication remains available with this flag.
         '--ignore-user-config', '--sandbox', request.get('sandbox') or 'read-only',
+        # --ignore-user-config 屏蔽用户 config.toml 的 network_access；bridge 必须显式注入，
+        # 否则 workspace-write 沙箱内 DNS 全断（2026-10-28 事故）。
+        '-c', 'sandbox_workspace_write.network_access=true',
         '--cd', request.get('cwd') or str(Path.home()),
     ]
     if request.get('model'):
@@ -139,7 +142,7 @@ async def run(ctx):
         with open(ctx.directory / 'runtime.stderr.log', 'a', opener=lambda path, flags: os.open(path, flags, 0o600)) as log:
             process = await asyncio.create_subprocess_exec(
                 *command(request), stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
-                stderr=log, start_new_session=True, limit=16 * 1024 * 1024, env=env,
+                stderr=log, **shared.spawn_options(), limit=16 * 1024 * 1024, env=env,
             )
         process.stdin.write(request['prompt'].encode())
         await process.stdin.drain()

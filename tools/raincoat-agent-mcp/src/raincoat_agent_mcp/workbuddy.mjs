@@ -17,8 +17,11 @@ async function credentialHelper() {
 
 async function main() {
   const request = JSON.parse(await readFile(process.argv[2],'utf8'));
-  const app = '/Applications/WorkBuddy.app/Contents';
-  const electron = join(app,'MacOS/Electron');
+  const root = process.env.WORKBUDDY_APP || (process.platform === 'win32' ? '' : '/Applications/WorkBuddy.app');
+  if (!root) throw new Error('WorkBuddy install path missing; set WORKBUDDY_APP');
+  const app = process.platform === 'win32' ? root : join(root,'Contents');
+  const electron = process.platform === 'win32' ? join(app,'WorkBuddy.exe') : join(app,'MacOS/Electron');
+  const archive = process.platform === 'win32' ? join(app,'resources/app.asar') : join(app,'Resources/app.asar');
   const configPath = join(homedir(),'.workbuddy/cache/acc-product-config-v3.json');
   const product = JSON.parse(await readFile(configPath,'utf8'));
   if (product.endpoint !== 'https://www.workbuddy.cn') throw new Error('Unexpected WorkBuddy endpoint');
@@ -44,7 +47,7 @@ async function main() {
   });
   const allowed = request.allowed_tools || [];
   const tools = [...new Set(allowed.map(x=>x.split('(')[0]))].join(',');
-  const args = [join(app,'Resources/app.asar/cli/bin/codebuddy'),'--print','--verbose','--output-format','stream-json',
+  const args = [join(archive,'cli/bin/codebuddy'),'--print','--verbose','--output-format','stream-json',
     ...(request.resume ? ['--resume',request.session_id] : ['--session-id',request.session_id]),
     '--model',request.model,'--strict-mcp-config','--mcp-config','{"mcpServers":{}}','--tools',tools];
   if (allowed.length) args.push('--allowedTools',...allowed);

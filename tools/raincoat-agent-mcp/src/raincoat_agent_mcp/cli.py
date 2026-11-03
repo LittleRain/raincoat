@@ -14,8 +14,8 @@ def main():
     if not argv or argv[0] in ('-h','--help'):
         print('local-agent '+__version__+'\nCommands: mcp, status, submit, get, wait, cancel, setup, doctor, update\nUse local-agent COMMAND --help for options.');return
     if argv[0] not in commands:
-        if sys.platform!='darwin':
-            print(json.dumps({'error':'当前运行时后端只支持 macOS。'},ensure_ascii=False),file=sys.stderr);raise SystemExit(1)
+        if sys.platform not in ('darwin','win32'):
+            print(json.dumps({'error':'当前运行时后端只支持 macOS 和 Windows。'},ensure_ascii=False),file=sys.stderr);raise SystemExit(1)
         from .bridge import main as bridge_main
         bridge_main();return
     parser=argparse.ArgumentParser(prog='local-agent');sub=parser.add_subparsers(dest='command',required=True)

@@ -97,7 +97,7 @@ def submit_task(backend: Backend, prompt: str, title='本地 Agent 委派任务'
     shared.atomic_json(directory/'state.json',state)
     with open(directory/'worker.log','a',opener=lambda p,flags:os.open(p,flags,0o600)) as log:
         process = subprocess.Popen([sys.executable,'-m','raincoat_agent_mcp','_worker',job_id],
-                                   stdin=subprocess.DEVNULL,stdout=log,stderr=log,start_new_session=True,
+                                   stdin=subprocess.DEVNULL,stdout=log,stderr=log,**shared.spawn_options(),
                                    env={**os.environ,'PYTHONPATH':str(Path(__file__).resolve().parents[1])+os.pathsep+os.environ.get('PYTHONPATH','')})
     threading.Thread(target=process.wait, daemon=True, name='agent-worker-reaper').start()
     shared.atomic_json(directory/'worker.json',{'pid':process.pid})

@@ -48,7 +48,8 @@ def main(wheel):
     with tempfile.TemporaryDirectory(prefix='raincoat-package-smoke-') as tmp:
         root=Path(tmp);home=root/'home';home.mkdir()
         env={k:v for k,v in os.environ.items() if k not in {'PYTHONPATH','PYTHONHOME','VIRTUAL_ENV','WORKBUDDY_CREDENTIAL_HELPER','LOCAL_AGENT_NODE'}}
-        env.update(HOME=str(home),UV_TOOL_DIR=str(root/'tools'),UV_TOOL_BIN_DIR=str(root/'bin'),LOCAL_AGENT_MCP_STATE_DIR=str(root/'state'))
+        env.update(HOME=str(home),USERPROFILE=str(home),UV_TOOL_DIR=str(root/'tools'),
+                   UV_TOOL_BIN_DIR=str(root/'bin'),LOCAL_AGENT_MCP_STATE_DIR=str(root/'state'))
         run([uv,'tool','install','--python',sys.executable,'--force',wheel],env,home)
         cli=root/'bin/local-agent'
         version=run([cli,'--version'],env,home);assert version==original,version

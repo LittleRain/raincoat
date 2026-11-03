@@ -1,6 +1,6 @@
 """Bitto protocol adapter, extracted from the previously verified bridge."""
 from __future__ import annotations
-import asyncio, fcntl, json, os, re, subprocess, time, urllib.error, urllib.request, uuid
+import asyncio, json, os, re, subprocess, time, urllib.error, urllib.request, uuid
 from pathlib import Path
 from urllib.parse import urlparse
 import websockets
@@ -45,6 +45,8 @@ def discover_ws() -> str:
         if p.scheme != "ws" or p.hostname not in {"127.0.0.1", "localhost", "::1"} or p.username or p.password or p.query or p.fragment:
             raise ValueError("WebSocket URL must be a local loopback ws:// address")
         return override
+    if os.name == 'nt':
+        raise RuntimeError('Windows 上请设置 BITTO_BRIDGE_WS_URL 为 Bitto 本机 ws:// 地址。')
     result = subprocess.run(["/usr/sbin/lsof", "-nP", "-a", "-c", "bitto-ser", "-iTCP", "-sTCP:LISTEN", "-Fn"], capture_output=True, text=True)
     ports = set(re.findall(r"^n(?:127\.0\.0\.1|\[::1\]):(\d+)$", result.stdout, re.M))
     if len(ports) != 1:
@@ -131,7 +133,7 @@ async def run(ctx) -> None:
         state["session_id"] = sid
         lock = shared.lock_path("bitto", sid).open("a")
         try:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            shared.try_lock_file(lock)
         except BlockingIOError:
             raise RuntimeError("该会话已有桥接任务在执行，请等待后再继续。") from None
         save()

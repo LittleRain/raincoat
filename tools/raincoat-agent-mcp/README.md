@@ -1,242 +1,152 @@
 # Raincoat Agent MCP
 
-把完整任务交给本机 Bitto、WorkBuddy 或 GPT（Codex CLI），使用对应产品的运行时、模型和登录账号。Codex、DeepSeek Harness 或其他支持 stdio 的 Agent 通过同一个 MCP 的 `backend="bitto" | "workbuddy" | "gpt"` 参数选择后端。
+在 macOS 或 Windows 设备上，通过 MCP 把完整任务交给本机的 Bitto、WorkBuddy 或 Codex CLI。调用方可以是 Codex、DeepSeek Harness，或支持 stdio MCP 的其他客户端；被调用的后端通过 `backend` 参数选择。
 
-当前版本 **0.1.0**，后端仅支持 **macOS**。Python 包和发行流程已经准备好，**尚未发布到 PyPI**；现在可分发构建后的 `.whl` 文件。Windows/Linux 的运行时发现、认证和进程管理尚未适配，CLI 会给出明确提示。
+> **分发状态：** 当前版本为 0.2.0，尚未发布到 PyPI。要让别人安装，需要向对方提供构建好的 `.whl` 文件，或提供可访问的源码仓库。安装包不含你的登录信息；每台设备都要单独安装、登录和配置。Windows 上的 Bitto 需要手动提供本地连接地址，见下文。
 
-## 给使用者：首次安装
+## 先确认你的设备
 
-需要 Python 3.11+、[uv](https://docs.astral.sh/uv/getting-started/installation/)，以及已安装并登录的 Bitto、WorkBuddy 或 Codex CLI。使用 WorkBuddy 还需 Node.js **22.19+（22 系列）或 24+** 和 npm；这与固定版本凭证辅助模块的要求一致。GPT 后端只需 Codex CLI，复用其现有登录，不另外配置 API Key。
+- macOS 或 Windows 10/11、Python 3.11+、[uv](https://docs.astral.sh/uv/getting-started/installation/)。
+- 至少安装并登录一个要调用的后端。只用 GPT 时安装 Codex CLI；只用 Bitto 或 WorkBuddy 时不需要 Codex CLI。
+- 安装时需要联网获取 Python 依赖。使用 WorkBuddy 时，还需要 Node.js 22.19+（22 系列）或 24+、npm，并在准备后端的步骤中安装辅助模块。
+- 调用模型使用这台设备上对应产品的账号和额度，不使用发布者的账号。
 
-收到发布者提供的 wheel 后安装。以下路径替换为实际下载位置：
+| `backend` | 本机运行时 | 提交前要做什么 | 默认模型 |
+| --- | --- | --- | --- |
+| `bitto` | Bitto 桌面端 sidecar | 打开 Bitto 并登录；Windows 需配置 `BITTO_HOME` 和 `BITTO_BRIDGE_WS_URL` | Bitto 当前设置 |
+| `workbuddy` | WorkBuddy 自带 CLI | 安装并登录 WorkBuddy；安装辅助模块 | `deepseek-v4.1-flash` |
+| `gpt` | Codex CLI | 安装 Codex CLI，运行 `codex login` | Codex CLI 默认模型 |
+
+Linux 尚未适配。
+
+## 安装到自己的设备
+
+拿到发布者提供的 wheel 后，在终端执行，替换成真实文件路径。Windows 在 PowerShell 中使用相应的磁盘路径，例如 `C:\Downloads\raincoat_agent_mcp-...whl`：
 
 ```sh
-uv tool install --python 3.11 --force /path/to/raincoat_agent_mcp-0.1.0-py3-none-any.whl
+uv tool install --python 3.11 /path/to/raincoat_agent_mcp-0.2.0-py3-none-any.whl
 local-agent --version
 ```
 
-`uv` 找不到指定 Python 时可按其提示安装，或指定本机已有的 Python 3.11+。若终端找不到 `local-agent`，先运行 `uv tool update-shell`，再重新打开终端。
-
-PyPI 正式发布后，首次安装可简化为：
+如果拿到的是仓库源码，在仓库根目录执行：
 
 ```sh
-uv tool install --python 3.11 raincoat-agent-mcp
+uv tool install --python 3.11 ./tools/raincoat-agent-mcp
+local-agent --version
 ```
 
-这是本地程序：每台设备使用自己的客户端和登录状态，不共享发布者的账号或额度。调用方自身的调度和验收仍会消耗调用方模型额度。
+若终端提示找不到 `local-agent`，运行 `uv tool update-shell` 后重新打开终端。若 `uv` 找不到 Python 3.11，可按其提示安装，或将 `--python 3.11` 换成这台设备已有的 Python 3.11+。
 
-### 准备后端
+### 准备一个后端
 
-只使用 Bitto：打开并登录 Bitto，再检查本机运行时。
+只运行你要使用的命令。检查不会调用模型；`doctor --backend all` 要求三个后端都可用，因此只装了一个后端时不要用它判断安装是否成功。
 
 ```sh
+# Bitto：先打开并登录桌面端
 local-agent doctor --backend bitto
-```
 
-使用 WorkBuddy：打开并登录 WorkBuddy，然后单独安装固定版本的凭证辅助模块。
-
-```sh
+# WorkBuddy：先打开并登录桌面端；此命令用 npm 安装固定版本的辅助模块
 local-agent doctor --backend workbuddy --install-deps
-```
 
-这条命令通过 npm 将 `dsh-workbuddy-connect@0.7.9` 安装到 `~/.local/share/raincoat-agent-mcp/workbuddy/`，不需要安装 DeepSeek Harness，也不读取或复制其他人的凭证。失败会返回非零退出码和具体原因。未安装 Node/npm 时先安装上述受支持版本，再重试。
-
-使用 GPT：安装 Codex CLI 并执行 `codex login`，然后检查运行时和已有登录。支持 ChatGPT 登录，不需要把 API Key 写入 MCP 配置。
-
-```sh
+# GPT：先安装 Codex CLI 并运行 codex login
 local-agent doctor --backend gpt
 ```
 
-之后可随时运行只做本地检查的命令：
+WorkBuddy 的辅助模块是 `dsh-workbuddy-connect@0.7.9`，安装在用户目录下的 `.local/share/raincoat-agent-mcp/workbuddy/`。macOS 默认查找 `/Applications/WorkBuddy.app`；Windows 默认查找 `%LOCALAPPDATA%\Programs\WorkBuddy`。非默认安装位置可设置 `WORKBUDDY_APP` 为应用根目录。`doctor` 不验证 WorkBuddy 登录是否仍有效，提交任务时才验证。GPT 的 `doctor` 会运行 `codex login status`，不会调用模型。安装辅助模块后可用 `local-agent doctor --backend workbuddy` 再次检查。
+
+Windows 上的 Bitto 不自动扫描监听端口。先确认该设备上的 Bitto 桌面运行时可用，再把 `BITTO_HOME` 设为含 `credentials/auth.json`、`device.id` 的本机数据目录，把 `BITTO_BRIDGE_WS_URL` 设为本机 `ws://127.0.0.1:<port>` 地址。没有 Windows Bitto 运行时或无法取得连接地址时，请使用 `workbuddy` 或 `gpt` 后端。
+
+### 接入 MCP 客户端
+
+以 Codex 为例，先预览将写入的配置，再应用：
 
 ```sh
-local-agent doctor --backend workbuddy
-local-agent doctor                         # 同时检查三个后端
-```
-
-Doctor 检查安装、运行时、Node 版本和辅助模块入口，不调用大模型。WorkBuddy 不验证登录有效性；GPT 通过 `codex login status` 检查已有登录。检查成功时会记住本机 Node / Codex 路径，避免桌面 Agent 未加载 shell PATH 导致找不到运行时。检查失败返回非零退出码；只启用一个后端时请指定 `--backend`。
-
-### 接入 Agent
-
-预览配置，然后写入：
-
-```sh
-# Codex
 local-agent setup --client codex
 local-agent setup --client codex --apply
-
-# DeepSeek Harness desktop profile
-local-agent setup --client deepseek --apply
-
-# 其他 DeepSeek Harness profile
-local-agent setup --client deepseek --dsh-profile web --apply
-
-# 自动选择已存在的客户端目录，不创建未安装的 profile
-local-agent setup --apply
 ```
 
-Codex 配置位于 `~/.codex/config.toml`，DeepSeek Harness 配置位于 `~/.dsh/profiles/<profile>/cordis.patch.yml`。写入前保存 `*.before-local-agents-<时间戳>` 备份，替换旧 `bitto` 和 `local_agents` 注册，保留其他服务与设置。重复执行不会增加重复注册。`--client all` 可显式创建两者配置。
+随后重载 MCP 或重启 Codex。配置位于 `~/.codex/config.toml`。如果使用 DeepSeek Harness：
 
-其他 MCP 客户端使用生成的标准 JSON；其中解释器路径来自实际安装环境，不需要手写开发机路径：
+```sh
+local-agent setup --client deepseek --apply
+# 非默认 profile：local-agent setup --client deepseek --dsh-profile web --apply
+```
+
+其他 stdio MCP 客户端可生成标准 JSON，并把内容放入该客户端的 MCP 配置：
 
 ```sh
 local-agent setup --client generic
+# 或保存为文件：
 local-agent setup --client generic --output ./mcp.json --apply
 ```
 
-配置使用安装环境中的固定 Python 路径和 `-m raincoat_agent_mcp mcp`。后续升级不依赖源码目录，也不用修改客户端启动配置。
+`setup --apply` 写入前会备份原文件为 `*.before-local-agents-<时间戳>`；它只替换旧 `bitto` 和 `local_agents` 注册。自动检测已存在客户端目录时可用 `local-agent setup --apply`。配置中的 Python 路径指向安装环境，后续升级不需要重新填写源码路径。
 
-**配置写入后，重载 MCP 或重启对应 Agent。** 加载后可看到 `agent_submit_task`、`agent_wait_task` 等工具。
+## 发起第一个任务
 
-## 更新与回退
-
-更新前完成或取消仍在执行、等待授权的任务。`update` 会检查原任务目录，有活跃任务时拒绝更新；它不会在 MCP 调用过程中自动安装新版本。
-
-尚未发布到 PyPI，或通过文件分发时，下载新 wheel 后只需：
-
-```sh
-local-agent update --from /path/to/raincoat_agent_mcp-0.1.1-py3-none-any.whl
-```
-
-PyPI 发布后的常规用法：
-
-```sh
-local-agent update --check       # 查询 PyPI 的最新版本，不修改安装
-local-agent update              # 使用 uv 重新安装最新公开包
-```
-
-`--check` 查询 `https://pypi.org/pypi/raincoat-agent-mcp/json`；尚未发布、网络不可用时会明确报错，现有 MCP 仍可使用。常规更新使用 uv 的索引配置；使用私有索引的维护者应通过 uv 配置来源，PyPI 版本检查不代表私有索引版本。
-
-`update` 仅支持 `uv tool` 管理的安装，底层使用 `uv tool install --force` 并保留现有 Python 解释器，避免首次 wheel 或指定版本安装把后续更新一直固定在旧来源。更新失败不会报告成功；可用原 wheel 重新安装，因此请保留至少上一版发行文件。
-
-更新完成后，再重载 MCP。更新 CLI 本身不会让已运行的 Agent 自动重连。
-
-回退有两种方式：
-
-```sh
-# 文件分发：使用自己保留的上一版 wheel，可在依赖已缓存时离线重装
-local-agent update --from /path/to/raincoat_agent_mcp-0.1.0-py3-none-any.whl
-
-# 公开索引上已经存在该版本时
-local-agent update --version 0.1.0
-```
-
-任务记录、登录状态和客户端配置不随包升级删除。配置若需要单独回退，恢复对应的 `before-local-agents` 备份，再重载客户端。
-
-### 从此前的源码安装迁移
-
-```sh
-uv tool install --force /path/to/raincoat_agent_mcp-0.1.0-py3-none-any.whl
-local-agent doctor --backend workbuddy --install-deps  # 仅使用 WorkBuddy 时需要
-local-agent setup --apply
-```
-
-旧安装留下的 `~/.local/bin/bitto-agent` 可暂时保留。新配置只注册一个 `local_agents` 服务器；其中保留五个旧 Bitto MCP 工具名。旧任务目录默认仍是 `~/.local/state/bitto-agent-bridge`，已有 `job_id` 可以继续读取。
-
-源码 checkout 中的 `python3 install.py --apply` 是兼容入口，会先用 uv 安装本地包，再配置已发现的客户端；它不再复制源码到旧 release 目录。
-
-## MCP 用法与完成等待
+客户端加载后，应能看到 `agent_status`、`agent_submit_task`、`agent_wait_task` 等工具。先用 `agent_status(backend="gpt")` 检查运行时，再提交任务，例如：
 
 ```json
 {
-  "backend": "workbuddy",
-  "prompt": "计算并校验指定文件中的结果",
-  "cwd": "/absolute/workspace",
-  "allowed_tools": ["Bash(python3:*)"]
+  "backend": "gpt",
+  "prompt": "读取当前目录并总结项目结构",
+  "cwd": "/absolute/workspace"
 }
 ```
 
-调用 `agent_submit_task` 时传入这些参数。工具权限需要按用户对任务的授权显式给出：WorkBuddy 的空列表不开放工具，GPT 默认 `read-only` 沙箱，均不会自动使用跳过权限模式。GPT 需要写入 `cwd` 时明确传 `"sandbox": "workspace-write"`；`danger-full-access` 仅适用于已隔离且明确授权的环境。
+GPT 默认使用 `read-only` 沙箱。确需在 `cwd` 写文件时，为该次任务加 `"sandbox": "workspace-write"`。WorkBuddy 的工具权限由该次任务的 `allowed_tools` 指定；空列表不开放工具，例如 `"allowed_tools": ["Bash(python3:*)"]`。Bitto 使用其运行时的交互授权。
 
-| 工具 | 用途 |
-|---|---|
-| `agent_status(backend)` | 本地发现检查，不调用模型 |
-| `agent_submit_task(backend, prompt, ...)` | 提交并默认等待最多 25 秒 |
-| `agent_wait_task(job_id, timeout_seconds=25)` | 完成或需要授权时立即返回 |
-| `agent_get_task(job_id, include_details=false)` | 立即读取状态快照 |
-| `agent_cancel_task(job_id)` | 请求取消，需再等待终止确认 |
-| `agent_respond_permission(job_id, request_id, allow)` | 回答 Bitto 当前工具授权 |
+`agent_submit_task` 默认等待最多 25 秒。若返回的任务尚未完成，立即用返回的 `job_id` 调用 `agent_wait_task`；单次等待超时不会取消任务。若状态为 `interrupted`，先检查后端会话，避免重复提交可能仍在执行的任务。
 
-提交还支持 `title, project, model, cwd, session_id, timeout_seconds, wait_seconds, allowed_tools, sandbox`。`allowed_tools` 仅用于 WorkBuddy，`sandbox` 仅用于 GPT。提交的执行上限 `timeout_seconds` 范围 1–86400 秒；`wait_seconds` 和等待工具的 `timeout_seconds` 范围 0–50 秒。单次等待超时不会取消任务。
-
-未完成时立即继续调用 `agent_wait_task`，不要 sleep 或指数退避。worker 在保存终态后通过私有 Unix socket 唤醒等待者；默认只返回最终文本和少量工具摘要，完整状态见 `result_path`，也可用 `include_details=true` 读取。
-
-MCP 无法在工具调用已结束后主动唤醒闲置模型，需要调用方保持有界等待。此前真实执行中，收到后端终态到返回结果约 2 ms；这不包含模型执行和调用方组织回复的时间，也不是任意负载下的保证。
-
-旧工具名 `bitto_status`、`bitto_submit_task`、`bitto_get_task`、`bitto_cancel_task`、`bitto_respond_permission` 在同一个服务器内继续提供。
-
-CLI 也支持任务执行：
+也可直接用 CLI 验证调用链；以下 `submit` 会实际调用模型：
 
 ```sh
-local-agent status bitto
-local-agent submit bitto '执行任务并返回结果'
-local-agent submit workbuddy '执行已授权的任务' --allowed-tool 'Bash(python3:*)'
-local-agent submit gpt '读取并总结当前目录' --cwd /absolute/workspace
-local-agent submit gpt '修改并验证当前项目' --cwd /absolute/workspace --sandbox workspace-write
+local-agent status gpt
+local-agent submit gpt '总结当前目录' --cwd /absolute/workspace
 local-agent wait JOB_ID
-local-agent get JOB_ID
-local-agent cancel JOB_ID
 ```
 
-## 后端与数据边界
+## 常见问题
 
-Bitto 连接本机 sidecar，任务在桌面端可见；`project` 默认 `default`，支持名称或 ID。Bitto 可能映射 cwd，产物宜在任务中指定绝对路径。整个任务以 `SessionRunEnded` 为完成依据，中间模型回复不代表完成。
+| 现象 | 检查和处理 |
+| --- | --- |
+| `local-agent: command not found` | 运行 `uv tool update-shell` 并重新打开终端，确认 `uv tool list` 中有此包。 |
+| `doctor --backend all` 失败 | 只安装了部分后端时，改用 `doctor --backend bitto/workbuddy/gpt` 检查要使用的那个。 |
+| WorkBuddy 显示缺少 Node 或辅助模块 | 使用受支持的 Node/npm，运行 `local-agent doctor --backend workbuddy --install-deps`；确认应用路径，非默认位置设置 `WORKBUDDY_APP`。 |
+| WorkBuddy 提交失败但 doctor 通过 | 打开 WorkBuddy 重新登录；`doctor` 只检查安装，登录在提交时验证。 |
+| GPT 显示未登录 | 在同一用户下执行 `codex login`，再运行 `local-agent doctor --backend gpt`。 |
+| Bitto 找不到本地运行时 | 打开 Bitto；macOS 多实例或 Windows 上用 `BITTO_BRIDGE_WS_URL` 指定本机 loopback WebSocket。 |
+| 客户端看不到工具 | 确认已执行对应的 `setup --apply`，再重载 MCP 或重启客户端。 |
+| 安装 wheel 时依赖解析失败 | 确认能访问 Python 包索引；wheel 不包含 `mcp`、`websockets` 等第三方依赖。 |
 
-WorkBuddy 使用应用自带 CLI，任务不出现在桌面任务列表。只接受官方模型 ID，默认 `deepseek-v4.1-flash`，拒绝同 ID 的自定义模型覆盖；`project` 不生效。`session_id` 可续接，活跃会话并发提交会拒绝，前序任务已完成但仍在清理时会短暂等待。取消确认覆盖 CLI 进程组中的可执行后代。
+## 更新与回退
 
-WorkBuddy 通过固定版本辅助模块只读获取当前用户的桌面登录令牌，在本地子进程内存中传给 `www.workbuddy.cn`；兼容桌面凭证标注的 `www.codebuddy.cn` 域名。包装层对令牌值脱敏，不写入 MCP 配置或任务文件；过期时需重新登录，不自动刷新。用户启用 WorkBuddy 后端即按本机账号执行其明确委派的任务。
-
-GPT 通过 `codex exec --json` 使用 Codex CLI 已保存的登录，支持新任务和 `session_id` 续接；`project` 不生效，`model` 缺省使用 Codex 内置默认模型，`cwd` 缺省为家目录。子进程会移除 `OPENAI_API_KEY` / `CODEX_API_KEY` 环境覆盖，避免意外改用环境变量计费；仍尊重 Codex 自己保存的登录方式。启动时使用 `--ignore-user-config` 隔离用户配置中的 MCP 与 hooks，避免桥接递归或隐式外部动作；认证仍从 `CODEX_HOME` 读取。`turn.completed` 才是成功完成依据，中间 agent message 不会提前结束任务。
-
-非秘密的依赖路径保存在 `~/.config/raincoat-agent-mcp/runtime.json`。以下环境变量可覆盖发现：
-
-| 环境变量 | 用途 |
-|---|---|
-| `LOCAL_AGENT_MCP_STATE_DIR` | 自定义任务目录；旧 `BITTO_BRIDGE_STATE_DIR` 仍兼容 |
-| `LOCAL_AGENT_NODE` | Node 可执行文件绝对路径 |
-| `LOCAL_AGENT_CODEX` | Codex CLI 可执行文件绝对路径 |
-| `WORKBUDDY_CREDENTIAL_HELPER` | 兼容的 0.7.9 辅助模块入口绝对路径 |
-| `BITTO_HOME` | Bitto 本地数据目录 |
-| `BITTO_BRIDGE_WS_URL` | 多实例时指定本机 loopback WebSocket |
-
-`interrupted` 表示执行状态未知，先检查后端会话，勿自动重提交。包更新不会改动上述任务和登录目录。
-
-## 给维护者：构建与发布
-
-当前源码位于 `tools/raincoat-agent-mcp`。所有以下命令都在该目录运行：
+现在通过文件分发时，先拿到新 wheel，再更新：
 
 ```sh
-python3 -m pip install 'setuptools>=77' wheel build twine
-python3 -m build
-python3 -m twine check dist/*
+local-agent update --from /path/to/new.whl
 ```
 
-产物为 `dist/raincoat_agent_mcp-0.1.0-py3-none-any.whl` 和源码包 `.tar.gz`，可以直接把 wheel 提供给别人。wheel 包含完整 Python 包和 `workbuddy.mjs`，不包含登录凭证、测试产物或开发机配置。
+若未来发布到 PyPI，可用 `local-agent update --check` 查询公开版本，再运行 `local-agent update`。目前 `--check` 会因尚未发布而报告错误。回退时保留旧 wheel，执行 `local-agent update --from /path/to/old.whl`。更新前需完成或取消仍在执行、等待授权的任务；更新后重载 MCP。任务记录、登录状态和客户端配置不会随包升级删除。
 
-版本只在 `src/raincoat_agent_mcp/_version.py` 维护。修改版本、完成验证后，可使用仓库中的 `.github/workflows/raincoat-agent-mcp-release.yml`：
+## 运行边界
 
-- 手动触发只构建、测试和上传 GitHub Actions artifact，不发布 PyPI。
-- 推送 `raincoat-agent-mcp/v0.1.0` 格式标签时校验标签与包版本一致，生成发行包。
-- 仅在仓库变量 `LOCAL_AGENT_MCP_PYPI_ENABLED=true` 且配置好 `pypi` environment 和 PyPI Trusted Publisher 后，标签流程才发布 PyPI。
-- Trusted Publisher 需对应仓库 owner/name、工作流文件名 `raincoat-agent-mcp-release.yml` 和 environment `pypi`。首次发布前需确认包名可用并完成 PyPI 关联；本次实现没有推送标签或发布公共包。
+- 本机使用各后端原有的运行时和登录。Bitto 任务在其桌面端可见；WorkBuddy 和 GPT 的 CLI 任务不在桌面任务列表。
+- GPT 使用 `codex exec --json`，默认只读；`model` 留空时使用 Codex CLI 默认模型。`project` 对 GPT 和 WorkBuddy 不生效。WorkBuddy 只接受其官方模型 ID。
+- 任务请求、输出和事件保存在本机 `~/.local/state/bitto-agent-bridge/`，可用 `LOCAL_AGENT_MCP_STATE_DIR` 改路径。请按本机数据管理习惯处理这些记录。
+- `agent_get_task` 读取状态，`agent_cancel_task` 请求取消；仅 Bitto 支持 `agent_respond_permission`。旧的 `bitto_*` 工具名仍保留。
+- MCP 工具调用结束后不会主动唤醒客户端模型；调用方需要持续调用 `agent_wait_task` 等待终态。
 
-工作流使用 OIDC，不需要将 PyPI token 写入源码。参考：[Python 打包指南](https://packaging.python.org/en/latest/tutorials/packaging-projects/)、[PyPI Trusted Publishing](https://docs.pypi.org/trusted-publishers/using-a-publisher/)、[uv 工具管理](https://docs.astral.sh/uv/guides/tools/)。
+## 维护者：构建与发布
 
-### 验证
+在仓库根目录运行：
 
 ```sh
-python3 -m pip install -e .
-python3 -m unittest discover -s tests -v
-python3 tests/distribution_smoke.py dist/raincoat_agent_mcp-0.1.0-py3-none-any.whl
+python3 -m unittest discover -s tools/raincoat-agent-mcp/tests -v
+uv build tools/raincoat-agent-mcp --out-dir dist-raincoat-agent-mcp
+python3 tools/raincoat-agent-mcp/tests/distribution_smoke.py dist-raincoat-agent-mcp/raincoat_agent_mcp-0.2.0-py3-none-any.whl
 ```
 
-分发验收使用临时 HOME 和独立 uv tool 环境，从非项目目录执行，覆盖真实 MCP 握手、后台 worker 包导入、0.1.0→测试版 0.1.1 升级、回退及配置保留，不读取真实登录或调用大模型。测试版只在临时目录构建。
+分发验收会在临时用户目录中安装 wheel、完成 MCP 握手、从已安装包启动后台 worker、升级和回退，不调用模型；需可访问 Python 包索引。`.github/workflows/raincoat-agent-mcp-release.yml` 在 macOS 和 Windows 运行检查并上传构建产物。当前工作流未自动提供面向使用者的下载入口，且未发布到 PyPI；正式开放前需要确定交付 wheel 或源码的渠道。
 
-下列测试会创建真实后端任务并消耗模型额度，需要单独授权后运行：
-
-```sh
-python3 tests/integration.py bitto
-python3 tests/integration.py workbuddy
-python3 tests/integration.py gpt
-python3 tests/lifecycle.py /private/tmp/local-agent-integration-EXAMPLE
-```
+版本只在 `src/raincoat_agent_mcp/_version.py` 维护。标签格式为 `raincoat-agent-mcp/v<version>`；只有配置好 PyPI Trusted Publisher 和仓库变量 `LOCAL_AGENT_MCP_PYPI_ENABLED=true` 时，标签工作流才会发布到 PyPI。真实 Bitto、WorkBuddy、GPT 集成测试会调用模型并消耗各自账号额度，不属于上述无模型验收。

@@ -4,11 +4,29 @@ import asyncio
 import json
 import os
 from pathlib import Path
+import sys
 import time
 import uuid
 from . import shared, dependencies
 
-APP = Path('/Applications/WorkBuddy.app')
+def app_root():
+    override = os.environ.get('WORKBUDDY_APP')
+    if override:
+        return Path(override).expanduser()
+    if sys.platform == 'win32':
+        local = Path(os.environ.get('LOCALAPPDATA', Path.home() / 'AppData/Local'))
+        candidates = [local / 'Programs/WorkBuddy']
+        candidates.extend(Path(value) / 'WorkBuddy' for value in
+                          (os.environ.get('ProgramFiles'), os.environ.get('ProgramFiles(x86)')) if value)
+        return next((path for path in candidates if (path / 'resources/app.asar').is_file()), candidates[0])
+    return Path('/Applications/WorkBuddy.app')
+
+
+def app_files():
+    root = app_root()
+    if sys.platform == 'win32':
+        return root, root / 'resources/app.asar', root / 'WorkBuddy.exe'
+    return root, root / 'Contents/Resources/app.asar', root / 'Contents/MacOS/Electron'
 
 
 def node_binary():
@@ -17,11 +35,13 @@ def node_binary():
 
 
 def status():
-    installed = (APP/'Contents/Resources/app.asar').is_file() and (APP/'Contents/MacOS/Electron').is_file()
+    app, archive, electron = app_files()
+    installed = archive.is_file() and electron.is_file()
     node = node_binary()
     from .dependencies import helper_path
     helper = helper_path()
     return {'installed':installed,'runtime':'WorkBuddy bundled Agent CLI','execution_ready':bool(installed and node and helper),
+            'app':str(app),
             'node':node,'credential_helper':helper,'desktop_task_visible':False,'default_model':'deepseek-v4.1-flash',
             'note':'本地安装检查；缺辅助模块时运行 local-agent doctor --backend workbuddy --install-deps。提交时只读获取现有登录凭证，过期则失败，不自动刷新。CLI 任务不进入桌面任务列表。'}
 
@@ -101,8 +121,9 @@ async def run(ctx):
             state.update(status='cancelled',finished_at=time.time());ctx.save();return
         with open(ctx.directory/'runtime.stderr.log','a',opener=lambda p,flags:os.open(p,flags,0o600)) as log:
             process=await asyncio.create_subprocess_exec(node_binary() or 'node',str(Path(__file__).with_suffix('.mjs')),str(ctx.directory/'launch.json'),
-                stdout=asyncio.subprocess.PIPE,stderr=log,start_new_session=True,limit=16*1024*1024,
-                env={**os.environ,'WORKBUDDY_CREDENTIAL_HELPER':dependencies.helper_path() or ''})
+                stdout=asyncio.subprocess.PIPE,stderr=log,**shared.spawn_options(),limit=16*1024*1024,
+                env={**os.environ,'WORKBUDDY_CREDENTIAL_HELPER':dependencies.helper_path() or '',
+                     'WORKBUDDY_APP':str(app_root())})
         state.update(status='submitted',runtime_pid=process.pid);ctx.save()
         deadline=time.monotonic()+request['timeout_seconds']
         reader_task=asyncio.create_task(process.stdout.readline())
