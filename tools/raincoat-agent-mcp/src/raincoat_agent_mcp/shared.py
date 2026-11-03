@@ -153,6 +153,11 @@ async def stop_process(process):
     if process.returncode is not None:
         await process.wait()
         return
+    try:
+        await asyncio.wait_for(process.wait(), timeout=0.05)
+        return
+    except TimeoutError:
+        pass
     if IS_WINDOWS:
         result = await asyncio.to_thread(
             subprocess.run, ['taskkill', '/PID', str(process.pid), '/T', '/F'],
@@ -170,6 +175,12 @@ async def stop_process(process):
     except ProcessLookupError:
         await process.wait()
         return
+    except PermissionError:
+        try:
+            await asyncio.wait_for(process.wait(), timeout=0.2)
+            return
+        except TimeoutError:
+            raise RuntimeError('Cannot terminate agent process group')
     deadline = time.monotonic() + 3
     while await group_alive(process.pid) and time.monotonic() < deadline:
         await asyncio.sleep(0.05)

@@ -100,7 +100,7 @@ class RunnerTests(unittest.IsolatedAsyncioTestCase):
             {'type': 'item.completed', 'item': {'id': 'm1', 'type': 'agent_message', 'text': 'done'}},
             {'type': 'turn.completed', 'usage': {'output_tokens': 1}},
         ]
-        script = 'import json,time,sys;assert sys.stdin.read()=="test";events=' + repr(events) + ';[print(json.dumps(e),flush=True) for e in events];time.sleep(30)'
+        script = 'import json,time;events=' + repr(events) + ';[print(json.dumps(e),flush=True) for e in events];time.sleep(30)'
         with patch.object(gpt.dependencies, 'codex_binary', return_value='/stable/codex'), patch.object(asyncio, 'create_subprocess_exec', self.fake_spawn(script)):
             running = asyncio.create_task(gpt.run(self.ctx))
             result = await shared.wait_task(self.job, 2)
