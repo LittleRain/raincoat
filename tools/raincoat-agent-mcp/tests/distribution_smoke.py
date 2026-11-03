@@ -88,7 +88,7 @@ print(json.dumps({'worker_status':result['status']}))
         # Build a synthetic next version in a separate source copy for a real upgrade.
         source=root/'next-source';shutil.copytree(ROOT,source,ignore=shutil.ignore_patterns('dist','build','*.egg-info','__pycache__'))
         (source/'src/raincoat_agent_mcp/_version.py').write_text(f'__version__ = "{next_version}"\n')
-        run([sys.executable,'-c',"from setuptools.build_meta import build_wheel;build_wheel('dist')"],os.environ.copy(),source)
+        run([uv,'build',source,'--wheel','--out-dir',source/'dist'],env,home)
         next_wheel=next((source/'dist').glob('*.whl'))
         upgraded=json.loads(run([cli,'update','--from',next_wheel],env,home));assert upgraded['installed_version']==next_version,upgraded
         assert run([cli,'--version'],env,home)==next_version
