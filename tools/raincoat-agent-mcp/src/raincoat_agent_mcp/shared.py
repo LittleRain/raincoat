@@ -150,10 +150,10 @@ def spawn_options():
 
 
 async def stop_process(process):
+    if process.returncode is not None:
+        await process.wait()
+        return
     if IS_WINDOWS:
-        if process.returncode is not None:
-            await process.wait()
-            return
         result = await asyncio.to_thread(
             subprocess.run, ['taskkill', '/PID', str(process.pid), '/T', '/F'],
             capture_output=True, text=True,

@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import ExitStack
 import json
 import os
+import tempfile
 from pathlib import Path
 import subprocess
 import time
@@ -139,14 +141,21 @@ async def run(ctx):
             ctx.save()
             return
         env = {key: value for key, value in os.environ.items() if key not in {'CODEX_API_KEY', 'OPENAI_API_KEY'}}
-        with open(ctx.directory / 'runtime.stderr.log', 'a', opener=lambda path, flags: os.open(path, flags, 0o600)) as log:
+        with ExitStack() as stack:
+            log = stack.enter_context(open(ctx.directory / 'runtime.stderr.log', 'a', opener=lambda path, flags: os.open(path, flags, 0o600)))
+            stdin = asyncio.subprocess.PIPE
+            if shared.IS_WINDOWS:
+                stdin = stack.enter_context(tempfile.TemporaryFile())
+                stdin.write(request['prompt'].encode())
+                stdin.seek(0)
             process = await asyncio.create_subprocess_exec(
-                *command(request), stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
+                *command(request), stdin=stdin, stdout=asyncio.subprocess.PIPE,
                 stderr=log, **shared.spawn_options(), limit=16 * 1024 * 1024, env=env,
             )
-        process.stdin.write(request['prompt'].encode())
-        await process.stdin.drain()
-        process.stdin.close()
+        if process.stdin:
+            process.stdin.write(request['prompt'].encode())
+            await process.stdin.drain()
+            process.stdin.close()
         state.update(status='submitted', runtime_pid=process.pid, sandbox=request.get('sandbox') or 'read-only')
         ctx.save()
         deadline = time.monotonic() + request['timeout_seconds']
