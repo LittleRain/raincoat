@@ -77,16 +77,21 @@ def get_task(job_id):
     if not pid and (directory / 'worker.json').exists():
         pid = read_json(directory / 'worker.json')['pid']
     if state['status'] not in TERMINAL and pid:
-        try:
-            os.kill(pid, 0)
-            # Legacy workers may be unreaped children of a still-running MCP.
-            if not IS_WINDOWS:
-                probe = subprocess.run(['ps', '-p', str(pid), '-o', 'stat='], capture_output=True, text=True)
-                if probe.returncode == 1 or probe.stdout.strip().startswith('Z'):
-                    raise ProcessLookupError
-        except ProcessLookupError:
+        if not pid_alive(pid):
             state.update(status='interrupted', error='桥接 worker 已退出；后端任务可能仍在执行，请先检查会话，勿自动重提交。')
     return state
+
+
+def pid_alive(pid):
+    if IS_WINDOWS:
+        return psutil.pid_exists(pid)
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    # Legacy workers may be unreaped children of a still-running MCP.
+    probe = subprocess.run(['ps', '-p', str(pid), '-o', 'stat='], capture_output=True, text=True)
+    return probe.returncode == 0 and not probe.stdout.strip().startswith('Z')
 
 
 def ready(state):
@@ -196,13 +201,9 @@ async def stop_process(process):
 
 
 def stop_windows_process_tree(pid):
-    if os.environ.get('RAINCOAT_DEBUG_WINDOWS_PROCESS'):
-        os.write(2, f'stop_windows_process_tree parent={os.getpid()} target={pid}\n'.encode())
     try:
         parent = psutil.Process(pid)
         descendants = parent.children(recursive=True)
-        if os.environ.get('RAINCOAT_DEBUG_WINDOWS_PROCESS'):
-            os.write(2, f'target_name={parent.name()} descendants={[child.pid for child in descendants]}\n'.encode())
     except psutil.NoSuchProcess:
         return
     for child in reversed(descendants):

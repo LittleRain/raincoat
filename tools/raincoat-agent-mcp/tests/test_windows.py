@@ -43,7 +43,7 @@ class WindowsDiscoveryTests(unittest.TestCase):
 class WindowsRuntimeTests(unittest.IsolatedAsyncioTestCase):
     async def test_windows_wait_uses_bounded_state_polling(self):
         with tempfile.TemporaryDirectory() as tmp, patch.object(shared, 'STATE', Path(tmp)), \
-                patch.object(shared, 'IS_WINDOWS', True):
+                patch.object(shared, 'IS_WINDOWS', True), patch.object(shared, 'pid_alive', return_value=True):
             job = 'a' * 32
             directory = shared.job_dir(job)
             shared.atomic_json(directory / 'request.json', {'backend': 'gpt'})

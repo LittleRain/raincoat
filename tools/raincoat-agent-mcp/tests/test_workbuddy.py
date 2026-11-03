@@ -65,7 +65,7 @@ class RunnerTests(unittest.IsolatedAsyncioTestCase):
             shared.atomic_json(self.ctx.directory/'cancel.json',{})
             await asyncio.wait_for(running,4)
             self.assertEqual(self.ctx.state['status'],'cancelled')
-            with self.assertRaises(OSError):os.kill(pid,0)
+            self.assertFalse(shared.pid_alive(pid))
     @unittest.skipIf(shared.IS_WINDOWS, 'POSIX signal semantics')
     async def test_term_ignoring_descendant_is_killed_after_leader_exits(self):
         marker=Path(self.tmp.name)/'child.pid'

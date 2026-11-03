@@ -8,6 +8,7 @@ import time
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from integration import value
+from raincoat_agent_mcp import shared
 ROOT=Path(__file__).resolve().parents[1]
 
 async def main(output):
@@ -40,9 +41,7 @@ async def main(output):
         value(await session.call_tool('agent_cancel_task',{'job_id':cancel['job_id']}))
         cancelled=await finish(cancel)
         assert cancelled['status']=='cancelled',cancelled
-        alive=False
-        try:os.kill(pid,0);alive=True
-        except ProcessLookupError:pass
+        alive=shared.pid_alive(pid)
         assert not alive,f'Child {pid} survived cancellation'
         assert not (output/'should-not-exist.txt').exists()
         summary={'resume':resume,'cancel':cancelled,'cancelled_child_pid':pid,'child_alive':alive}
