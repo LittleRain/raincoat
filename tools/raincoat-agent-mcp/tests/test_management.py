@@ -9,9 +9,16 @@ import unittest
 from unittest.mock import patch
 from packaging.version import Version
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'src'))
-from raincoat_agent_mcp import management, dependencies, updates, __version__
+from raincoat_agent_mcp import management, dependencies, updates, cli, __version__
 
 class ManagementTests(unittest.TestCase):
+    def test_cli_json_works_with_legacy_windows_encoding(self):
+        output = io.BytesIO()
+        with patch.object(sys, 'argv', ['local-agent', 'setup']), patch.object(sys, 'stdout', io.TextIOWrapper(output, encoding='cp1252')), patch.object(management, 'setup', return_value={'message': '安装成功'}):
+            cli.main()
+            sys.stdout.flush()
+            encoded = output.getvalue()
+        self.assertEqual(json.loads(encoded), {'message': '安装成功'})
     def test_setup_preview_does_not_create_config(self):
         with tempfile.TemporaryDirectory() as tmp,patch('pathlib.Path.home',return_value=Path(tmp)):
             result=management.setup(client='codex')

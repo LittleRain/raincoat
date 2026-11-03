@@ -223,8 +223,8 @@ def main():
         elif command=='wait':result=compact(asyncio.run(shared.wait_task(**a)))
         elif command=='get':result=compact(shared.get_task(a['job_id']))
         else:result=cancel_task(a['job_id'])
-        print(json.dumps(result,ensure_ascii=False,indent=2))
+        print(json.dumps(result,ensure_ascii=True,indent=2))
     except Exception as e:
-        print(json.dumps({'error':str(e)},ensure_ascii=False),file=sys.stderr);sys.exit(1)
+        print(json.dumps({'error':str(e)},ensure_ascii=True),file=sys.stderr);sys.exit(1)
 
 if __name__=='__main__':main()

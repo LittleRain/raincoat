@@ -15,7 +15,7 @@ def main():
         print('local-agent '+__version__+'\nCommands: mcp, status, submit, get, wait, cancel, setup, doctor, update\nUse local-agent COMMAND --help for options.');return
     if argv[0] not in commands:
         if sys.platform not in ('darwin','win32'):
-            print(json.dumps({'error':'当前运行时后端只支持 macOS 和 Windows。'},ensure_ascii=False),file=sys.stderr);raise SystemExit(1)
+            print(json.dumps({'error':'当前运行时后端只支持 macOS 和 Windows。'},ensure_ascii=True),file=sys.stderr);raise SystemExit(1)
         from .bridge import main as bridge_main
         bridge_main();return
     parser=argparse.ArgumentParser(prog='local-agent');sub=parser.add_subparsers(dest='command',required=True)
@@ -30,7 +30,7 @@ def main():
         else:
             from . import management
             result=getattr(management,command)(**args)
-        print(json.dumps(result,ensure_ascii=False,indent=2))
+        print(json.dumps(result,ensure_ascii=True,indent=2))
         if command=='doctor' and not result['healthy']:raise SystemExit(1)
     except (OSError,ValueError,RuntimeError,ImportError,subprocess.SubprocessError) as error:
-        print(json.dumps({'error':str(error)},ensure_ascii=False),file=sys.stderr);raise SystemExit(1)
+        print(json.dumps({'error':str(error)},ensure_ascii=True),file=sys.stderr);raise SystemExit(1)
