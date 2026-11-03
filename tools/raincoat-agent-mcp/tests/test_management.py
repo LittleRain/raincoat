@@ -71,7 +71,7 @@ class ManagementTests(unittest.TestCase):
         with patch('urllib.request.urlopen',side_effect=OSError('offline')):
             with self.assertRaisesRegex(RuntimeError,'当前安装仍可使用'):updates.check_update()
     def test_version_rollback_uses_explicit_spec(self):
-        with tempfile.TemporaryDirectory() as tmp,patch.object(sys,'prefix',tmp),patch.object(updates,'ensure_idle'),patch('shutil.which',return_value='/uv'):
+        with tempfile.TemporaryDirectory() as tmp,patch.object(sys,'prefix',tmp),patch.object(sys,'platform','darwin'),patch.object(updates,'ensure_idle'),patch('shutil.which',return_value='/uv'):
             (Path(tmp)/'uv-receipt.toml').write_text('')
             results=[subprocess.CompletedProcess([],0),subprocess.CompletedProcess([],0,'0.0.9\n','')]
             with patch('subprocess.run',side_effect=results) as run:
@@ -79,7 +79,7 @@ class ManagementTests(unittest.TestCase):
                 self.assertEqual(result['installed_version'],'0.0.9')
                 self.assertEqual(run.call_args_list[0].args[0],['/uv','tool','install','--force','--python',getattr(sys,'_base_executable',sys.executable),'raincoat-agent-mcp==0.0.9'])
     def test_failed_upgrade_does_not_report_success(self):
-        with tempfile.TemporaryDirectory() as tmp,patch.object(sys,'prefix',tmp),patch.object(updates,'ensure_idle'),patch('shutil.which',return_value='/uv'):
+        with tempfile.TemporaryDirectory() as tmp,patch.object(sys,'prefix',tmp),patch.object(sys,'platform','darwin'),patch.object(updates,'ensure_idle'),patch('shutil.which',return_value='/uv'):
             (Path(tmp)/'uv-receipt.toml').write_text('')
             with patch('subprocess.run',return_value=subprocess.CompletedProcess([],1)):
                 with self.assertRaisesRegex(RuntimeError,'升级未成功'):updates.update()
