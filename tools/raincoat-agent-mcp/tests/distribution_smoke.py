@@ -71,7 +71,8 @@ def main(wheel):
         python=config['mcp_servers']['local_agents']['command']
         # The native adapters must import from the wheel, never the repository.
         imported=run([python,'-c','import raincoat_agent_mcp;print(raincoat_agent_mcp.__file__)'],env,home)
-        assert str(root/'tools') in imported and str(ROOT) not in imported,imported
+        installed_module = Path(imported).resolve()
+        assert installed_module.is_relative_to((root/'tools').resolve()) and not installed_module.is_relative_to(ROOT.resolve()), imported
         # Spawn a detached installed worker; it fails before native auth because this
         # clean HOME deliberately lacks WorkBuddy product config. No model is called.
         worker_script='''import asyncio,json
