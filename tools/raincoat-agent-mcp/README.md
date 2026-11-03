@@ -127,7 +127,7 @@ local-agent wait JOB_ID
 local-agent update --from /path/to/new.whl
 ```
 
-若未来发布到 PyPI，可用 `local-agent update --check` 查询公开版本，再运行 `local-agent update`。目前 `--check` 会因尚未发布而报告错误。回退时保留旧 wheel，执行 `local-agent update --from /path/to/old.whl`。更新前需完成或取消仍在执行、等待授权的任务；更新后重载 MCP。任务记录、登录状态和客户端配置不会随包升级删除。
+若未来发布到 PyPI，可用 `local-agent update --check` 查询公开版本，再运行 `local-agent update`。目前 `--check` 会因尚未发布而报告错误。回退时保留旧 wheel，执行 `local-agent update --from /path/to/old.whl`。Windows 上的 `update` 会输出 `powershell_command`；复制该命令到 PowerShell 执行，避免安装目录被当前进程占用。更新前需完成或取消仍在执行、等待授权的任务；更新后重载 MCP。任务记录、登录状态和客户端配置不会随包升级删除。
 
 ## 运行边界
 

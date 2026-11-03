@@ -83,5 +83,13 @@ class ManagementTests(unittest.TestCase):
             (Path(tmp)/'uv-receipt.toml').write_text('')
             with patch('subprocess.run',return_value=subprocess.CompletedProcess([],1)):
                 with self.assertRaisesRegex(RuntimeError,'升级未成功'):updates.update()
+    def test_windows_update_returns_external_command(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(sys, 'prefix', tmp), patch.object(sys, 'platform', 'win32'), patch.object(updates, 'ensure_idle'), patch('shutil.which', return_value='C:\\Program Files\\uv.exe'), patch('subprocess.run') as run:
+            (Path(tmp) / 'uv-receipt.toml').write_text('')
+            result = updates.update(target_version='0.0.9')
+            self.assertEqual(result['status'], 'external_install_required')
+            self.assertEqual(result['command'][-1], 'raincoat-agent-mcp==0.0.9')
+            self.assertTrue(result['powershell_command'].startswith("& 'C:\\Program Files\\uv.exe'"))
+            run.assert_not_called()
 
 if __name__=='__main__':unittest.main()

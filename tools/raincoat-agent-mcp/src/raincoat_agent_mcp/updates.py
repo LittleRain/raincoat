@@ -68,7 +68,13 @@ def update(*,check=False,target_version=None,source=None):
     elif target_version:
         target_version=str(Version(target_version));target+=f'=={target_version}'
     # Reinstall an explicit spec: a wheel/old version constraint must not pin future upgrades.
-    result=subprocess.run([uv,'tool','install','--force','--python',getattr(sys,'_base_executable',sys.executable),target],stdout=sys.stderr,stderr=sys.stderr)
+    command=[uv,'tool','install','--force','--python',getattr(sys,'_base_executable',sys.executable),target]
+    if sys.platform=='win32':
+        powershell_command='& '+' '.join("'"+part.replace("'","''")+"'" for part in command)
+        return {'previous_version':__version__,'target_version':target_version,'source':target,
+                'status':'external_install_required','command':command,'powershell_command':powershell_command,
+                'next':'退出 local-agent 后，在 PowerShell 中运行 powershell_command，再重载 MCP。'}
+    result=subprocess.run(command,stdout=sys.stderr,stderr=sys.stderr)
     if result.returncode:raise RuntimeError('升级未成功；请检查 uv 错误并保留原 wheel 以便重装。')
     probe=subprocess.run([sys.executable,'-c',f'import importlib.metadata; print(importlib.metadata.version({PACKAGE!r}))'],capture_output=True,text=True,check=True)
     return {'previous_version':__version__,'installed_version':probe.stdout.strip(),'source':target,'next':'重载 MCP 或重启调用方；无需修改启动配置。'}

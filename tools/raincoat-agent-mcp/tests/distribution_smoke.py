@@ -90,11 +90,21 @@ print(json.dumps({'worker_status':result['status']}))
         (source/'src/raincoat_agent_mcp/_version.py').write_text(f'__version__ = "{next_version}"\n')
         run([uv,'build',source,'--wheel','--out-dir',source/'dist'],env,home)
         next_wheel=next((source/'dist').glob('*.whl'))
-        upgraded=json.loads(run([cli,'update','--from',next_wheel],env,home));assert upgraded['installed_version']==next_version,upgraded
+        upgraded=json.loads(run([cli,'update','--from',next_wheel],env,home))
+        if sys.platform=='win32':
+            assert upgraded['status']=='external_install_required',upgraded
+            run(upgraded['command'],env,home)
+            upgraded['installed_version']=run([cli,'--version'],env,home)
+        assert upgraded['installed_version']==next_version,upgraded
         assert run([cli,'--version'],env,home)==next_version
         assert configfile.read_text()==before
         assert asyncio.run(handshake(config,env,home))==11
-        rolled_back=json.loads(run([cli,'update','--from',wheel],env,home));assert rolled_back['installed_version']==original,rolled_back
+        rolled_back=json.loads(run([cli,'update','--from',wheel],env,home))
+        if sys.platform=='win32':
+            assert rolled_back['status']=='external_install_required',rolled_back
+            run(rolled_back['command'],env,home)
+            rolled_back['installed_version']=run([cli,'--version'],env,home)
+        assert rolled_back['installed_version']==original,rolled_back
         assert configfile.read_text()==before
         run([cli,'setup','--client','codex','--apply'],env,home)
         assert configfile.read_text()==before
