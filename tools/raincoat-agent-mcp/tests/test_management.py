@@ -34,8 +34,11 @@ class ManagementTests(unittest.TestCase):
             with self.subTest(version=version),patch.object(dependencies,'node_binary',return_value='/node'),patch('subprocess.run',return_value=subprocess.CompletedProcess([],0,version,'')):
                 self.assertEqual(dependencies.node_check()['available'],expected)
     def test_removed_cached_node_falls_back_to_new_path(self):
-        with patch.dict(os.environ,{'LOCAL_AGENT_NODE':''}),patch.object(dependencies,'settings',return_value={'node':'/removed/node'}),patch('shutil.which',return_value='/new/node'),patch.object(Path,'is_file',lambda path:str(path)=='/new/node'):
-            self.assertEqual(dependencies.node_binary(),'/new/node')
+        with tempfile.TemporaryDirectory() as tmp:
+            node = Path(tmp) / 'node'
+            node.write_text('')
+            with patch.dict(os.environ, {'LOCAL_AGENT_NODE': ''}), patch.object(dependencies, 'settings', return_value={'node': str(Path(tmp) / 'removed-node')}), patch('shutil.which', return_value=str(node)):
+                self.assertEqual(dependencies.node_binary(), str(node))
     def test_missing_helper_does_not_fall_back_to_dsh(self):
         with tempfile.TemporaryDirectory() as tmp,patch('pathlib.Path.home',return_value=Path(tmp)),patch.dict(os.environ,{'WORKBUDDY_CREDENTIAL_HELPER':''}):
             root=Path(tmp)/'.dsh/profiles/desktop/node_modules/dsh-workbuddy-connect/lib'

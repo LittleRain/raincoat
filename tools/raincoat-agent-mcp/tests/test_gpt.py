@@ -107,9 +107,11 @@ class RunnerTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(result['status'], 'succeeded')
             self.assertEqual(result['text'], 'done')
             self.assertEqual(result['provider'], 'codex')
-            self.assertEqual(shared.lock_path('gpt', result['session_id']).read_text(), self.job)
+            lock_file = shared.lock_path('gpt', result['session_id'])
+            self.assertTrue(lock_file.exists())
             self.assertLess(result['completion_delivery_ms'], 250)
             await asyncio.wait_for(running, 4)
+            self.assertEqual(lock_file.read_text(), self.job)
 
     async def test_cancel_stops_process_before_confirming(self):
         with patch.object(gpt.dependencies, 'codex_binary', return_value='/stable/codex'), patch.object(asyncio, 'create_subprocess_exec', self.fake_spawn('import time;time.sleep(30)')):
