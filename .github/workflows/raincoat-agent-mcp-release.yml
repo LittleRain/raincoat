@@ -55,6 +55,8 @@ jobs:
       - name: Install test dependencies
         run: python -m pip install -e tools/raincoat-agent-mcp
       - name: Windows regression tests
+        env:
+          RAINCOAT_DEBUG_WINDOWS_PROCESS: '1'
         run: python -m unittest discover -s tools/raincoat-agent-mcp/tests -v
       - name: Build Windows wheel
         run: uv build tools/raincoat-agent-mcp --wheel --out-dir dist-raincoat-agent-mcp

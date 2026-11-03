@@ -196,9 +196,13 @@ async def stop_process(process):
 
 
 def stop_windows_process_tree(pid):
+    if os.environ.get('RAINCOAT_DEBUG_WINDOWS_PROCESS'):
+        os.write(2, f'stop_windows_process_tree parent={os.getpid()} target={pid}\n'.encode())
     try:
         parent = psutil.Process(pid)
         descendants = parent.children(recursive=True)
+        if os.environ.get('RAINCOAT_DEBUG_WINDOWS_PROCESS'):
+            os.write(2, f'target_name={parent.name()} descendants={[child.pid for child in descendants]}\n'.encode())
     except psutil.NoSuchProcess:
         return
     for child in reversed(descendants):
