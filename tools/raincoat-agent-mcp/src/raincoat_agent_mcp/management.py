@@ -30,7 +30,7 @@ def setup(client='auto',apply=False,dsh_profile='desktop',output=None):
             if installed!=Path(__file__).resolve():raise importlib.metadata.PackageNotFoundError
         except importlib.metadata.PackageNotFoundError:
             raise RuntimeError('先安装发行包，再从安装后的 local-agent setup --apply 写入稳定配置。') from None
-    updates={path:render(path.read_text() if path.exists() else '',command,args) for path,render in selected}
+    updates={path:render(path.read_text(encoding='utf-8') if path.exists() else '',command,args) for path,render in selected}
     if apply:
         stamp=datetime.now().strftime('%Y%m%d-%H%M%S-%f')
         for path,text in updates.items():client_config.write_backed_up(path,text,stamp)

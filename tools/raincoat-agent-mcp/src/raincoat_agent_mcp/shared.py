@@ -26,14 +26,14 @@ ATTENTION = {'waiting_permission', 'waiting_desktop_tool'}
 
 
 def read_json(path):
-    return json.loads(Path(path).read_text())
+    return json.loads(Path(path).read_text(encoding='utf-8'))
 
 
 def atomic_json(path, value):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     temp = path.with_name(path.name + '.' + uuid.uuid4().hex + '.tmp')
-    with open(temp, 'x', opener=lambda p, flags: os.open(p, flags, 0o600)) as f:
+    with open(temp, 'x', encoding='utf-8', opener=lambda p, flags: os.open(p, flags, 0o600)) as f:
         json.dump(value, f, ensure_ascii=False)
     temp.replace(path)
 
@@ -341,7 +341,7 @@ class Worker:
 
     def log_event(self, message):
         message = {**message, 'bridge_received_at': time.time()}
-        with open(self.directory / 'events.jsonl', 'a', opener=lambda p, flags: os.open(p, flags, 0o600)) as f:
+        with open(self.directory / 'events.jsonl', 'a', encoding='utf-8', opener=lambda p, flags: os.open(p, flags, 0o600)) as f:
             f.write(json.dumps(message, ensure_ascii=False) + '\n')
 
     def cancelled(self):

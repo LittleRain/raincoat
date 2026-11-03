@@ -218,7 +218,7 @@ def main():
         if command=='status':result=status(**a)
         elif command=='submit':
             file=a.pop('prompt_file')
-            if file:a['prompt']=Path(file).read_text()
+            if file:a['prompt']=Path(file).read_text(encoding='utf-8')
             backend=a.pop('backend');prompt=a.pop('prompt');result=asyncio.run(submit_and_wait(backend,prompt,**a))
         elif command=='wait':result=compact(asyncio.run(shared.wait_task(**a)))
         elif command=='get':result=compact(shared.get_task(a['job_id']))

@@ -35,5 +35,5 @@ def write_backed_up(path,text,stamp):
     path=Path(path);path.parent.mkdir(parents=True,exist_ok=True)
     if path.exists():shutil.copy2(path,path.with_name(path.name+'.before-local-agents-'+stamp))
     temp=path.with_name(path.name+'.tmp-'+stamp)
-    with open(temp,'x',opener=lambda p,flags:os.open(p,flags,0o600)) as f:f.write(text)
+    with open(temp,'x',encoding='utf-8',opener=lambda p,flags:os.open(p,flags,0o600)) as f:f.write(text)
     temp.replace(path)

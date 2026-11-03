@@ -120,7 +120,7 @@ async def run(ctx) -> None:
         if (directory / "cancel.json").exists():
             state.update(status="cancelled", finished_at=time.time()); save(); return
         sid = request["session_id"]
-        device = (BITTO / "device.id").read_text().strip()
+        device = (BITTO / "device.id").read_text(encoding='utf-8').strip()
         if not sid:
             projects = await asyncio.to_thread(api, "v1/bitto/studio/projects")
             project = next((x for x in projects.get("projects", []) if request["project"] in (x["id"], x.get("name"))), None)
@@ -160,7 +160,7 @@ async def run(ctx) -> None:
             state["status"] = "submitted"; save()
             deadline = time.monotonic() + request["timeout_seconds"]
             stop_deadline = None
-            with open(directory / "events.jsonl", "a", opener=lambda p, flags: os.open(p, flags, 0o600)) as log:
+            with open(directory / "events.jsonl", "a", encoding='utf-8', opener=lambda p, flags: os.open(p, flags, 0o600)) as log:
                 while state["status"] not in TERMINAL:
                     expired = time.monotonic() > deadline
                     if (expired or (directory / "cancel.json").exists()) and not state.get("cancel_sent") and state.get("run_id"):
