@@ -17,6 +17,9 @@ if os.name != 'nt':
 
 IS_WINDOWS = os.name == 'nt'
 
+if IS_WINDOWS:
+    import psutil
+
 STATE = Path(os.environ.get('LOCAL_AGENT_MCP_STATE_DIR', os.environ.get('BITTO_BRIDGE_STATE_DIR', '~/.local/state/bitto-agent-bridge'))).expanduser()
 TERMINAL = {'succeeded', 'failed', 'cancelled', 'interrupted'}
 ATTENTION = {'waiting_permission', 'waiting_desktop_tool'}
@@ -159,16 +162,11 @@ async def stop_process(process):
     except TimeoutError:
         pass
     if IS_WINDOWS:
-        result = await asyncio.to_thread(
-            subprocess.run, ['taskkill', '/PID', str(process.pid), '/T', '/F'],
-            capture_output=True, text=True,
-        )
+        await asyncio.to_thread(stop_windows_process_tree, process.pid)
         try:
             await asyncio.wait_for(process.wait(), timeout=5)
         except TimeoutError as error:
             raise RuntimeError('Windows agent process did not stop') from error
-        if result.returncode and process.returncode is None:
-            raise RuntimeError('Cannot confirm Windows agent process termination')
         return
     try:
         os.killpg(process.pid, signal.SIGTERM)
@@ -195,6 +193,26 @@ async def stop_process(process):
         if time.monotonic() >= deadline:
             raise RuntimeError('Agent descendants are still alive; cancellation not confirmed')
         await asyncio.sleep(0.05)
+
+
+def stop_windows_process_tree(pid):
+    try:
+        parent = psutil.Process(pid)
+        descendants = parent.children(recursive=True)
+    except psutil.NoSuchProcess:
+        return
+    for child in reversed(descendants):
+        try:
+            child.kill()
+        except psutil.NoSuchProcess:
+            pass
+    try:
+        parent.kill()
+    except psutil.NoSuchProcess:
+        pass
+    alive = psutil.wait_procs(descendants, timeout=5)[1]
+    if alive:
+        raise RuntimeError('Windows agent descendants are still alive; cancellation not confirmed')
 
 
 def try_lock_file(lock):

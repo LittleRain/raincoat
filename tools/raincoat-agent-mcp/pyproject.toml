@@ -8,7 +8,7 @@ dynamic = ["version"]
 description = "Delegate MCP tasks to local Bitto, WorkBuddy and GPT/Codex runtimes"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = ["mcp>=1.20,<2", "websockets>=14,<17", "packaging>=23"]
+dependencies = ["mcp>=1.20,<2", "websockets>=14,<17", "packaging>=23", "psutil>=5.9; sys_platform == 'win32'"]
 classifiers = ["Programming Language :: Python :: 3", "Operating System :: MacOS", "Operating System :: Microsoft :: Windows"]
 
 [project.scripts]
