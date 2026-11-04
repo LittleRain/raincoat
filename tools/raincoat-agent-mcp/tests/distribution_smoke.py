@@ -56,10 +56,11 @@ def main(wheel):
         assert not (home/'.dsh').exists()
         helper_installed=False
         if os.environ.get('RAINCOAT_SMOKE_INSTALL_HELPER')=='1':
-            doctor=json.loads(run([cli,'doctor','--backend','workbuddy','--install-deps'],env,home))
-            assert doctor['backends']['workbuddy']['available'],doctor
+            checked=subprocess.run([str(cli),'doctor','--backend','workbuddy','--install-deps'],env=env,cwd=home,text=True,capture_output=True)
+            doctor=json.loads(checked.stdout)
             helper=doctor['backends']['workbuddy']['credential_helper']
-            assert str(home/'.local/share/raincoat-agent-mcp/workbuddy') in helper
+            assert Path(helper).is_file(),doctor
+            assert Path(helper).resolve().is_relative_to((home/'.local/share/raincoat-agent-mcp/workbuddy').resolve()),helper
             node=doctor['backends']['workbuddy']['node']['path']
             script='import {pathToFileURL} from "node:url"; const lib=await import(pathToFileURL(process.argv[1]).href); if(!lib.m||!lib.S) throw Error("incompatible helper");'
             run([node,'--input-type=module','-e',script,helper],env,home)

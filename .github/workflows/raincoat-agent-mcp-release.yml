@@ -51,6 +51,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
       - uses: astral-sh/setup-uv@v6
       - name: Install test dependencies
         run: python -m pip install -e tools/raincoat-agent-mcp
@@ -59,6 +62,8 @@ jobs:
       - name: Build Windows wheel
         run: uv build tools/raincoat-agent-mcp --wheel --out-dir dist-raincoat-agent-mcp
       - name: Windows isolated install and MCP handshake
+        env:
+          RAINCOAT_SMOKE_INSTALL_HELPER: '1'
         run: |
           $wheel = (Get-ChildItem 'dist-raincoat-agent-mcp/*.whl' | Select-Object -First 1).FullName
           python tools/raincoat-agent-mcp/tests/distribution_smoke.py $wheel
