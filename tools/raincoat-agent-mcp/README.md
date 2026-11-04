@@ -1,6 +1,6 @@
 # Raincoat Agent MCP
 
-在 macOS 或 Windows 设备上，通过 MCP 把完整任务交给本机的 Bitto、WorkBuddy 或 Codex CLI。调用方可以是 Codex、DeepSeek Harness，或支持 stdio MCP 的其他客户端；被调用的后端通过 `backend` 参数选择。
+在 macOS 或 Windows 设备上，通过 MCP 把完整任务交给已安装的本机 Bitto、WorkBuddy 或 Codex CLI。调用方可以是 Codex、DeepSeek Harness，或支持 stdio MCP 的其他客户端；被调用的后端通过 `backend` 参数选择。Bitto 在 Windows 上还需要提供本地 WebSocket sidecar 的桌面版本。
 
 > **分发状态：** 当前版本为 0.2.0，尚未发布到 PyPI。要让别人安装，需要向对方提供构建好的 `.whl` 文件，或提供可访问的源码仓库。安装包不含你的登录信息；每台设备都要单独安装、登录和配置。Windows 上的 Bitto 需要手动提供本地连接地址，见下文。
 
@@ -54,7 +54,13 @@ local-agent doctor --backend gpt
 
 WorkBuddy 的辅助模块是 `dsh-workbuddy-connect@0.7.9`，安装在用户目录下的 `.local/share/raincoat-agent-mcp/workbuddy/`。macOS 默认查找 `/Applications/WorkBuddy.app`；Windows 默认查找 `%LOCALAPPDATA%\Programs\WorkBuddy`。非默认安装位置可设置 `WORKBUDDY_APP` 为应用根目录。`doctor` 不验证 WorkBuddy 登录是否仍有效，提交任务时才验证。GPT 的 `doctor` 会运行 `codex login status`，不会调用模型。安装辅助模块后可用 `local-agent doctor --backend workbuddy` 再次检查。
 
-Windows 上的 Bitto 不自动扫描监听端口。先确认该设备上的 Bitto 桌面运行时可用，再把 `BITTO_HOME` 设为含 `credentials/auth.json`、`device.id` 的本机数据目录，把 `BITTO_BRIDGE_WS_URL` 设为本机 `ws://127.0.0.1:<port>` 地址。没有 Windows Bitto 运行时或无法取得连接地址时，请使用 `workbuddy` 或 `gpt` 后端。
+Windows 上的 Bitto 不自动扫描监听端口。先确认安装版本带有本地 WebSocket sidecar，再把 `BITTO_HOME` 设为含 `credentials/auth.json`、`device.id` 的本机数据目录，把 `BITTO_BRIDGE_WS_URL` 设为本机 `ws://127.0.0.1:<port>` 地址。可在 PowerShell 中为当前终端设置后运行 `local-agent doctor --backend bitto`；使用桌面 MCP 客户端时，要让该客户端也能读取这两个环境变量并重启客户端。若 Windows Bitto 没有该 sidecar，这个后端无法调用。
+
+```powershell
+$env:BITTO_HOME = 'C:\Users\你的用户名\.bitto'
+$env:BITTO_BRIDGE_WS_URL = 'ws://127.0.0.1:实际端口'
+local-agent doctor --backend bitto
+```
 
 ### 接入 MCP 客户端
 
