@@ -8,7 +8,7 @@ window.__ModuleLoader__.load({
     const useRefLoose = React.useRef || ((initial) => ({ current: initial }))
 
     const API = '/kb-desk/api'
-    const BUILD = '20261110-1340-kbdesk'
+    const BUILD = '20261110-2145-kbdesk'
     const TABS = [
       { id: 'ingest', label: '摄入' },
       { id: 'health', label: '健康' },
@@ -487,8 +487,8 @@ window.__ModuleLoader__.load({
       const statCards = [
         { title: '排队中', value: stats?.queued ?? '—', hint: stats?.oldestQueuedAt ? `最早已等 ${duration(Date.now() - stats.oldestQueuedAt)}` : '队列是空的', tone: stats?.queued ? 'warn' : null },
         { title: '处理中', value: stats?.claimed ?? '—', hint: 'worker 已领取' },
-        { title: '已完成', value: (stats?.done || 0) + (stats?.archived?.done || 0), hint: stats?.archived?.done ? `含历史归档 ${stats.archived.done}` : '累计写入 vault' },
-        { title: '失败', value: (stats?.failed || 0) + (stats?.archived?.failed || 0), hint: stats?.archived?.failed ? `含历史归档 ${stats.archived.failed}` : '没有失败', tone: (stats?.failed || 0) + (stats?.archived?.failed || 0) ? 'error' : null },
+        { title: '已完成', value: stats?.done ?? '—', hint: stats?.archived?.done ? `含历史归档 ${stats.archived.done}` : '累计写入 vault' },
+        { title: '失败', value: stats?.failed ?? '—', hint: stats?.archived?.failed ? `含历史归档 ${stats.archived.failed}` : '没有失败', tone: stats?.failed ? 'error' : null },
         { title: 'Inbox 待整理', value: inbox.length || (boot?.vault?.inboxCount ?? 0), hint: inbox.length ? '等 triage' : '已经清空', tone: inbox.length > 5 ? 'warn' : null },
       ]
 

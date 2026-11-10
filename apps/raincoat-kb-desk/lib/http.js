@@ -142,15 +142,42 @@ export function registerHttp(ctx) {
 
     if (path === '/ingest/stats' && method === 'GET') {
       const stats = await services.ingest.stats()
-      const archived = { done: 0, failed: 0 }
+      // 数字必须和列表同源：实时队列里的任务往往也在历史归档里，按 id 去重后再计数，
+      // 不能把两边直接相加，否则卡片会比列表多。
+      let history = []
       try {
-        const history = await services.ingest.history()
-        archived.done = history.filter((job) => job.status === 'done').length
-        archived.failed = history.filter((job) => job.status === 'failed').length
+        history = await services.ingest.history()
       } catch {
-        // 历史归档读不到就只报实时队列
+        history = []
       }
-      return json(res, 200, { stats: { ...stats, archived } })
+      let liveDone = []
+      let liveFailed = []
+      try {
+        const [done, failed] = await Promise.all([
+          services.ingest.jobs('done', 120),
+          services.ingest.jobs('failed', 120),
+        ])
+        liveDone = done.jobs || []
+        liveFailed = failed.jobs || []
+      } catch {
+        // 实时队列读不到就只报归档
+      }
+      const mergeCount = (status, liveList) => {
+        const map = new Map()
+        for (const job of history.filter((item) => item.status === status)) map.set(job.id, job)
+        for (const job of liveList) map.set(job.id, job)
+        return { total: map.size, archivedOnly: [...map.values()].filter((job) => job.archived).length }
+      }
+      const done = mergeCount('done', liveDone)
+      const failed = mergeCount('failed', liveFailed)
+      return json(res, 200, {
+        stats: {
+          ...stats,
+          done: done.total,
+          failed: failed.total,
+          archived: { done: done.archivedOnly, failed: failed.archivedOnly },
+        },
+      })
     }
 
     if (path === '/ingest/jobs' && method === 'GET') {
