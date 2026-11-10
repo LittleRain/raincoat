@@ -8,7 +8,7 @@ window.__ModuleLoader__.load({
     const useRefLoose = React.useRef || ((initial) => ({ current: initial }))
 
     const API = '/kb-desk/api'
-    const BUILD = '20261110-1120-kbdesk'
+    const BUILD = '20261110-1135-kbdesk'
     const TABS = [
       { id: 'ingest', label: '摄入' },
       { id: 'health', label: '健康' },
@@ -242,11 +242,17 @@ window.__ModuleLoader__.load({
         try {
           const [statsPayload, jobsPayload] = await Promise.all([
             api('/ingest/stats'),
-            api(`/ingest/jobs?status=${nextStatus}&limit=30`),
+            // 服务端按创建时间升序返回并从最早的开始截断，所以多要一些再在前端取最新的
+            api(`/ingest/jobs?status=${nextStatus}&limit=120`),
           ])
           if (!alive.current) return
           setStats(statsPayload.stats)
-          setJobs(jobsPayload.jobs || [])
+          // 队列按时间倒序：最近的在最前面
+          setJobs(
+            [...(jobsPayload.jobs || [])]
+              .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+              .slice(0, 40),
+          )
         } catch (error) {
           if (alive.current) setNotice(error.message)
         }
