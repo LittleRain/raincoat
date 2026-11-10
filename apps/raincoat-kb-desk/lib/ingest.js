@@ -100,6 +100,25 @@ export function createIngest() {
       const payload = await request(settings(), `/jobs?status=${encodeURIComponent(status)}&limit=${limit}`, { token: 'worker' })
       return { status, count: Number(payload?.count || 0), jobs: (payload?.jobs || []).map(normalizeJob) }
     },
+    /** 队列目录是工作区，会被清理；VPS 另外留了一份 /kb/history.json，历史任务从这里补。 */
+    async history() {
+      const cred = readCredentials(settings())
+      const base = String(cred.apiBase || settings().apiBase).replace(/\/+$/, '')
+      const root = base.replace(/\/api$/, '')
+      if (!cred.workerToken) throw new IngestUnavailable('缺少 WORKER_TOKEN，读不到历史记录', 428)
+      let res
+      try {
+        res = await fetch(`${root}/kb/history.json`, {
+          headers: { 'x-worker-token': cred.workerToken },
+          signal: AbortSignal.timeout(TIMEOUT_MS),
+        })
+      } catch (error) {
+        throw new IngestUnavailable(`读不到历史归档：${error?.message || error}`)
+      }
+      if (!res.ok) throw new IngestUnavailable(`历史归档返回 ${res.status}`, res.status)
+      const payload = await res.json().catch(() => null)
+      return (payload?.jobs || []).map((raw) => ({ ...normalizeJob(raw), archived: true }))
+    },
     async runs(limit = 12) {
       const payload = await request(settings(), `/runs?limit=${limit}`, { token: 'worker' })
       return (payload?.runs || []).map((run) => ({
@@ -129,6 +148,33 @@ export function createIngest() {
           note: stage.note || null,
         })),
       }
+    },
+    /**
+     * 把失败任务放回远端队列。
+     *
+     * 传 ids 只重试这几条；不传就把远端当前 failed 的任务全重试一遍（面板上的
+     * 「全部重试」走这条，避免前端只重试加载到的那 40 条）。逐条调用，单条失败
+     * 不影响其它条，返回里能直接看出哪条没成功。
+     */
+    async retry(ids) {
+      const wanted = Array.isArray(ids) ? [...new Set(ids.map((id) => String(id || '').trim()).filter(Boolean))] : []
+      const targets = wanted.length
+        ? wanted
+        : ((await request(settings(), '/jobs?status=failed&limit=100', { token: 'worker' }))?.jobs || []).map((job) => job.id)
+      const retried = []
+      const failures = []
+      for (const id of targets) {
+        try {
+          const payload = await request(settings(), `/jobs/${encodeURIComponent(id)}/retry`, { method: 'POST', token: 'worker' })
+          retried.push(payload?.job?.id || id)
+        } catch (error) {
+          failures.push({
+            id,
+            error: error?.status === 404 ? '远端服务还没有重试接口（需要部署新版摄入服务）' : error?.message || String(error),
+          })
+        }
+      }
+      return { total: targets.length, retried, failed: failures }
     },
     async submit({ url, title, note }) {
       const cred = readCredentials(settings())

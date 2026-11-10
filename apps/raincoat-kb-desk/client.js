@@ -8,7 +8,7 @@ window.__ModuleLoader__.load({
     const useRefLoose = React.useRef || ((initial) => ({ current: initial }))
 
     const API = '/kb-desk/api'
-    const BUILD = '20261110-1135-kbdesk'
+    const BUILD = '20261110-1340-kbdesk'
     const TABS = [
       { id: 'ingest', label: '摄入' },
       { id: 'health', label: '健康' },
@@ -133,10 +133,11 @@ window.__ModuleLoader__.load({
       }, children)
     }
 
-    function Pill({ children, tone = 'idle', onClick, active }) {
+    function Pill({ children, tone = 'idle', onClick, active, title }) {
       return h(onClick ? 'button' : 'span', {
         className: `kbd-pill kbd-pill-${tone}${active ? ' is-active' : ''}`,
         onClick,
+        title,
         type: onClick ? 'button' : undefined,
       }, children)
     }
@@ -151,6 +152,13 @@ window.__ModuleLoader__.load({
 
     function Empty({ children }) {
       return h('div', { className: 'kbd-empty' }, children)
+    }
+
+    // 提示条默认按错误展示：只有明确命中成功文案、且没带失败字样才算成功。
+    function noticeKind(text, okPattern) {
+      if (!text) return 'error'
+      if (/没成功|失败|出错|不可用|拒绝|超时/.test(text)) return 'error'
+      return okPattern.test(text) ? 'ok' : 'error'
     }
 
     function Notice({ kind = 'error', children, onClose }) {
@@ -213,6 +221,9 @@ window.__ModuleLoader__.load({
       const [openJob, setOpenJob] = useState(null)
       const [diagnoseJob, setDiagnoseJob] = useState(null)
       const [mechanism, setMechanism] = useState(false)
+      const [retrying, setRetrying] = useState(false)
+      const [applyingAll, setApplyingAll] = useState(false)
+      const [confirmAll, setConfirmAll] = useState(false)
       const alive = useRefLoose(true)
 
       const loadTriage = useCallback(async () => {
@@ -380,6 +391,25 @@ window.__ModuleLoader__.load({
         return rows
       })()
       const automation = boot?.automation || {}
+      const watcher = boot?.triage?.watcher || {}
+      const pendingProposals = triageJobs.filter((job) => job.status === 'proposal')
+      // 行的读法：状态 → 动作 → 唯一真实选择（写入方式）→ 上一轮干了什么。
+      const writeHint = automation.autoApply === false
+        ? pendingProposals.length ? `${pendingProposals.length} 条提案等你确认` : '提案会停在待确认'
+        : '模型出完提案直接落盘'
+      const automationHint = (() => {
+        if (automation.autoIngest === false) return '新文件会留在 Inbox，同步与推送照常'
+        if (watcher.ticking) return '正在跑一轮…'
+        if (watcher.lastError) return `上轮出错：${watcher.lastError}`
+        if (!watcher.lastRunAt) return '等第一轮…'
+        const report = watcher.lastReport || {}
+        const bits = []
+        if (report.pulled) bits.push(`拉取 ${report.pulled}`)
+        if (report.enqueued) bits.push(`整理 ${report.enqueued}`)
+        if (report.applied) bits.push(`写入 ${report.applied}`)
+        if (report.pushed) bits.push('已推送')
+        return `上次 ${ago(watcher.lastRunAt)}${bits.length ? `：${bits.join('，')}` : '：没有新内容'}`
+      })()
       const saveAutomation = async (patch) => {
         try {
           await api('/settings', { method: 'POST', body: patch })
@@ -389,26 +419,81 @@ window.__ModuleLoader__.load({
         }
       }
 
-      const runNow = async () => {
+      /**
+       * 「先给我确认」模式下提案会排队等人。「全部写入」是两步：
+       * 第一次点只把按钮变成确认态，再点一次才真写，避免误触批量落盘。
+       */
+      const applyAll = async () => {
+        const pending = triageJobs.filter((job) => job.status === 'proposal')
+        if (!pending.length || applyingAll) return
+        if (!confirmAll) {
+          setConfirmAll(true)
+          return
+        }
+        setConfirmAll(false)
+        setApplyingAll(true)
         try {
-          await api('/auto/run', { method: 'POST' })
-          await Promise.all([loadTriage(), loadInbox(), load(status)])
-          setNotice('已经跑了一轮：拉取 → 排队 → 写入 → 推送')
+          const failed = []
+          for (const job of pending) {
+            try {
+              await api('/triage/apply', { method: 'POST', body: { id: job.id } })
+            } catch (error) {
+              failed.push(error.message)
+            }
+          }
+          const ok = pending.length - failed.length
+          if (!ok) {
+            setNotice(`一条都没写成功：${failed[0] || '未知原因'}`)
+          } else {
+            const commit = await api('/triage/commit', { method: 'POST', body: { message: `kb: 批量写入 ${ok} 条提案` } })
+            setNotice(failed.length
+              ? `已写入 ${ok} 条，${failed.length} 条没成功：${failed[0]}`
+              : commit.ok ? `已写入 ${ok} 条并推送` : `已写入 ${ok} 条，推送没成功：${commit.message || '未知原因'}`)
+          }
+          await Promise.all([loadTriage(), loadInbox()])
+          refreshBoot?.()
         } catch (error) {
           setNotice(error.message)
+        } finally {
+          setApplyingAll(false)
+        }
+      }
+
+      /**
+       * 重试失败任务。不传 ids 时由宿主把远端当前所有 failed 重新排队，
+       * 不受前端只加载了最近 40 条的限制；逐条重试，部分失败如实报出来。
+       */
+      const retryFailed = async (ids) => {
+        if (retrying) return
+        setRetrying(true)
+        try {
+          const payload = await api('/ingest/retry', { method: 'POST', body: ids ? { ids } : {} })
+          const ok = payload.retried?.length || 0
+          const bad = payload.failed || []
+          if (!payload.total) setNotice('远端现在没有失败任务')
+          else if (bad.length) setNotice(`已重新排队 ${ok} 条，${bad.length} 条没成功：${bad[0].error}`)
+          else setNotice(`已重新排队 ${ok} 条，worker 一分钟内会来领`)
+          setSelected(null)
+          await load('failed')
+          loadInbox()
+          refreshBoot?.()
+        } catch (error) {
+          setNotice(error.message)
+        } finally {
+          setRetrying(false)
         }
       }
 
       const statCards = [
         { title: '排队中', value: stats?.queued ?? '—', hint: stats?.oldestQueuedAt ? `最早已等 ${duration(Date.now() - stats.oldestQueuedAt)}` : '队列是空的', tone: stats?.queued ? 'warn' : null },
         { title: '处理中', value: stats?.claimed ?? '—', hint: 'worker 已领取' },
-        { title: '已完成', value: stats?.done ?? '—', hint: '累计写入 vault' },
-        { title: '失败', value: stats?.failed ?? '—', hint: stats?.failed ? '看失败页的原因' : '没有失败', tone: stats?.failed ? 'error' : null },
+        { title: '已完成', value: (stats?.done || 0) + (stats?.archived?.done || 0), hint: stats?.archived?.done ? `含历史归档 ${stats.archived.done}` : '累计写入 vault' },
+        { title: '失败', value: (stats?.failed || 0) + (stats?.archived?.failed || 0), hint: stats?.archived?.failed ? `含历史归档 ${stats.archived.failed}` : '没有失败', tone: (stats?.failed || 0) + (stats?.archived?.failed || 0) ? 'error' : null },
         { title: 'Inbox 待整理', value: inbox.length || (boot?.vault?.inboxCount ?? 0), hint: inbox.length ? '等 triage' : '已经清空', tone: inbox.length > 5 ? 'warn' : null },
       ]
 
       return h('div', { className: 'kbd-tab' }, [
-        notice ? h(Notice, { key: 'n', kind: /已提交|去重/.test(notice) ? 'ok' : 'error', onClose: () => setNotice(null) }, notice) : null,
+        notice ? h(Notice, { key: 'n', kind: noticeKind(notice, /已提交|去重|已重新排队|已经跑了一轮/), onClose: () => setNotice(null) }, notice) : null,
         h('div', { className: 'kbd-cards', key: 'cards' }, statCards.map((card, index) => h(Card, { key: index, ...card }))),
 
         h('div', { className: 'kbd-submit', key: 'submit' }, [
@@ -428,14 +513,15 @@ window.__ModuleLoader__.load({
         ]),
 
         h('div', { key: 'auto', className: 'kbd-auto' }, [
-          h('span', { key: 'l', className: 'kbd-small kbd-muted' }, '自动闭环'),
-          h(Pill, { key: 'i', tone: 'idle', active: Boolean(automation.autoIngest), onClick: () => saveAutomation({ autoIngest: !automation.autoIngest }) }, '整理新摄入'),
-          h(Pill, { key: 'a', tone: 'idle', active: Boolean(automation.autoApply), onClick: () => saveAutomation({ autoApply: !automation.autoApply }) }, '自动写入'),
-          h(Pill, { key: 'p', tone: 'idle', active: Boolean(automation.autoPush), onClick: () => saveAutomation({ autoPush: !automation.autoPush }) }, '自动推送'),
-          h(Btn, { key: 'r', size: 'sm', onClick: runNow }, '立刻跑一轮'),
+          h(Pill, { key: 'state', tone: automation.autoIngest === false ? 'warn' : 'success' }, automation.autoIngest === false ? '已暂停' : '自动处理中'),
           automation.autoIngest === false
-            ? h('span', { key: 'w', className: 'kbd-small kbd-warn-text' }, '自动摄入已关闭，Inbox 会堆积')
-            : h('span', { key: 'hint', className: 'kbd-small kbd-muted' }, `每 ${automation.watchSeconds || 60} 秒跑一轮`),
+            ? h(Btn, { key: 'resume', size: 'sm', kind: 'primary', onClick: () => saveAutomation({ autoIngest: true }) }, '继续')
+            : h(Btn, { key: 'pause', size: 'sm', onClick: () => saveAutomation({ autoIngest: false }) }, '暂停'),
+          h('span', { key: 'wl', className: 'kbd-small kbd-muted' }, '写入方式'),
+          h(Pill, { key: 'w-auto', active: automation.autoApply !== false, onClick: () => saveAutomation({ autoApply: true }) }, '直接写入'),
+          h(Pill, { key: 'w-ask', active: automation.autoApply === false, onClick: () => saveAutomation({ autoApply: false }) }, '先给我确认'),
+          h('span', { key: 'wh', className: `kbd-small ${automation.autoApply === false ? 'kbd-warn-text' : 'kbd-muted'}` }, writeHint),
+          h('span', { key: 'hint', className: `kbd-small ${watcher.lastError ? 'kbd-warn-text' : 'kbd-muted'}` }, automationHint),
         ]),
 
         h('div', { className: 'kbd-split', key: 'split' }, [
@@ -450,7 +536,12 @@ window.__ModuleLoader__.load({
                   onClick: () => setStatus(id),
                 }, count === undefined ? meta.label : `${meta.label} ${count}`)
               })),
-              h('span', { className: 'kbd-muted kbd-small', key: 'c' }, `${jobs.length} 条`),
+              h('div', { key: 'side', className: 'kbd-pane-side' }, [
+                status === 'failed' && jobs.length
+                  ? h(Btn, { key: 'retry', size: 'sm', kind: 'primary', disabled: retrying, onClick: () => retryFailed() }, retrying ? '重试中…' : '全部重试')
+                  : null,
+                h('span', { key: 'c', className: 'kbd-muted kbd-small' }, `${jobs.length} 条`),
+              ]),
             ]),
             h('div', { className: 'kbd-list', key: 'l' }, jobs.length
               ? jobs.map((job) => h('button', {
@@ -464,6 +555,7 @@ window.__ModuleLoader__.load({
                   h('span', { key: 't', className: 'kbd-row-title' }, job.title || job.url),
                   h('span', { key: 'u', className: 'kbd-row-sub' }, `${job.client || 'unknown'} · ${ago(job.createdAt)}${job.attempts ? ` · 第 ${job.attempts} 次` : ''}`),
                 ]),
+                job.archived ? h(Pill, { key: 'a', tone: 'idle' }, '历史') : null,
                 job.duplicate ? h(Pill, { key: 'd', tone: 'idle' }, '重复') : null,
               ]))
               : h(Empty, { key: 'e' }, status === 'queued' ? '队列空了。粘一个链接试试。' : '这一栏暂时没有任务。')),
@@ -495,7 +587,10 @@ window.__ModuleLoader__.load({
                   h('div', { key: 't', className: 'kbd-error-title' }, selected.error ? '失败原因' : '远端没留错误文本'),
                   h('div', { key: 'm' }, selected.error || '点「排查原因」，把本机 vault、阶段记录和源站一起对一遍。'),
                 ]),
-                h(Btn, { key: 'd', kind: 'primary', onClick: () => setDiagnoseJob(selected) }, '排查原因'),
+                h('div', { key: 'acts', className: 'kbd-fail-actions' }, [
+                  h(Btn, { key: 'd', kind: 'primary', onClick: () => setDiagnoseJob(selected) }, '排查原因'),
+                  h(Btn, { key: 'r', disabled: retrying, onClick: () => retryFailed([selected.id]) }, retrying ? '重试中…' : '重试这条'),
+                ]),
               ]) : null,
 
               selected.vaultPath ? h('div', { key: 'vp', className: 'kbd-line' }, [
@@ -549,6 +644,15 @@ window.__ModuleLoader__.load({
             h('span', { key: 'c', className: 'kbd-muted kbd-small' }, '这些是落盘了但还没 triage 的原文'),
             inbox.length
               ? h(Btn, { key: 'all', size: 'sm', onClick: () => enqueueTriage(inbox.filter((doc) => !triageJobs.some((job) => job.path === doc.path && (job.status === 'queued' || job.status === 'running' || job.status === 'proposal')))) }, '全部整理')
+              : null,
+            pendingProposals.length
+              ? h(Btn, {
+                key: 'aw',
+                size: 'sm',
+                kind: confirmAll ? 'primary' : 'ghost',
+                disabled: applyingAll,
+                onClick: applyAll,
+              }, applyingAll ? '写入中…' : confirmAll ? `再点一次，写入 ${pendingProposals.length} 条` : `全部写入 ${pendingProposals.length} 条提案`)
               : null,
           ]),
           inbox.length
@@ -649,7 +753,11 @@ window.__ModuleLoader__.load({
             ]),
             h('div', { key: 'c', className: 'kbd-mech-note' }, [
               h('strong', { key: 's' }, '人工关卡 '),
-              '关掉「自动写入」，提案会停在待确认，弹窗里看过再点确认；关掉「自动推送」，写盘和推送分开走。',
+              '「写入方式」选「先给我确认」，提案会停在待确认：逐条打开弹窗确认，或在 Inbox 区点「全部写入」批量落盘。选「直接写入」则由模型出完提案就落盘。',
+            ]),
+            h('div', { key: 'd', className: 'kbd-mech-note' }, [
+              h('strong', { key: 's' }, '暂停 '),
+              '「暂停」只停「整理新摄入」这一步，git 拉取和推送照常跑；顶栏的「落后 origin N」点一下可以立刻同步一轮。',
             ]),
           ]),
           h('div', { key: 'f', className: 'kbd-modal-foot' }, [
@@ -1614,12 +1722,22 @@ window.__ModuleLoader__.load({
         }
       }, [])
 
-      const pull = useCallback(async () => {
+      // 顶栏「落后 origin N」就是手动同步入口：拉取、整理、推送跑一轮，别的不做。
+      const syncNow = useCallback(async () => {
         setPulling(true)
         setPullNote(null)
         try {
-          const result = await api('/vault/pull', { method: 'POST' })
-          setPullNote(result.message || (result.ok ? '已拉取' : '拉取失败'))
+          const payload = await api('/auto/run', { method: 'POST' })
+          const watcher = payload?.watcher || {}
+          const report = watcher.lastReport || {}
+          const bits = []
+          if (report.pulled) bits.push(`拉取 ${report.pulled}`)
+          if (report.enqueued) bits.push(`整理 ${report.enqueued}`)
+          if (report.applied) bits.push(`写入 ${report.applied}`)
+          if (report.pushed) bits.push('已推送')
+          setPullNote(watcher.lastError
+            ? `同步出错：${watcher.lastError}`
+            : bits.length ? `已同步：${bits.join('，')}` : '已同步：没有新内容')
           await refreshBoot()
         } catch (err) {
           setPullNote(err.message)
@@ -1650,7 +1768,7 @@ window.__ModuleLoader__.load({
             }, item.label))),
           h('div', { key: 'right', className: 'kbd-top-right' }, [
             boot?.vault?.git?.behind > 0
-              ? h(Pill, { key: 'g', tone: 'warn', onClick: pulling ? undefined : pull }, pulling ? '拉取中…' : `落后 origin ${boot.vault.git.behind}`)
+              ? h(Pill, { key: 'g', tone: 'warn', title: '点一下：现在同步（拉取 + 处理一轮）', onClick: pulling ? undefined : syncNow }, pulling ? '同步中…' : `落后 origin ${boot.vault.git.behind}`)
               : null,
             boot && !boot.ingest?.ok ? h(Pill, { key: 'i', tone: 'warn' }, '摄入服务离线') : null,
             boot?.vault && !boot.vault.exists ? h(Pill, { key: 'v', tone: 'error' }, 'vault 路径不存在') : null,
@@ -1723,6 +1841,7 @@ button.kbd-pill:hover{border-color:var(--dsw-alias-border-l2);color:var(--dsw-al
 .kbd-split-wide{grid-template-columns:minmax(280px,0.7fr) minmax(420px,1.3fr)}
 .kbd-pane{background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l1);border-radius:12px;display:flex;flex-direction:column;min-height:0;overflow:hidden}
 .kbd-pane-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border-bottom:1px solid var(--dsw-alias-border-l1)}
+.kbd-pane-side{display:flex;align-items:center;gap:8px;flex:0 0 auto}
 .kbd-pane-head h3{margin:0;font-size:12.5px;font-weight:640}
 .kbd-pills{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .kbd-list{overflow:auto;flex:1;padding:6px}
@@ -1771,6 +1890,7 @@ button.kbd-pill:hover{border-color:var(--dsw-alias-border-l2);color:var(--dsw-al
 .kbd-triage-busy{display:flex;align-items:center;gap:10px;padding:18px 2px}
 .kbd-modal-wide{width:min(760px,92vw)}
 .kbd-fail{display:flex;align-items:flex-start;gap:10px}
+.kbd-fail-actions{display:flex;flex-direction:column;gap:8px;flex:0 0 auto}
 .kbd-fail .kbd-error-box{flex:1;min-width:0}
 .kbd-diag-collect{display:flex;align-items:center;gap:10px;padding:18px 2px;font-size:12.5px;color:var(--dsw-alias-label-secondary)}
 .kbd-diag-context{display:flex;flex-direction:column;gap:10px;padding:2px 0}

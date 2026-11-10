@@ -141,13 +141,33 @@ export function registerHttp(ctx) {
     }
 
     if (path === '/ingest/stats' && method === 'GET') {
-      return json(res, 200, { stats: await services.ingest.stats() })
+      const stats = await services.ingest.stats()
+      const archived = { done: 0, failed: 0 }
+      try {
+        const history = await services.ingest.history()
+        archived.done = history.filter((job) => job.status === 'done').length
+        archived.failed = history.filter((job) => job.status === 'failed').length
+      } catch {
+        // 历史归档读不到就只报实时队列
+      }
+      return json(res, 200, { stats: { ...stats, archived } })
     }
 
     if (path === '/ingest/jobs' && method === 'GET') {
       const status = query(url, 'status', 'queued')
-      const limit = Math.min(Number(query(url, 'limit', 20)) || 20, 50)
-      return json(res, 200, await services.ingest.jobs(status, limit))
+      const limit = Math.min(Number(query(url, 'limit', 20)) || 20, 120)
+      const live = await services.ingest.jobs(status, limit)
+      let archived = []
+      try {
+        archived = (await services.ingest.history()).filter((job) => job.status === status)
+      } catch {
+        archived = []
+      }
+      const seen = new Set(live.jobs.map((job) => job.id))
+      const merged = [...live.jobs, ...archived.filter((job) => !seen.has(job.id))]
+        .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+        .slice(0, limit)
+      return json(res, 200, { status, count: merged.length, jobs: merged, live: live.jobs.length, archived: archived.length })
     }
 
     if (path === '/ingest/runs' && method === 'GET') {
@@ -204,6 +224,16 @@ export function registerHttp(ctx) {
         if (!res.writableEnded) res.end()
       }
       return undefined
+    }
+
+    if (path === '/ingest/retry' && method === 'POST') {
+      const body = await readJson(req)
+      const ids = Array.isArray(body.ids) ? body.ids.slice(0, 100) : []
+      try {
+        return json(res, 200, await services.ingest.retry(ids))
+      } catch (err) {
+        return json(res, err.status || 502, { error: err.message || '重试失败' })
+      }
     }
 
     if (path === '/ingest/submit' && method === 'POST') {

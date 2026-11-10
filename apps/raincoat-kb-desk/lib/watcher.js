@@ -24,10 +24,6 @@ export function watcherState() {
 async function tick(ctx) {
   if (ticking) return
   const settings = readSettings()
-  if (!settings.autoIngest) {
-    lastReport = { skipped: '自动摄入已关闭' }
-    return
-  }
   ticking = true
   await triageReady()
   const report = { pulled: 0, enqueued: 0, applied: 0, pushed: false, notes: [] }
@@ -46,13 +42,17 @@ async function tick(ctx) {
       }
     }
 
-    // 2) Inbox 里没进过队列的文件直接排队
-    const docs = await listInbox(root)
-    const known = new Set(listJobs().filter((job) => OPEN.has(job.status)).map((job) => job.path))
-    const fresh = docs.filter((doc) => !known.has(doc.path))
-    if (fresh.length) {
-      const queued = await enqueue(ctx, root, fresh)
-      report.enqueued = queued.length
+    // 2) Inbox 里没进过队列的文件直接排队（「自动处理」暂停时不做这一步）
+    if (settings.autoIngest) {
+      const docs = await listInbox(root)
+      const known = new Set(listJobs().filter((job) => OPEN.has(job.status)).map((job) => job.path))
+      const fresh = docs.filter((doc) => !known.has(doc.path))
+      if (fresh.length) {
+        const queued = await enqueue(ctx, root, fresh)
+        report.enqueued = queued.length
+      }
+    } else {
+      report.notes.push('自动处理已暂停，只同步不整理')
     }
 
     // 3) 提案好了就写盘（人工关卡在这里绕过，可在设置里关掉）
