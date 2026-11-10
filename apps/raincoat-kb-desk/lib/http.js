@@ -1,0 +1,448 @@
+// /kb-desk/api 路由。所有响应都是 JSON（聊天走 SSE），错误统一 {error}。
+import { existsSync } from 'node:fs'
+import { callModel, LEARN_SYSTEM, learnUserPrompt, modelInfo, parseJsonLoose, TOPIC_SYSTEM, topicsUserPrompt } from './ai.js'
+import { readCredentials, readSettings, vaultRoot, writeSettings } from './config.js'
+import { fetchArticle } from './learn.js'
+import { diagnoseFailure, gatherFailure } from './diagnose.js'
+import { createIngest } from './ingest.js'
+import { applyTriage, gitCommitAndPush, proposeTriage } from './triage.js'
+import { activeCount, apply as applyQueued, dismiss as dismissQueued, enqueue, getJob, listJobs, ready as triageReady } from './triage-queue.js'
+import { runWatcherNow, watcherState } from './watcher.js'
+import {
+  gitOverview,
+  healthCheck,
+  listInbox,
+  pullVault,
+  readDoc,
+  recentDocs,
+  searchVault,
+  writeDraft,
+  writeHealthReport,
+  writeInboxDoc,
+} from './vault.js'
+
+const PREFIX = '/kb-desk/api'
+
+function json(res, status, body) {
+  if (res.headersSent) return res.end()
+  const payload = JSON.stringify(body)
+  res.writeHead(status, {
+    'content-type': 'application/json; charset=utf-8',
+    'cache-control': 'no-store',
+    'content-length': Buffer.byteLength(payload),
+  })
+  res.end(payload)
+}
+
+function readJson(req) {
+  return new Promise((done) => {
+    let raw = ''
+    req.on('data', (chunk) => {
+      raw += chunk
+      if (raw.length > 2_000_000) req.destroy()
+    })
+    req.on('end', () => {
+      try {
+        done(raw ? JSON.parse(raw) : {})
+      } catch {
+        done({})
+      }
+    })
+    req.on('error', () => done({}))
+  })
+}
+
+function query(url, key, fallback = null) {
+  const value = url.searchParams.get(key)
+  return value === null ? fallback : value
+}
+
+export function registerHttp(ctx) {
+  const ingest = createIngest()
+
+  return ctx.webServer.register({
+    kind: 'prefix',
+    path: PREFIX,
+    handler: async (req, res) => {
+      const connection = ctx.get('connection') ?? ctx.connection
+      if (typeof connection?.requestRejection !== 'function') {
+        return json(res, 503, { error: 'DSH 请求保护不可用，知识库接口已关闭' })
+      }
+      const rejection = connection.requestRejection({ headers: req.headers })
+      if (rejection === 401 || rejection === 403) {
+        return json(res, rejection, { error: '未授权：请在 DSH 里打开这个页面' })
+      }
+      try {
+        await route(ctx, { ingest }, req, res)
+      } catch (error) {
+        json(res, error?.status || 500, { error: error?.message || String(error) })
+      }
+    },
+  })
+
+  async function route(ctx, services, req, res) {
+    const url = new URL(req.url || '/', 'http://localhost')
+    const path = url.pathname.replace(/^\/kb-desk\/api/, '') || '/'
+    const settings = readSettings()
+    const root = vaultRoot(settings)
+    const method = req.method || 'GET'
+
+    if (path === '/bootstrap' && method === 'GET') {
+      const cred = readCredentials(settings)
+      let stats = null
+      let ingestError = null
+      try {
+        stats = await services.ingest.stats()
+      } catch (error) {
+        ingestError = error?.message || String(error)
+      }
+      let inbox = []
+      try {
+        inbox = await listInbox(root)
+      } catch {
+        inbox = []
+      }
+      let git = null
+      try {
+        git = await gitOverview(root)
+      } catch {
+        git = null
+      }
+      return json(res, 200, {
+        vault: { path: root, exists: existsSync(root), inboxCount: inbox.length, git },
+        settings: { vault: settings.vault, apiBase: settings.apiBase, credentialsFile: settings.credentialsFile },
+        credentials: { ingestToken: Boolean(cred.ingestToken), workerToken: Boolean(cred.workerToken), file: cred.source },
+        ingest: { ok: !ingestError, error: ingestError, stats },
+        triage: { active: activeCount(), jobs: listJobs().slice(0, 20), watcher: watcherState() },
+        automation: {
+          autoIngest: settings.autoIngest,
+          autoApply: settings.autoApply,
+          autoPush: settings.autoPush,
+          watchSeconds: settings.watchSeconds,
+        },
+        model: modelInfo(ctx),
+      })
+    }
+
+    if (path === '/settings' && method === 'POST') {
+      const body = await readJson(req)
+      const next = writeSettings({
+        vault: body.vault,
+        apiBase: body.apiBase,
+        autoIngest: typeof body.autoIngest === 'boolean' ? body.autoIngest : undefined,
+        autoApply: typeof body.autoApply === 'boolean' ? body.autoApply : undefined,
+        autoPush: typeof body.autoPush === 'boolean' ? body.autoPush : undefined,
+        watchSeconds: body.watchSeconds == null ? undefined : Number(body.watchSeconds),
+      })
+      return json(res, 200, {
+        settings: { vault: next.vault, apiBase: next.apiBase },
+        automation: { autoIngest: next.autoIngest, autoApply: next.autoApply, autoPush: next.autoPush, watchSeconds: next.watchSeconds },
+      })
+    }
+
+    if (path === '/ingest/stats' && method === 'GET') {
+      return json(res, 200, { stats: await services.ingest.stats() })
+    }
+
+    if (path === '/ingest/jobs' && method === 'GET') {
+      const status = query(url, 'status', 'queued')
+      const limit = Math.min(Number(query(url, 'limit', 20)) || 20, 50)
+      return json(res, 200, await services.ingest.jobs(status, limit))
+    }
+
+    if (path === '/ingest/runs' && method === 'GET') {
+      return json(res, 200, { runs: await services.ingest.runs(Math.min(Number(query(url, 'limit', 12)) || 12, 40)) })
+    }
+
+    if (path === '/ingest/run' && method === 'GET') {
+      const jobId = query(url, 'jobId')
+      if (!jobId) return json(res, 400, { error: '缺少 jobId' })
+      return json(res, 200, await services.ingest.run(jobId))
+    }
+
+    // 失败任务排查：先把本机证据收齐（SSE 的 context 事件），再流式给模型结论（delta）。
+    if (path === '/ingest/diagnose' && method === 'POST') {
+      const body = await readJson(req)
+      const jobId = String(body.jobId || body.job?.id || '').trim()
+      if (!jobId) return json(res, 400, { error: '缺少 jobId' })
+      const note = String(body.note || '').slice(0, 1200)
+      const controller = new AbortController()
+      let finished = false
+      res.on('close', () => {
+        if (!finished) controller.abort()
+      })
+      res.writeHead(200, {
+        'content-type': 'text/event-stream; charset=utf-8',
+        'cache-control': 'no-store',
+        connection: 'keep-alive',
+      })
+      const send = (event, data) => {
+        if (!res.writableEnded) res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
+      }
+      try {
+        const gathered = await gatherFailure({
+          ingest: services.ingest,
+          root,
+          job: body.job,
+          jobId,
+          note,
+          probe: body.probe !== false,
+        })
+        send('context', gathered.context)
+        if (!controller.signal.aborted) {
+          const result = await diagnoseFailure(ctx, {
+            evidence: gathered.evidence,
+            signal: controller.signal,
+            onText: (text) => send('delta', { text }),
+          })
+          send('done', { text: result.text, model: result.model })
+        }
+      } catch (error) {
+        send('error', { message: error?.message || String(error) })
+      } finally {
+        finished = true
+        if (!res.writableEnded) res.end()
+      }
+      return undefined
+    }
+
+    if (path === '/ingest/submit' && method === 'POST') {
+      const body = await readJson(req)
+      const target = String(body.url || '').trim()
+      if (!/^https?:\/\//i.test(target)) return json(res, 400, { error: '请填 http(s) 链接' })
+      const result = await services.ingest.submit({ url: target, title: body.title, note: body.note })
+      return json(res, 200, result)
+    }
+
+    if (path === '/vault/inbox' && method === 'GET') {
+      return json(res, 200, { docs: await listInbox(root) })
+    }
+
+    if (path === '/vault/doc' && method === 'GET') {
+      const rel = query(url, 'path')
+      if (!rel) return json(res, 400, { error: '缺少 path' })
+      const doc = await readDoc(root, rel)
+      return json(res, 200, doc)
+    }
+
+    if (path === '/vault/recent' && method === 'GET') {
+      const days = Math.min(Number(query(url, 'days', 30)) || 30, 365)
+      const limit = Math.min(Number(query(url, 'limit', 40)) || 40, 100)
+      return json(res, 200, { docs: await recentDocs(root, { days, limit, material: true }) })
+    }
+
+    if (path === '/triage/propose' && method === 'POST') {
+      const body = await readJson(req)
+      const inboxPath = String(body.path || '').trim()
+      if (!inboxPath) return json(res, 400, { error: '缺少 Inbox 文件路径' })
+      try {
+        return json(res, 200, await proposeTriage(ctx, root, inboxPath))
+      } catch (err) {
+        return json(res, err.status || 502, { error: err.message || '整理提案失败' })
+      }
+    }
+
+    if (path === '/triage/enqueue' && method === 'POST') {
+      const body = await readJson(req)
+      const entries = Array.isArray(body.paths) ? body.paths : body.path ? [{ path: body.path, title: body.title }] : []
+      if (!entries.length) return json(res, 400, { error: '缺少要整理的文件' })
+      try {
+        const queued = await enqueue(ctx, root, entries)
+        return json(res, 200, { jobs: queued, active: activeCount() })
+      } catch (err) {
+        return json(res, err.status || 500, { error: err.message || '入队失败' })
+      }
+    }
+
+    if (path === '/triage/jobs' && method === 'GET') {
+      await triageReady()
+      return json(res, 200, { jobs: listJobs(), active: activeCount() })
+    }
+
+    if (path === '/triage/job' && method === 'GET') {
+      const id = query(url, 'id', '')
+      const job = id ? getJob(id) : null
+      if (!job) return json(res, 404, { error: '找不到这个整理任务' })
+      return json(res, 200, job)
+    }
+
+    if (path === '/triage/dismiss' && method === 'POST') {
+      const body = await readJson(req)
+      await dismissQueued(String(body.id || ''))
+      return json(res, 200, { ok: true, active: activeCount() })
+    }
+
+    if (path === '/triage/apply' && method === 'POST') {
+      const body = await readJson(req)
+      if (body.id) {
+        try {
+          const result = await applyQueued(String(body.id), ctx, root)
+          return json(res, 200, result)
+        } catch (err) {
+          return json(res, err.status || 500, { error: err.message || '写入失败' })
+        }
+      }
+      const proposal = body.proposal
+      if (!proposal || typeof proposal !== 'object') return json(res, 400, { error: '缺少提案' })
+      proposal.inboxPath = proposal.inboxPath || body.path || ''
+      if (!proposal.inboxPath) return json(res, 400, { error: '缺少 Inbox 文件路径' })
+      try {
+        return json(res, 200, await applyTriage(ctx, root, proposal))
+      } catch (err) {
+        return json(res, err.status || 500, { error: err.message || '写入失败' })
+      }
+    }
+
+    if (path === '/triage/commit' && method === 'POST') {
+      const body = await readJson(req)
+      try {
+        return json(res, 200, await gitCommitAndPush(root, String(body.message || '').trim()))
+      } catch (err) {
+        return json(res, 500, { error: err.message || 'git 操作失败' })
+      }
+    }
+
+    if (path === '/auto/run' && method === 'POST') {
+      await runWatcherNow(ctx)
+      return json(res, 200, { ok: true, watcher: watcherState() })
+    }
+
+    if (path === '/vault/git' && method === 'GET') {
+      const fetched = url.includes('fetch=1')
+      return json(res, 200, await gitOverview(root, { fetch: fetched }))
+    }
+
+    if (path === '/vault/pull' && method === 'POST') {
+      return json(res, 200, await pullVault(root))
+    }
+
+    if (path === '/health' && method === 'GET') {
+      const result = await healthCheck(root, settings, services.ingest)
+      let report = null
+      if (query(url, 'save') === '1') report = await writeHealthReport(root, result)
+      return json(res, 200, { ...result, report })
+    }
+
+    if (path === '/health/report' && method === 'POST') {
+      const result = await healthCheck(root, settings, services.ingest)
+      const report = await writeHealthReport(root, result)
+      return json(res, 200, { report, counts: result.counts })
+    }
+
+    if (path === '/learn/article' && method === 'GET') {
+      const target = query(url, 'url')
+      if (!target) return json(res, 400, { error: '缺少 url' })
+      return json(res, 200, await fetchArticle(target))
+    }
+
+    if (path === '/learn/chat' && method === 'POST') {
+      const body = await readJson(req)
+      const message = String(body.message || '').trim()
+      if (!message) return json(res, 400, { error: '说点什么再发' })
+      const article = {
+        title: body.article?.title || '未命名文章',
+        url: body.article?.url || '',
+        paragraphs: Array.isArray(body.article?.paragraphs) ? body.article.paragraphs : [],
+      }
+      let related = []
+      if (body.useVault !== false) {
+        try {
+          related = await searchVault(root, `${message} ${article.title}`, 4)
+        } catch {
+          related = []
+        }
+      }
+      res.writeHead(200, {
+        'content-type': 'text/event-stream; charset=utf-8',
+        'cache-control': 'no-store',
+        connection: 'keep-alive',
+      })
+      const send = (event, data) => {
+        res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
+      }
+      try {
+        const result = await callModel(ctx, {
+          system: LEARN_SYSTEM,
+          messages: [{ role: 'user', content: learnUserPrompt({ article, related, history: body.history || [], message }) }],
+          maxTokens: 1600,
+          onText: (delta) => send('delta', { text: delta }),
+        })
+        send('related', { items: related.map((item) => ({ path: item.path, title: item.title })) })
+        send('done', { text: result.text, model: result.model })
+      } catch (error) {
+        send('error', { message: error?.message || String(error) })
+      }
+      res.end()
+      return undefined
+    }
+
+    if (path === '/learn/save' && method === 'POST') {
+      const body = await readJson(req)
+      const title = String(body.title || '').trim()
+      if (!title) return json(res, 400, { error: '缺少标题' })
+      const doc = await writeInboxDoc(root, {
+        title,
+        url: body.url || '',
+        source: body.url ? 'learning:web' : 'learning',
+        body: String(body.body || ''),
+        tags: Array.isArray(body.tags) ? body.tags : ['学习笔记'],
+        author: body.author || '',
+        publishedAt: body.publishedAt || '',
+      })
+      return json(res, 200, doc)
+    }
+
+    if (path === '/create/recent' && method === 'GET') {
+      const days = Math.min(Number(query(url, 'days', 30)) || 30, 365)
+      const limit = Math.min(Number(query(url, 'limit', 60)) || 60, 200)
+      const material = query(url, 'material') !== '0'
+      return json(res, 200, { docs: await recentDocs(root, { days, limit, material }) })
+    }
+
+    if (path === '/create/topics' && method === 'POST') {
+      const body = await readJson(req)
+      const days = Math.min(Number(body.days) || 30, 365)
+      const picked = []
+      if (Array.isArray(body.paths) && body.paths.length) {
+        for (const rel of body.paths.slice(0, 12)) {
+          try {
+            const doc = await readDoc(root, rel)
+            picked.push({ title: doc.title, path: doc.path, space: doc.frontmatter?.space || null, type: doc.frontmatter?.type || null, excerpt: String(doc.body).replace(/\s+/g, ' ').slice(0, 600) })
+          } catch {
+            // 单个文件读不到不影响整体选题
+          }
+        }
+      }
+      const docs = picked.length ? picked : await recentDocs(root, { days, limit: 20, material: true })
+      if (!docs.length) return json(res, 409, { error: '这段时间知识库里没有新内容，换个天数或先摄入几篇' })
+      const result = await callModel(ctx, {
+        system: TOPIC_SYSTEM,
+        messages: [{ role: 'user', content: topicsUserPrompt({ docs, days }) }],
+        maxTokens: 2600,
+      })
+      const topics = parseJsonLoose(result.text)
+      if (!Array.isArray(topics)) {
+        return json(res, 502, { error: '模型没有返回可解析的选题 JSON', raw: String(result.text).slice(0, 800) })
+      }
+      return json(res, 200, {
+        model: result.model,
+        topics: topics.slice(0, 10).map((topic) => ({
+          platform: topic.platform === '小红书' ? '小红书' : '公众号',
+          title: String(topic.title || '').slice(0, 60),
+          hook: String(topic.hook || '').slice(0, 120),
+          angle: String(topic.angle || '').slice(0, 160),
+          outline: Array.isArray(topic.outline) ? topic.outline.map((line) => String(line).slice(0, 200)).slice(0, 6) : [],
+          sources: Array.isArray(topic.sources) ? topic.sources.map((line) => String(line).slice(0, 120)).slice(0, 6) : [],
+        })),
+      })
+    }
+
+    if (path === '/create/draft' && method === 'POST') {
+      const body = await readJson(req)
+      if (!String(body.title || '').trim()) return json(res, 400, { error: '缺少标题' })
+      return json(res, 200, await writeDraft(root, { title: body.title, platform: body.platform, body: String(body.body || '') }))
+    }
+
+    return json(res, 404, { error: '接口不存在' })
+  }
+}

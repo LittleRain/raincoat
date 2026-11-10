@@ -1,0 +1,4 @@
+# raincoat-kb-desk：同一个包提供 host 半片（/kb-desk/api）与浏览器半片（main + 侧栏入口）
+- insert:
+    - id: raincoat-kb-desk
+      name: '@local/raincoat-kb-desk'

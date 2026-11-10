@@ -1,0 +1,37 @@
+{
+  "name": "@local/raincoat-kb-desk",
+  "version": "0.6.0",
+  "private": true,
+  "type": "module",
+  "description": "个人知识库工作台：摄入队列、知识库体检、URL 学习模式与公众号/小红书选题",
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "lib/*.js",
+    "locale/*.json",
+    "icon.svg",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true
+    }
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.mjs"
+  }
+}
