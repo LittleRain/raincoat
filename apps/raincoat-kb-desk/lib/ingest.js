@@ -60,8 +60,10 @@ export function toMillis(value) {
 }
 
 export function normalizeJob(raw) {
-  const created = toMillis(raw.created_at)
   const finished = toMillis(raw.finished_at) ?? toMillis(raw.updated_at)
+  // 历史归档里有些记录来自 worker 日志，只有完成时间，没有 created_at；
+  // 这类记录用 finished_at 兜底，否则会显示成 1970。
+  const created = toMillis(raw.created_at) || finished
   const started = toMillis(raw.claimed_at)
   return {
     id: raw.id,
