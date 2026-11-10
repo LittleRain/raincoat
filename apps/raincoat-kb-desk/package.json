@@ -1,6 +1,6 @@
 {
   "name": "@local/raincoat-kb-desk",
-  "version": "0.8.1",
+  "version": "0.9.0",
   "private": true,
   "type": "module",
   "description": "个人知识库工作台：摄入队列、知识库体检、URL 学习模式与公众号/小红书选题",

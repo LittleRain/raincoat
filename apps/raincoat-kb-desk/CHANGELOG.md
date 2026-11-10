@@ -1,3 +1,8 @@
+## 0.9.0
+
+- 支持双实例：桌面 app 与 `co.dsh.web` 共用 `~/.dsh`，自动闭环只由 `watcherOwner` 指定的实例跑（默认跟随设置），另一套实例跳过；同时用 `watcher.lock`（pid + 120s TTL）兜住并发。
+- `web` profile 也装了本插件，手机入口能看到同一份摄入状态。
+
 ## 0.8.1
 
 - 历史归档里部分记录只有 `finished_at`（来自 worker 日志），`created_at` 兜底成完成时间，避免列表显示 1970。

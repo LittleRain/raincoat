@@ -1,6 +1,8 @@
 // 自动闭环：不再有 Hermes，worker 抓完之后的 pull → 整理 → 写入 → 提交推送由这里接管。
 // 每轮都是幂等的：没新文件就什么都不做，队列里有活就不重复入队。
-import { readSettings } from './config.js'
+import { readFile, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { dataDir, readSettings } from './config.js'
 import { gitCommitAndPush, gitPush } from './triage.js'
 import { activeCount, apply, enqueue, listJobs, ready as triageReady } from './triage-queue.js'
 import { gitOverview, listInbox, pullVault } from './vault.js'
@@ -10,6 +12,27 @@ const WRITE_PATHS = ['00 Inbox', '00 raw', '01 wiki', '02 outputs/health', '02 o
 // applied 不算「在跑」：同一篇被 worker 重新推回 Inbox 时应该再走一遍，
 // 重复写入由 triage 的幂等保护兜住（复用摘要编号、跳过已写段落）。
 const OPEN = new Set(['queued', 'running', 'proposal'])
+const LOCK_TTL = 120_000
+
+/** 两套实例（桌面 app 与 co.dsh.web）共用 ~/.dsh，只允许一个跑自动闭环。 */
+async function acquireLock() {
+  const file = join(dataDir(), 'watcher.lock')
+  try {
+    const raw = JSON.parse(await readFile(file, 'utf8'))
+    if (raw?.pid && raw.pid !== process.pid && Date.now() - (raw.at || 0) < LOCK_TTL) {
+      try {
+        process.kill(raw.pid, 0)
+        return false
+      } catch {
+        // 持锁进程已经没了，接管
+      }
+    }
+  } catch {
+    // 没有锁文件或内容坏了，直接抢
+  }
+  await writeFile(file, JSON.stringify({ pid: process.pid, at: Date.now(), profile: process.env.DSH_PROFILE || null }), 'utf8')
+  return true
+}
 
 let timer = null
 let ticking = false
@@ -24,6 +47,16 @@ export function watcherState() {
 async function tick(ctx) {
   if (ticking) return
   const settings = readSettings()
+  const owner = settings.watcherOwner
+  const profile = process.env.DSH_PROFILE || null
+  if (owner && profile && profile !== owner) {
+    lastReport = { skipped: `自动闭环由 ${owner} 实例负责` }
+    return
+  }
+  if (!(await acquireLock())) {
+    lastReport = { skipped: '另一个实例正在跑自动闭环' }
+    return
+  }
   ticking = true
   await triageReady()
   const report = { pulled: 0, enqueued: 0, applied: 0, pushed: false, notes: [] }
