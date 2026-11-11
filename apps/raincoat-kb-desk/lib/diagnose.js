@@ -21,6 +21,9 @@ export function classifyError(message) {
   const text = String(message || '')
   if (!text.trim()) return { code: 'unknown', label: '远端没有留下错误文本', scope: 'unknown' }
   if (/uncommitted changes/i.test(text)) return { code: 'vault-dirty', label: '本机 vault 有未提交改动，worker 拒绝写入', scope: 'local' }
+  if (/unfinished rebase|rebase-merge exists|rebase-apply exists|unmerged files|not on "?main"?/i.test(text)) {
+    return { code: 'vault-git', label: 'vault 的 git 状态坏了（未完成的 rebase / 合并冲突 / 不在 main）', scope: 'local' }
+  }
   if (/lease expired/i.test(text)) return { code: 'lease-expired', label: 'worker 租约过期（抓取阶段没按时续约）', scope: 'worker' }
   if (/vault sync failed|pull --rebase failed|SSL_ERROR|unable to access|Could not resolve|Connection timed out/i.test(text)) {
     return { code: 'git-sync', label: 'vault 同步（git 拉取/推送）失败', scope: 'local' }
@@ -40,6 +43,7 @@ export function classifyError(message) {
 /** 错误类型 → 给模型的判读参考，避免它对着常见错误瞎猜。 */
 const CLUE_MAP = {
   'vault-dirty': 'worker 写盘前会检查 vault 是否干净；失败说明失败当时有未提交改动。修法是先在 vault 里 commit 或 stash，再重试。',
+  'vault-git': 'vault 停在一次没做完的 rebase（通常是 pull --rebase 撞上冲突没人处理）时，worker 会在写盘前直接拒绝，之后每个任务都会失败。在 worker 那台机器的 vault 里看 git status，把冲突合掉后 git rebase --continue，或 git rebase --abort 退回 rebase 前再重试。',
   'lease-expired': '租约过期说明 worker 领取后没能按时上报进度：抓取慢（大文件/JS 渲染）、worker 掉线、或源站卡住都会这样；重试前先确认 mac-mini 上的 worker 进程与网络。',
   'git-sync': 'git 拉取/推送失败通常是网络或代理问题；远端提示本地 commit 已保留，不要 reset，重新 push 即可。',
   auth: '凭据问题要换 credentials.env 里的 token，重试不会自己好。',

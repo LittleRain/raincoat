@@ -13,6 +13,9 @@ const { buildSignals, biggestGap, classifyError, gatherFailure, isPrivateHost, p
 test('classifyError：把常见失败文本归到具体类型', () => {
   const cases = [
     ['vault has uncommitted changes (87 files); commit or discard them before the worker writes', 'vault-dirty', 'local'],
+    ['vault git is in an unfinished rebase (rebase-merge exists); abort or clean it up before syncing', 'vault-git', 'local'],
+    ['vault git has unmerged files; resolve conflicts before syncing', 'vault-git', 'local'],
+    ['vault git is not on "main" (current: "HEAD"); checkout main before syncing', 'vault-git', 'local'],
     ['lease expired 3 times; giving up', 'lease-expired', 'worker'],
     ["vault sync failed; left commit local (d3e872c): pull --rebase failed; local commits preserved: fatal: unable to access 'https://github.com/LittleRain/rain_knowledge.git/'", 'git-sync', 'local'],
     ['request failed: HTTP 401 unauthorized', 'auth', 'worker'],

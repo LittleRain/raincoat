@@ -1,3 +1,7 @@
+## 0.9.2
+
+- 排查的错误归类补上 `vault-git`：`unfinished rebase` / `rebase-merge exists` / `unmerged files` / 不在 `main` 这几类以前都落到 `unknown`，现在归到「vault 的 git 状态坏了（local）」，并在判读参考里写明先看 `git status`、再 `git rebase --continue` 或 `--abort`。2026-11-11 那次整条队列失败就是这类错误被归成 unknown，绕了一圈才发现是 mini 上 vault 停在冲突的 rebase。
+
 ## 0.9.1
 
 - 修统计卡与列表数字不一致：实时队列里的任务常常也在历史归档里，原来两边直接相加导致偏大；现在按 id 去重后计数，卡片与列表同源。
