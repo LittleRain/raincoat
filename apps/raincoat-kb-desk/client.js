@@ -222,6 +222,7 @@ window.__ModuleLoader__.load({
       const [diagnoseJob, setDiagnoseJob] = useState(null)
       const [mechanism, setMechanism] = useState(false)
       const [retrying, setRetrying] = useState(false)
+      const [retryNote, setRetryNote] = useState(null)
       const [applyingAll, setApplyingAll] = useState(false)
       const [confirmAll, setConfirmAll] = useState(false)
       const alive = useRefLoose(true)
@@ -256,16 +257,17 @@ window.__ModuleLoader__.load({
             // 服务端按创建时间升序返回并从最早的开始截断，所以多要一些再在前端取最新的
             api(`/ingest/jobs?status=${nextStatus}&limit=120`),
           ])
-          if (!alive.current) return
+          if (!alive.current) return null
           setStats(statsPayload.stats)
           // 队列按时间倒序：最近的在最前面
-          setJobs(
-            [...(jobsPayload.jobs || [])]
-              .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
-              .slice(0, 40),
-          )
+          const nextJobs = [...(jobsPayload.jobs || [])]
+            .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+            .slice(0, 40)
+          setJobs(nextJobs)
+          return nextJobs
         } catch (error) {
           if (alive.current) setNotice(error.message)
+          return null
         }
       }, [status])
 
@@ -363,6 +365,9 @@ window.__ModuleLoader__.load({
       }
 
       const localJob = selected ? triageJobs.find((item) => item.path === selected.vaultPath) : null
+      // 远端 history 里很多记录没有 vault_path（worker 日志回填丢了），本地也没走插件整理；
+      // 只要 vault 里有同 URL 的 raw，就按「已落盘」显示，别让它看起来只停在 Inbox。
+      const localRecord = selected?.local || null
       const stages = (() => {
         if (!selected) return []
         const rows = (Array.isArray(run) ? run : []).map((stage) => ({
@@ -387,8 +392,34 @@ window.__ModuleLoader__.load({
             note: localJob.status === 'applied' ? `${label}：raw + 摘要 + 概念页` : label,
             meta: localJob.status === 'applied' ? '插件' : '插件',
           })
+        } else if (localRecord?.raw) {
+          rows.push({
+            stage: '写入本地',
+            status: 'ok',
+            at: null,
+            note: localRecord.summary ? `${localRecord.raw} · ${localRecord.summary}` : localRecord.raw,
+            meta: 'vault',
+          })
         }
         return rows
+      })()
+      /**
+       * 失败框的说明分三档：已重新提交（历史记录换成新任务）、历史归档（远端队列已经
+       * 清理掉，只能重新摄入）、普通失败（队列里还能重排）。
+       */
+      const failText = (() => {
+        if (!selected) return ''
+        if (selected.resubmitted) {
+          const when = selected.resubmitted.at ? ago(selected.resubmitted.at) : ''
+          const target = selected.resubmitted.jobId
+            ? `新任务 ${selected.resubmitted.jobId}`
+            : '队列里已有的那条（去重命中）'
+          return `${when ? `已于 ${when} ` : '已'}重新提交为${target}；这条历史失败记录不用再处理。${selected.error ? ` 原错误：${selected.error}` : ''}`
+        }
+        if (selected.archived) {
+          return `${selected.error || '远端没留错误文本'} 这条来自历史归档：远端队列已经把它清理掉了，没法原地重排；点「重新摄入」会按原链接新建一条任务。`
+        }
+        return selected.error || '点「排查原因」，把本机 vault、阶段记录和源站一起对一遍。'
       })()
       const automation = boot?.automation || {}
       const watcher = boot?.triage?.watcher || {}
@@ -462,23 +493,47 @@ window.__ModuleLoader__.load({
       /**
        * 重试失败任务。不传 ids 时由宿主把远端当前所有 failed 重新排队，
        * 不受前端只加载了最近 40 条的限制；逐条重试，部分失败如实报出来。
+       *
+       * 历史归档里的失败记录已经不在远端队列，重排接口会拒绝，宿主会改成按原链接
+       * 重新提交；结果里把这两类分开说，并在点了按钮的位置也留一条说明——提示条在
+       * 面板顶部，滚到下面点「重试」时很容易看不见。
        */
       const retryFailed = async (ids) => {
         if (retrying) return
         setRetrying(true)
+        setRetryNote(null)
         try {
-          const payload = await api('/ingest/retry', { method: 'POST', body: ids ? { ids } : {} })
+          const hints = ids
+            ? jobs.filter((job) => ids.includes(job.id)).map((job) => ({ id: job.id, url: job.url, title: job.title }))
+            : []
+          const payload = await api('/ingest/retry', { method: 'POST', body: ids ? { ids, jobs: hints } : {} })
           const ok = payload.retried?.length || 0
+          const subs = payload.resubmitted || []
           const bad = payload.failed || []
-          if (!payload.total) setNotice('远端现在没有失败任务')
-          else if (bad.length) setNotice(`已重新排队 ${ok} 条，${bad.length} 条没成功：${bad[0].error}`)
-          else setNotice(`已重新排队 ${ok} 条，worker 一分钟内会来领`)
-          setSelected(null)
-          await load('failed')
+          const bits = []
+          if (!payload.total) {
+            bits.push('远端队列里没有失败任务；历史归档里的记录只能逐条重新摄入')
+          } else {
+            if (ok) bits.push(`已重新排队 ${ok} 条，worker 一分钟内会来领`)
+            if (subs.length) bits.push(`${subs.length} 条历史记录已按原链接重新提交`)
+            if (bad.length) bits.push(`${bad.length} 条没成功：${bad[0].error}`)
+          }
+          const text = bits.join('；')
+          setNotice(text)
+          setRetryNote({ text, tone: bad.length ? 'error' : 'ok' })
+          const refreshed = await load('failed')
+          // 单条重试后把刷新到的那条留在右侧：归档记录重新提交完还会留在失败列表里
+          // （带「已重新提交」），用户能直接在原地看到结果，而不是以为点了没反应。
+          if (ids?.length === 1) {
+            setSelected((refreshed || []).find((job) => job.id === ids[0]) || null)
+          } else if (!bad.length) {
+            setSelected(null)
+          }
           loadInbox()
           refreshBoot?.()
         } catch (error) {
           setNotice(error.message)
+          setRetryNote({ text: error.message, tone: 'error' })
         } finally {
           setRetrying(false)
         }
@@ -488,12 +543,26 @@ window.__ModuleLoader__.load({
         { title: '排队中', value: stats?.queued ?? '—', hint: stats?.oldestQueuedAt ? `最早已等 ${duration(Date.now() - stats.oldestQueuedAt)}` : '队列是空的', tone: stats?.queued ? 'warn' : null },
         { title: '处理中', value: stats?.claimed ?? '—', hint: 'worker 已领取' },
         { title: '已完成', value: stats?.done ?? '—', hint: stats?.archived?.done ? `含历史归档 ${stats.archived.done}` : '累计写入 vault' },
-        { title: '失败', value: stats?.failed ?? '—', hint: stats?.archived?.failed ? `含历史归档 ${stats.archived.failed}` : '没有失败', tone: stats?.failed ? 'error' : null },
+        {
+          title: '失败',
+          value: stats?.failed ?? '—',
+          // 全部落在历史归档里时，远端队列已经没有可重排的任务，只能重新摄入；
+          // 这一点必须写在卡片上，否则「失败 7 / 全部重试 0 条」看起来像按钮坏了。
+          hint: !stats?.failed
+            ? '没有失败'
+            : stats.archived?.failed === stats.failed
+              ? '都在历史归档，队列里没有可重试的'
+              : stats.archived?.failed
+                ? `含历史归档 ${stats.archived.failed}`
+                : '队列里还能重试',
+          tone: stats?.failed ? 'error' : null,
+        },
         { title: 'Inbox 待整理', value: inbox.length || (boot?.vault?.inboxCount ?? 0), hint: inbox.length ? '等 triage' : '已经清空', tone: inbox.length > 5 ? 'warn' : null },
       ]
+      const liveFailed = jobs.filter((job) => !job.archived).length
 
       return h('div', { className: 'kbd-tab' }, [
-        notice ? h(Notice, { key: 'n', kind: noticeKind(notice, /已提交|去重|已重新排队|已经跑了一轮/), onClose: () => setNotice(null) }, notice) : null,
+        notice ? h(Notice, { key: 'n', kind: noticeKind(notice, /已提交|去重|已重新排队|已重新提交|已经跑了一轮/), onClose: () => setNotice(null) }, notice) : null,
         h('div', { className: 'kbd-cards', key: 'cards' }, statCards.map((card, index) => h(Card, { key: index, ...card }))),
 
         h('div', { className: 'kbd-submit', key: 'submit' }, [
@@ -538,7 +607,9 @@ window.__ModuleLoader__.load({
               })),
               h('div', { key: 'side', className: 'kbd-pane-side' }, [
                 status === 'failed' && jobs.length
-                  ? h(Btn, { key: 'retry', size: 'sm', kind: 'primary', disabled: retrying, onClick: () => retryFailed() }, retrying ? '重试中…' : '全部重试')
+                  ? liveFailed
+                    ? h(Btn, { key: 'retry', size: 'sm', kind: 'primary', disabled: retrying, onClick: () => retryFailed() }, retrying ? '重试中…' : '全部重试')
+                    : h('span', { key: 'arch', className: 'kbd-muted kbd-small' }, '只剩历史记录，逐条重新摄入')
                   : null,
                 h('span', { key: 'c', className: 'kbd-muted kbd-small' }, `${jobs.length} 条`),
               ]),
@@ -548,14 +619,19 @@ window.__ModuleLoader__.load({
                 key: job.id,
                 type: 'button',
                 className: `kbd-row${selected?.id === job.id ? ' is-active' : ''}`,
-                onClick: () => setSelected(job),
+                onClick: () => {
+                  setSelected(job)
+                  setRetryNote(null)
+                },
               }, [
                 h('span', { key: 'dot', className: `kbd-dot kbd-dot-${STATUS_META[job.status]?.tone || 'idle'}` }),
                 h('span', { key: 'main', className: 'kbd-row-main' }, [
                   h('span', { key: 't', className: 'kbd-row-title' }, job.title || job.url),
                   h('span', { key: 'u', className: 'kbd-row-sub' }, `${job.client || 'unknown'} · ${ago(job.createdAt)}${job.attempts ? ` · 第 ${job.attempts} 次` : ''}`),
                 ]),
+                job.local ? h(Pill, { key: 'loc', tone: 'success' }, '已摄入') : null,
                 job.archived ? h(Pill, { key: 'a', tone: 'idle' }, '历史') : null,
+                job.resubmitted ? h(Pill, { key: 'rs', tone: 'success' }, '已重新提交') : null,
                 job.duplicate ? h(Pill, { key: 'd', tone: 'idle' }, '重复') : null,
               ]))
               : h(Empty, { key: 'e' }, status === 'queued' ? '队列空了。粘一个链接试试。' : '这一栏暂时没有任务。')),
@@ -583,19 +659,39 @@ window.__ModuleLoader__.load({
               ]) : null,
 
               selected.status === 'failed' ? h('div', { key: 'fail', className: 'kbd-fail' }, [
-                h('div', { key: 'box', className: 'kbd-error-box' }, [
-                  h('div', { key: 't', className: 'kbd-error-title' }, selected.error ? '失败原因' : '远端没留错误文本'),
-                  h('div', { key: 'm' }, selected.error || '点「排查原因」，把本机 vault、阶段记录和源站一起对一遍。'),
+                h('div', { key: 'row', className: 'kbd-fail-row' }, [
+                  h('div', { key: 'box', className: `kbd-error-box${selected.resubmitted ? ' kbd-box-ok' : ''}` }, [
+                    h('div', { key: 't', className: 'kbd-error-title' }, selected.resubmitted
+                      ? '已重新提交'
+                      : selected.archived
+                        ? '历史失败记录'
+                        : selected.error ? '失败原因' : '远端没留错误文本'),
+                    h('div', { key: 'm' }, failText),
+                  ]),
+                  h('div', { key: 'acts', className: 'kbd-fail-actions' }, [
+                    h(Btn, { key: 'd', kind: 'primary', onClick: () => setDiagnoseJob(selected) }, '排查原因'),
+                    h(Btn, {
+                      key: 'r',
+                      disabled: retrying,
+                      onClick: () => retryFailed([selected.id]),
+                    }, retrying
+                      ? '重试中…'
+                      : selected.archived
+                        ? selected.resubmitted ? '再提交一次' : '重新摄入'
+                        : '重试这条'),
+                  ]),
                 ]),
-                h('div', { key: 'acts', className: 'kbd-fail-actions' }, [
-                  h(Btn, { key: 'd', kind: 'primary', onClick: () => setDiagnoseJob(selected) }, '排查原因'),
-                  h(Btn, { key: 'r', disabled: retrying, onClick: () => retryFailed([selected.id]) }, retrying ? '重试中…' : '重试这条'),
-                ]),
+                retryNote ? h('div', { key: 'note', className: `kbd-small ${retryNote.tone === 'error' ? 'kbd-warn-text' : 'kbd-muted'}` }, retryNote.text) : null,
               ]) : null,
 
-              selected.vaultPath ? h('div', { key: 'vp', className: 'kbd-line' }, [
+              (localRecord?.raw || selected.vaultPath) ? h('div', { key: 'vp', className: 'kbd-line' }, [
                 h('span', { key: 'k', className: 'kbd-muted' }, '落盘位置 '),
-                h('button', { key: 'b', type: 'button', className: 'kbd-link', onClick: () => openDoc(selected.vaultPath) }, selected.vaultPath),
+                h('button', { key: 'b', type: 'button', className: 'kbd-link', onClick: () => openDoc(localRecord?.raw || selected.vaultPath) }, localRecord?.raw || selected.vaultPath),
+              ]) : null,
+
+              localRecord?.summary ? h('div', { key: 'sm', className: 'kbd-line' }, [
+                h('span', { key: 'k', className: 'kbd-muted' }, '摘要 '),
+                h('button', { key: 'b', type: 'button', className: 'kbd-link', onClick: () => openDoc(localRecord.summary) }, localRecord.summary),
               ]) : null,
 
               h('div', { key: 'stages', className: 'kbd-stages' }, [
@@ -1889,9 +1985,11 @@ button.kbd-pill:hover{border-color:var(--dsw-alias-border-l2);color:var(--dsw-al
 .kbd-triage-changes{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px;font-size:12px}
 .kbd-triage-busy{display:flex;align-items:center;gap:10px;padding:18px 2px}
 .kbd-modal-wide{width:min(760px,92vw)}
-.kbd-fail{display:flex;align-items:flex-start;gap:10px}
+.kbd-fail{display:flex;flex-direction:column;gap:8px}
+.kbd-fail-row{display:flex;align-items:flex-start;gap:10px}
 .kbd-fail-actions{display:flex;flex-direction:column;gap:8px;flex:0 0 auto}
 .kbd-fail .kbd-error-box{flex:1;min-width:0}
+.kbd-box-ok{border-color:var(--dsw-alias-state-success-primary);background:color-mix(in srgb,var(--dsw-alias-state-success-primary) 8%,transparent)}
 .kbd-diag-collect{display:flex;align-items:center;gap:10px;padding:18px 2px;font-size:12.5px;color:var(--dsw-alias-label-secondary)}
 .kbd-diag-context{display:flex;flex-direction:column;gap:10px;padding:2px 0}
 .kbd-diag-signals{display:flex;flex-direction:column;gap:6px}

@@ -123,6 +123,101 @@ export async function readDoc(root, rel) {
   }
 }
 
+// ── 摄入记录反查：远端队列只记「写没写 Inbox」，本地到底落成哪篇 raw / 摘要，
+// 要靠 vault 自己说。索引按 URL 建，只读 frontmatter，30 秒过期。
+
+const LOCAL_INDEX_TTL_MS = 30_000
+const localIndexCache = new Map()
+
+/** 一个链接可能以几种形态出现在 frontmatter 里：原样、去尾斜杠、去 hash、去 query。 */
+export function urlKeys(value) {
+  const text = String(value || '').trim().replace(/^["']|["']$/g, '')
+  if (!text) return []
+  const keys = new Set([text.replace(/\/+$/, '')])
+  try {
+    const parsed = new URL(text)
+    parsed.hash = ''
+    keys.add(parsed.toString().replace(/\/+$/, ''))
+    const bare = `${parsed.origin}${parsed.pathname}`.replace(/\/+$/, '')
+    keys.add(bare)
+  } catch {
+    // 不是标准 URL（比如只剩一个 slug）就只按原样匹配
+  }
+  return [...keys].filter(Boolean)
+}
+
+/** frontmatter 缺收尾 `---` 的 raw 也要能认（vault 里确实有这种文件），退化成扫描开头几 KB。 */
+function urlFieldsOf(text, data) {
+  if (data) return ['source_url', 'canonical_url', 'url'].map((key) => data[key]).filter(Boolean)
+  const head = text.slice(0, 4000)
+  const values = []
+  for (const key of ['source_url', 'canonical_url', 'url']) {
+    const hit = new RegExp(`^${key}:\\s*["']?([^"'\\n]+)`, 'm').exec(head)
+    if (hit) values.push(hit[1].trim())
+  }
+  return values
+}
+
+/** 摘要里指向原文的字段有好几种写法（source / source_file / [Source: ...]），统一成 `00 raw/...`。 */
+function rawRelFromRef(ref) {
+  const text = String(ref || '').trim().replace(/^["']|["']$/g, '').replace(/\\/g, '/')
+  if (!text) return ''
+  const withPrefix = text.indexOf('00 raw/')
+  if (withPrefix >= 0) return text.slice(withPrefix)
+  const bare = text.indexOf('raw/')
+  if (bare >= 0) return `00 ${text.slice(bare)}`
+  return ''
+}
+
+/** 扫 raw 与 summaries，建 URL → { raw, summary } 的映射。raw 目录不存在就返回空表。 */
+export async function buildLocalIngestIndex(root) {
+  const summaryBySource = new Map()
+  for (const full of await walk(root, join(root, '01 wiki'))) {
+    if (!/[\\/]summaries[\\/]/.test(full)) continue
+    const text = await readFile(full, 'utf8').catch(() => '')
+    const { data } = parseFrontmatter(text)
+    const refs = ['source', 'source_file'].map((key) => rawRelFromRef(data?.[key])).filter(Boolean)
+    if (!refs.length) {
+      for (const hit of (text.match(/(?:00 )?raw\/(?:work|builder|acg)\/[^\n\]\)`]+?\.md/g) || []).slice(0, 3)) {
+        const rel = rawRelFromRef(hit)
+        if (rel) refs.push(rel)
+      }
+    }
+    for (const rel of refs) {
+      if (!summaryBySource.has(rel)) summaryBySource.set(rel, relPath(root, full))
+    }
+  }
+  const map = new Map()
+  for (const full of await walk(root, join(root, '00 raw'))) {
+    const rel = relPath(root, full)
+    const text = await readFile(full, 'utf8').catch(() => '')
+    const { data } = parseFrontmatter(text)
+    const summary = summaryBySource.get(rel) || null
+    for (const value of urlFieldsOf(text, data)) {
+      for (const key of urlKeys(value)) {
+        if (!map.has(key)) map.set(key, { raw: rel, summary })
+      }
+    }
+  }
+  return map
+}
+
+/** 返回 lookup(url) → { raw, summary } | null；同进程内复用 30 秒。 */
+export async function localIngestIndex(root, { ttl = LOCAL_INDEX_TTL_MS } = {}) {
+  const cached = localIndexCache.get(root)
+  if (cached && Date.now() - cached.at < ttl) return cached.lookup
+  const map = await buildLocalIngestIndex(root)
+  const lookup = (url) => {
+    for (const key of urlKeys(url)) {
+      const hit = map.get(key)
+      if (hit) return hit
+    }
+    return null
+  }
+  localIndexCache.set(root, { at: Date.now(), lookup })
+  return lookup
+}
+
 export async function listInbox(root) {
   const dir = join(root, INBOX_DIR)
   const files = await walk(root, dir)

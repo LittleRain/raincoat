@@ -46,7 +46,10 @@ async function request(settings, path, { method = 'GET', body, token } = {}) {
     throw new IngestUnavailable(`摄入服务拒绝了凭据（${res.status}），检查 credentials.env`, 401)
   }
   if (!res.ok) {
-    throw new IngestUnavailable(payload?.error || `摄入服务返回 ${res.status}`, res.status)
+    const error = new IngestUnavailable(payload?.error || `摄入服务返回 ${res.status}`, res.status)
+    // 重试路径要区分「这条任务不能再重排」（JSON 错误）和「远端没有重试接口」（404 + HTML）
+    error.payload = payload
+    throw error
   }
   return payload
 }
@@ -87,7 +90,47 @@ export function normalizeJob(raw) {
 
 export function createIngest() {
   const settings = () => readSettings()
-  return {
+
+  /** 历史归档：VPS 的 /kb/history.json，队列里已经清理掉的旧任务只在这里。 */
+  async function loadHistory() {
+    const cred = readCredentials(settings())
+    const base = String(cred.apiBase || settings().apiBase).replace(/\/+$/, '')
+    const root = base.replace(/\/api$/, '')
+    if (!cred.workerToken) throw new IngestUnavailable('缺少 WORKER_TOKEN，读不到历史记录', 428)
+    let res
+    try {
+      res = await fetch(`${root}/kb/history.json`, {
+        headers: { 'x-worker-token': cred.workerToken },
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+      })
+    } catch (error) {
+      throw new IngestUnavailable(`读不到历史归档：${error?.message || error}`)
+    }
+    if (!res.ok) throw new IngestUnavailable(`历史归档返回 ${res.status}`, res.status)
+    const payload = await res.json().catch(() => null)
+    return (payload?.jobs || []).map((raw) => ({ ...normalizeJob(raw), archived: true }))
+  }
+
+  /** 重排被拒时按 id 找回原链接：先看实时队列，再去历史归档里找。 */
+  async function lookupUrl(id) {
+    try {
+      const live = await request(settings(), '/jobs?status=failed&limit=100', { token: 'worker' })
+      const hit = (live?.jobs || []).find((job) => job.id === id)
+      if (hit?.url) return { url: hit.url, title: hit.title || null }
+    } catch {
+      // 实时队列读不到就只查归档
+    }
+    try {
+      const archived = await loadHistory()
+      const hit = archived.find((job) => job.id === id)
+      if (hit?.url) return { url: hit.url, title: hit.title || null }
+    } catch {
+      return null
+    }
+    return null
+  }
+
+  const service = {
     async stats() {
       const payload = await request(settings(), '/queue/stats', { token: 'worker' })
       return {
@@ -104,22 +147,7 @@ export function createIngest() {
     },
     /** 队列目录是工作区，会被清理；VPS 另外留了一份 /kb/history.json，历史任务从这里补。 */
     async history() {
-      const cred = readCredentials(settings())
-      const base = String(cred.apiBase || settings().apiBase).replace(/\/+$/, '')
-      const root = base.replace(/\/api$/, '')
-      if (!cred.workerToken) throw new IngestUnavailable('缺少 WORKER_TOKEN，读不到历史记录', 428)
-      let res
-      try {
-        res = await fetch(`${root}/kb/history.json`, {
-          headers: { 'x-worker-token': cred.workerToken },
-          signal: AbortSignal.timeout(TIMEOUT_MS),
-        })
-      } catch (error) {
-        throw new IngestUnavailable(`读不到历史归档：${error?.message || error}`)
-      }
-      if (!res.ok) throw new IngestUnavailable(`历史归档返回 ${res.status}`, res.status)
-      const payload = await res.json().catch(() => null)
-      return (payload?.jobs || []).map((raw) => ({ ...normalizeJob(raw), archived: true }))
+      return loadHistory()
     },
     async runs(limit = 12) {
       const payload = await request(settings(), `/runs?limit=${limit}`, { token: 'worker' })
@@ -152,31 +180,69 @@ export function createIngest() {
       }
     },
     /**
-     * 把失败任务放回远端队列。
+     * 把失败任务放回远端队列；重排不了的就按原链接重新提交。
      *
-     * 传 ids 只重试这几条；不传就把远端当前 failed 的任务全重试一遍（面板上的
-     * 「全部重试」走这条，避免前端只重试加载到的那 40 条）。逐条调用，单条失败
-     * 不影响其它条，返回里能直接看出哪条没成功。
+     * 传 ids 只处理这几条；不传就把远端当前 failed 的任务全重试一遍（面板上的
+     * 「全部重试」走这条，避免前端只重试加载到的那 40 条）。
+     *
+     * 历史归档里的失败任务已经不在远端队列，重排接口会回 409「job is not retryable」；
+     * 旧版服务没有这个接口时是 404 + HTML。这两种情况下「重试」只能是重新摄入一遍，
+     * 否则用户点了永远没反应、记录永远挂在失败里。
      */
-    async retry(ids) {
+    async retry(ids, hints = []) {
       const wanted = Array.isArray(ids) ? [...new Set(ids.map((id) => String(id || '').trim()).filter(Boolean))] : []
-      const targets = wanted.length
-        ? wanted
-        : ((await request(settings(), '/jobs?status=failed&limit=100', { token: 'worker' }))?.jobs || []).map((job) => job.id)
+      const hintMap = new Map()
+      for (const hint of Array.isArray(hints) ? hints : []) {
+        const id = String(hint?.id || '').trim()
+        if (id) hintMap.set(id, hint)
+      }
+      let targets
+      if (wanted.length) {
+        targets = wanted.map((id) => ({ id, url: hintMap.get(id)?.url || null, title: hintMap.get(id)?.title || null }))
+      } else {
+        const live = await request(settings(), '/jobs?status=failed&limit=100', { token: 'worker' })
+        targets = (live?.jobs || []).map((job) => ({ id: job.id, url: job.url || null, title: job.title || null }))
+      }
       const retried = []
-      const failures = []
-      for (const id of targets) {
+      const resubmitted = []
+      const failed = []
+      for (const target of targets) {
         try {
-          const payload = await request(settings(), `/jobs/${encodeURIComponent(id)}/retry`, { method: 'POST', token: 'worker' })
-          retried.push(payload?.job?.id || id)
+          const payload = await request(settings(), `/jobs/${encodeURIComponent(target.id)}/retry`, { method: 'POST', token: 'worker' })
+          retried.push(payload?.job?.id || target.id)
+          continue
         } catch (error) {
-          failures.push({
-            id,
-            error: error?.status === 404 ? '远端服务还没有重试接口（需要部署新版摄入服务）' : error?.message || String(error),
-          })
+          const status = error?.status || 0
+          // 404 + 非 JSON 是旧版服务没有这个路由；409 / 404 + JSON 是这条任务不能再重排
+          const noEndpoint = status === 404 && !error?.payload?.error
+          if (status !== 404 && status !== 409) {
+            failed.push({ id: target.id, error: error?.message || String(error) })
+            continue
+          }
+          const found = target.url ? { url: target.url, title: target.title } : await lookupUrl(target.id)
+          if (!found?.url) {
+            failed.push({
+              id: target.id,
+              error: noEndpoint
+                ? '远端服务还没有重试接口（需要部署新版摄入服务）'
+                : '这条已经不在远端队列，也拿不到原链接，只能从历史记录里复制链接重新提交',
+            })
+            continue
+          }
+          try {
+            const result = await service.submit({ url: found.url, title: target.title || found.title || undefined })
+            resubmitted.push({
+              id: target.id,
+              url: found.url,
+              jobId: result?.job_id || null,
+              duplicate: Boolean(result?.duplicate),
+            })
+          } catch (submitError) {
+            failed.push({ id: target.id, error: submitError?.message || String(submitError) })
+          }
         }
       }
-      return { total: targets.length, retried, failed: failures }
+      return { total: targets.length, retried, resubmitted, failed }
     },
     async submit({ url, title, note }) {
       const cred = readCredentials(settings())
@@ -201,4 +267,5 @@ export function createIngest() {
       return payload
     },
   }
+  return service
 }

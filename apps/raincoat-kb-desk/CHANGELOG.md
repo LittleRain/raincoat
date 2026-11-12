@@ -1,3 +1,16 @@
+## 0.9.4
+
+- 修「明明已经摄入了，插件里却只有 Inbox、看不到本地记录」：摄入列表和详情现在会按链接反查 vault，给每条任务带上 `local: { raw, summary }`。远端 history 里 `vault_path` 为空、或当时的摄入不是插件整理的（`triage-jobs.json` 里没有 job），都能显示成「写入本地」并给出 raw + 摘要路径，列表加「已摄入」标记；详情里的「落盘位置」优先给真正的 raw，点开就能看。
+- `lib/vault.js` 新增 `buildLocalIngestIndex` / `localIngestIndex`：扫 `00 raw` 的 `source_url` / `canonical_url` / `url` 建 URL 索引，摘要侧兼容 `source`、`source_file` 与正文里的 `[Source: raw/...]` 三种写法，30 秒缓存；顺带兼容 frontmatter 没写收尾 `---` 的 raw。
+- 新增 `tests/local-index.test.mjs`：覆盖尾斜杠 / 带 query 的链接、`source_file` 写法、未闭合 frontmatter 三种情况。
+
+## 0.9.3
+
+- 修「重试了没反应，还在失败里」：历史归档里的失败任务早已不在远端队列，`POST /jobs/:id/retry` 会回 `409 job is not retryable`，原来把它当成「远端服务没有重试接口」报出来、列表却一动不动。现在这类任务重试会退回按原链接重新提交（`POST /ingest`），后端返回新增的 `resubmitted` 字段说明换成了哪条新任务；本地 `retry-marks.json` 记一笔，列表与详情标「已重新提交」，不用再猜它到底处理没处理。旧版服务没有重试接口（404 + HTML）时同样退回重新提交。
+- 历史归档行不再出现「全部重试」：远端队列里没有失败任务时按钮换成一句「只剩历史记录，逐条重新摄入」，避免一次重抓一堆旧链接；失败统计卡在「全都在归档里」时直接写明「队列里没有可重试的」。
+- 重试结果除了顶部提示条，也在按钮下面留一行，单条重试后右侧详情保留并刷新——面板顶部的提示条在滚到下面点按钮时很容易看不见。
+- `lib/retry-marks.js`：重新提交记录的本地存储（最多 300 条，按时间淘汰）。
+
 ## 0.9.2
 
 - 排查的错误归类补上 `vault-git`：`unfinished rebase` / `rebase-merge exists` / `unmerged files` / 不在 `main` 这几类以前都落到 `unknown`，现在归到「vault 的 git 状态坏了（local）」，并在判读参考里写明先看 `git status`、再 `git rebase --continue` 或 `--abort`。2026-11-11 那次整条队列失败就是这类错误被归成 unknown，绕了一圈才发现是 mini 上 vault 停在冲突的 rebase。

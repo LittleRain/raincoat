@@ -13,7 +13,7 @@ const credentialsFile = join(tempDir, 'credentials.env')
 await writeFile(credentialsFile, 'WORKER_TOKEN=test-worker\nINGEST_TOKEN=test-ingest\n', 'utf8')
 process.env.DSH_HOME = tempDir
 
-const state = { failed: [], retryCodes: {} }
+const state = { failed: [], retryCodes: {}, submitted: [] }
 const calls = []
 
 const server = createServer(async (req, res) => {
@@ -25,6 +25,13 @@ const server = createServer(async (req, res) => {
   }
   if (req.method === 'GET' && url.pathname === '/api/jobs') {
     return send(200, { status: 'failed', count: state.failed.length, jobs: state.failed })
+  }
+  if (req.method === 'POST' && url.pathname === '/api/ingest') {
+    let raw = ''
+    for await (const chunk of req) raw += chunk
+    const body = raw ? JSON.parse(raw) : {}
+    state.submitted.push(body.url)
+    return send(200, { job_id: `new-${state.submitted.length}`, status: 'queued' })
   }
   const match = url.pathname.match(/^\/api\/jobs\/([^/]+)\/retry$/)
   if (req.method === 'POST' && match) {
@@ -86,7 +93,7 @@ test('keeps going after a single job fails and reports it per item', async () =>
   assert.deepEqual(result.retried, ['b'])
   assert.equal(result.failed.length, 1)
   assert.equal(result.failed[0].id, 'a')
-  assert.match(result.failed[0].error, /not retryable/)
+  assert.match(result.failed[0].error, /拿不到原链接/)
 })
 
 test('explains an old remote service that has no retry endpoint', async () => {
@@ -96,12 +103,39 @@ test('explains an old remote service that has no retry endpoint', async () => {
   assert.match(result.failed[0].error, /远端服务还没有重试接口/)
 })
 
+test('archived failure that cannot be requeued is resubmitted with its url', async () => {
+  state.retryCodes = { archived: 409 }
+  state.submitted = []
+  const result = await ingest.retry(['archived'], [{ id: 'archived', url: 'https://example.com/one', title: 'One' }])
+  assert.deepEqual(result.retried, [])
+  assert.equal(result.resubmitted.length, 1)
+  assert.equal(result.resubmitted[0].jobId, 'new-1')
+  assert.deepEqual(state.submitted, ['https://example.com/one'])
+  assert.deepEqual(result.failed, [])
+})
+
+test('old service without a retry endpoint falls back to resubmitting', async () => {
+  state.retryCodes = { old: 404 }
+  state.submitted = []
+  const result = await ingest.retry(['old'], [{ id: 'old', url: 'https://example.com/two' }])
+  assert.equal(result.resubmitted.length, 1)
+  assert.deepEqual(state.submitted, ['https://example.com/two'])
+})
+
 test('dedupes ids so a double click does not retry twice', async () => {
   state.retryCodes = {}
   calls.length = 0
   const result = await ingest.retry(['x', 'x', ' '])
   assert.equal(result.total, 1)
   assert.equal(calls.filter((line) => line.includes('/jobs/x/retry')).length, 1)
+})
+
+test('records resubmitted history entries so the list can mark them', async () => {
+  const { markResubmitted, readMarks } = await import('../lib/retry-marks.js')
+  markResubmitted('archived', { jobId: 'new-1', url: 'https://example.com/one' })
+  const marks = readMarks()
+  assert.equal(marks.archived.jobId, 'new-1')
+  assert.ok(marks.archived.at > 0)
 })
 
 test.after(() => {

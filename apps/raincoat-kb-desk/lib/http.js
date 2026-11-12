@@ -5,6 +5,7 @@ import { readCredentials, readSettings, vaultRoot, writeSettings } from './confi
 import { fetchArticle } from './learn.js'
 import { diagnoseFailure, gatherFailure } from './diagnose.js'
 import { createIngest } from './ingest.js'
+import { markResubmitted, readMarks } from './retry-marks.js'
 import { applyTriage, gitCommitAndPush, proposeTriage } from './triage.js'
 import { activeCount, apply as applyQueued, dismiss as dismissQueued, enqueue, getJob, listJobs, ready as triageReady } from './triage-queue.js'
 import { runWatcherNow, watcherState } from './watcher.js'
@@ -12,6 +13,7 @@ import {
   gitOverview,
   healthCheck,
   listInbox,
+  localIngestIndex,
   pullVault,
   readDoc,
   recentDocs,
@@ -191,9 +193,26 @@ export function registerHttp(ctx) {
         archived = []
       }
       const seen = new Set(live.jobs.map((job) => job.id))
+      // 重新提交过的历史失败记录带一个本地标记，界面据此说明「已经换成新任务」，
+      // 不再让它看起来像一条没人处理、点了也没反应的失败。
+      const marks = readMarks()
+      // 远端只记「有没有写 Inbox」，本地落成哪篇 raw/摘要得由 vault 反查：history 里
+      // 缺 vault_path、或当时的摄入不是插件整理的，都不该显示成「只在 Inbox」。
+      let lookupLocal = null
+      try {
+        lookupLocal = await localIngestIndex(root)
+      } catch {
+        lookupLocal = null
+      }
       const merged = [...live.jobs, ...archived.filter((job) => !seen.has(job.id))]
         .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
         .slice(0, limit)
+        .map((job) => {
+          const enriched = marks[job.id] ? { ...job, resubmitted: marks[job.id] } : job
+          if (!lookupLocal || !job.url) return enriched
+          const local = lookupLocal(job.url)
+          return local ? { ...enriched, local } : enriched
+        })
       return json(res, 200, { status, count: merged.length, jobs: merged, live: live.jobs.length, archived: archived.length })
     }
 
@@ -256,8 +275,13 @@ export function registerHttp(ctx) {
     if (path === '/ingest/retry' && method === 'POST') {
       const body = await readJson(req)
       const ids = Array.isArray(body.ids) ? body.ids.slice(0, 100) : []
+      const hints = Array.isArray(body.jobs) ? body.jobs.slice(0, 100) : []
       try {
-        return json(res, 200, await services.ingest.retry(ids))
+        const result = await services.ingest.retry(ids, hints)
+        for (const item of result.resubmitted || []) {
+          markResubmitted(item.id, { jobId: item.jobId || null, url: item.url, duplicate: Boolean(item.duplicate) })
+        }
+        return json(res, 200, result)
       } catch (err) {
         return json(res, err.status || 502, { error: err.message || '重试失败' })
       }
