@@ -169,8 +169,8 @@ function rawRelFromRef(ref) {
   return ''
 }
 
-/** 扫 raw 与 summaries，建 URL → { raw, summary } 的映射。raw 目录不存在就返回空表。 */
-export async function buildLocalIngestIndex(root) {
+/** 扫 summaries，建 raw 相对路径 → 摘要相对路径。摘要里指向原文的写法有 source / source_file / [Source: ...] 三种。 */
+async function buildSummaryIndex(root) {
   const summaryBySource = new Map()
   for (const full of await walk(root, join(root, '01 wiki'))) {
     if (!/[\\/]summaries[\\/]/.test(full)) continue
@@ -187,6 +187,12 @@ export async function buildLocalIngestIndex(root) {
       if (!summaryBySource.has(rel)) summaryBySource.set(rel, relPath(root, full))
     }
   }
+  return summaryBySource
+}
+
+/** 扫 raw 与 summaries，建 URL → { raw, summary } 的映射。raw 目录不存在就返回空表。 */
+export async function buildLocalIngestIndex(root) {
+  const summaryBySource = await buildSummaryIndex(root)
   const map = new Map()
   for (const full of await walk(root, join(root, '00 raw'))) {
     const rel = relPath(root, full)
@@ -200,6 +206,43 @@ export async function buildLocalIngestIndex(root) {
     }
   }
   return map
+}
+
+/**
+ * 列出「本地摄入」：vault 里带来源链接的 raw 及其摘要。
+ *
+ * 摄入页原来的数据源只有远端队列（live jobs + /kb/history.json），所以**没走远端队列的摄入
+ * 永远不会出现在列表里**——包括 agent 直接用脚本落盘的（播客转写、批量补录）和手工整理的。
+ * 这个函数把 vault 里能对上号的 raw/摘要反扫出来，页面才能把「没登记的任务」也列出来。
+ *
+ * 只收带 url 的：没有 url 既没法与远端任务去重，也会把灵感 / 手记混进来。
+ */
+export async function scanLocalIngests(root, { days = 30, limit = 40 } = {}) {
+  const summaries = await buildSummaryIndex(root)
+  const cutoff = Date.now() - days * 86400000
+  const rows = []
+  for (const full of await walk(root, join(root, '00 raw'))) {
+    const rel = relPath(root, full)
+    const text = await readFile(full, 'utf8').catch(() => '')
+    if (!text) continue
+    const { data } = parseFrontmatter(text)
+    const url = ['source_url', 'canonical_url', 'url'].map((key) => data?.[key]).find(Boolean)
+    if (!url) continue
+    const info = await stat(full).catch(() => null)
+    const ingestedAt = Date.parse(data?.ingested_at || data?.captured_at || '') || info?.mtimeMs || null
+    if (ingestedAt && ingestedAt < cutoff) continue
+    rows.push({
+      url: String(url),
+      title: data?.title || basename(full, '.md'),
+      raw: rel,
+      summary: summaries.get(rel) || null,
+      platform: data?.platform || null,
+      space: /^00 raw\/([^/]+)\//.exec(rel)?.[1] || null,
+      ingestedAt,
+    })
+  }
+  rows.sort((a, b) => (b.ingestedAt || 0) - (a.ingestedAt || 0))
+  return rows.slice(0, limit)
 }
 
 /** 返回 lookup(url) → { raw, summary } | null；同进程内复用 30 秒。 */

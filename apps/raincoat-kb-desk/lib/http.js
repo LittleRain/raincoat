@@ -17,7 +17,9 @@ import {
   pullVault,
   readDoc,
   recentDocs,
+  scanLocalIngests,
   searchVault,
+  urlKeys,
   writeDraft,
   writeHealthReport,
   writeInboxDoc,
@@ -214,6 +216,34 @@ export function registerHttp(ctx) {
           return local ? { ...enriched, local } : enriched
         })
       return json(res, 200, { status, count: merged.length, jobs: merged, live: live.jobs.length, archived: archived.length })
+    }
+
+    if (path === '/ingest/local' && method === 'GET') {
+      const days = Math.min(Number(query(url, 'days', 30)) || 30, 365)
+      const limit = Math.min(Number(query(url, 'limit', 20)) || 20, 120)
+      let rows = []
+      try {
+        rows = await scanLocalIngests(root, { days, limit: Math.min(limit * 3, 200) })
+      } catch {
+        rows = []
+      }
+      // 已经走过远端队列的链接会在「摄入」列表里出现，这里只列没有再补一遍。
+      const remote = new Set()
+      const remember = (job) => {
+        for (const key of urlKeys(job?.url)) remote.add(key)
+      }
+      try {
+        for (const job of await services.ingest.history()) remember(job)
+      } catch {
+        // 远端读不到就当成「全是本地」，页面标清楚即可
+      }
+      try {
+        for (const job of (await services.ingest.jobs('done', 120)).jobs || []) remember(job)
+      } catch {
+        // 同上
+      }
+      const filtered = rows.filter((row) => !urlKeys(row.url).some((key) => remote.has(key))).slice(0, limit)
+      return json(res, 200, { count: filtered.length, remoteCount: remote.size, rows: filtered })
     }
 
     if (path === '/ingest/runs' && method === 'GET') {

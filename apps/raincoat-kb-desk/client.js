@@ -223,6 +223,7 @@ window.__ModuleLoader__.load({
       const [mechanism, setMechanism] = useState(false)
       const [retrying, setRetrying] = useState(false)
       const [retryNote, setRetryNote] = useState(null)
+      const [localRows, setLocalRows] = useState([])
       const [applyingAll, setApplyingAll] = useState(false)
       const [confirmAll, setConfirmAll] = useState(false)
       const alive = useRefLoose(true)
@@ -252,10 +253,12 @@ window.__ModuleLoader__.load({
 
       const load = useCallback(async (nextStatus = status) => {
         try {
-          const [statsPayload, jobsPayload] = await Promise.all([
+          const [statsPayload, jobsPayload, localPayload] = await Promise.all([
             api('/ingest/stats'),
             // 服务端按创建时间升序返回并从最早的开始截断，所以多要一些再在前端取最新的
             api(`/ingest/jobs?status=${nextStatus}&limit=120`),
+            // 远端队列里没有的摄入（agent 直接落盘 / 手工整理）只存在于 vault，单独列出来
+            api('/ingest/local?days=30&limit=20').catch(() => ({ rows: [] })),
           ])
           if (!alive.current) return null
           setStats(statsPayload.stats)
@@ -264,6 +267,7 @@ window.__ModuleLoader__.load({
             .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
             .slice(0, 40)
           setJobs(nextJobs)
+          setLocalRows(localPayload?.rows || [])
           return nextJobs
         } catch (error) {
           if (alive.current) setNotice(error.message)
@@ -592,6 +596,29 @@ window.__ModuleLoader__.load({
           h('span', { key: 'wh', className: `kbd-small ${automation.autoApply === false ? 'kbd-warn-text' : 'kbd-muted'}` }, writeHint),
           h('span', { key: 'hint', className: `kbd-small ${watcher.lastError ? 'kbd-warn-text' : 'kbd-muted'}` }, automationHint),
         ]),
+
+        localRows.length
+          ? h('section', { key: 'local', className: 'kbd-pane kbd-local' }, [
+            h('div', { key: 'h', className: 'kbd-pane-head' }, [
+              h('div', { key: 't', className: 'kbd-section-title' }, `本地摄入 · ${localRows.length} 条`),
+              h('span', { key: 'hint', className: 'kbd-small kbd-muted' }, '没走远端队列，只在 vault 里有（agent 直接落盘 / 手工整理）'),
+            ]),
+            h('div', { key: 'l', className: 'kbd-list' }, localRows.map((row) => h('button', {
+              key: row.raw,
+              type: 'button',
+              className: 'kbd-row',
+              title: row.url,
+              onClick: () => openDoc(row.summary || row.raw),
+            }, [
+              h('span', { key: 'dot', className: 'kbd-dot kbd-dot-success' }),
+              h('span', { key: 'main', className: 'kbd-row-main' }, [
+                h('span', { key: 't', className: 'kbd-row-title' }, row.title),
+                h('span', { key: 'u', className: 'kbd-row-sub' }, `${row.platform || row.space || 'local'} · ${ago(row.ingestedAt)} · ${row.summary ? 'raw + 摘要' : '仅 raw'}`),
+              ]),
+              h(Pill, { key: 'p', tone: 'idle' }, '本地'),
+            ]))),
+          ])
+          : null,
 
         h('div', { className: 'kbd-split', key: 'split' }, [
           h('section', { className: 'kbd-pane', key: 'left' }, [

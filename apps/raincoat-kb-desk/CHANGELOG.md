@@ -1,3 +1,10 @@
+## 0.9.5
+
+- 补上 0.9.4 没覆盖的那一半：**摄入页新增「本地摄入」区块**。0.9.4 的本地反查只能给「远端已经有任务」的行贴「已摄入」——如果一次摄入**从来没走过远端队列**（agent 用脚本直接落盘，比如播客转写；或手工整理），列表里连一行都没有，看上去就像没摄入过。现在这些只在 vault 里存在的摄入会单独列出来，带标题 / 平台 / 时间 / 「raw + 摘要」，点开即看；按 URL 与远端队列、history 去重（`urlKeys` 归一化过尾斜杠与 query），不会重复显示。
+- `lib/vault.js` 新增 `scanLocalIngests`：扫 `00 raw` 读 frontmatter 的 `source_url` / `canonical_url` / `url` 与 `ingested_at`（缺则用 mtime），摘要复用 0.9.4 的 `buildSummaryIndex`；没有来源链接的笔记（灵感 / 手记）不进来，避免污染列表。
+- `GET /kb-desk/api/ingest/local?days=30&limit=20`：返回 `{ rows, count, remoteCount }`，远端读不到时降级为「全是本地」，不阻塞页面。
+- 新增 `tests/scan-local-ingests.test.mjs`：覆盖带 url 的 raw 出现且带摘要、无 url 的不出现、`days` 之外的老摄入被过滤。
+
 ## 0.9.4
 
 - 修「明明已经摄入了，插件里却只有 Inbox、看不到本地记录」：摄入列表和详情现在会按链接反查 vault，给每条任务带上 `local: { raw, summary }`。远端 history 里 `vault_path` 为空、或当时的摄入不是插件整理的（`triage-jobs.json` 里没有 job），都能显示成「写入本地」并给出 raw + 摘要路径，列表加「已摄入」标记；详情里的「落盘位置」优先给真正的 raw，点开就能看。
