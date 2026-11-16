@@ -90,26 +90,30 @@ local-agent setup --client generic --output ./mcp.json --apply
 
 ## 发起第一个任务
 
-客户端加载后，应能看到 `agent_status`、`agent_submit_task`、`agent_wait_task` 等工具。先用 `agent_status(backend="gpt")` 检查运行时，再提交任务，例如：
+客户端加载后，先调用 `agent_status()` 查看本机后端，或传 `backend` 检查单个后端。此检查不调用模型或写配置。`availability` 表示是否具备本地运行条件，`login_status` 单独表示登录检查结果。Bitto 和 WorkBuddy 的登录有效性在实际提交时验证。提交只读复核时可使用 Codex：
 
 ```json
 {
-  "backend": "gpt",
-  "prompt": "读取当前目录并总结项目结构",
-  "cwd": "/absolute/workspace"
+  "backend": "codex",
+  "prompt": "检查当前改动，按严重程度报告发现并引用文件行号",
+  "cwd": "/absolute/workspace",
+  "sandbox": "read-only"
 }
 ```
 
-GPT 默认使用 `read-only` 沙箱。确需在 `cwd` 写文件时，为该次任务加 `"sandbox": "workspace-write"`。WorkBuddy 的工具权限由该次任务的 `allowed_tools` 指定；空列表不开放工具，例如 `"allowed_tools": ["Bash(python3:*)"]`。Bitto 使用其运行时的交互授权。
+Codex 的 `backend` 也可写成 `gpt`，默认使用 `read-only` 沙箱。确需在 `cwd` 写文件时，为该次任务加 `"sandbox": "workspace-write"`。WorkBuddy 用 `allowed_tools` 开放本次允许的工具，例如 `"allowed_tools": ["Bash(python3:*)"]`，空列表不开放工具。Bitto 使用其运行时的交互授权，可通过 `agent_respond_permission` 回应当前请求。需要强制只读文件访问的复核请选择 Codex。
 
-`agent_submit_task` 默认等待最多 25 秒。若返回的任务尚未完成，立即用返回的 `job_id` 调用 `agent_wait_task`；单次等待超时不会取消任务。若状态为 `interrupted`，先检查后端会话，避免重复提交可能仍在执行的任务。
+`agent_submit_task` 默认等待最多 25 秒。后台提交时设 `wait_seconds=0`，立即拿到 `job_id`，之后用 `agent_wait_task` 取结果。等待接口的 `timeout_seconds=0` 立即查询状态，正数则等到完成、需授权或超时。等待超时不会取消任务。用 `agent_cancel_task` 请求取消，再用等待接口确认是否终止。若状态为 `interrupted`，先检查后端会话，避免重复提交可能仍在执行的任务。
+
+续接已结束的任务时，向 `agent_submit_task` 传入 `{"resume_from_job_id":"原任务 ID","prompt":"解释第一条发现"}`。系统会用原后端、会话、工作目录和权限启动新任务，返回新的 `job_id`。原任务需要留有请求记录和会话 ID。
 
 也可直接用 CLI 验证调用链；以下 `submit` 会实际调用模型：
 
 ```sh
-local-agent status gpt
-local-agent submit gpt '总结当前目录' --cwd /absolute/workspace
+local-agent status
+local-agent submit codex '总结当前目录' --cwd /absolute/workspace --wait-seconds 0
 local-agent wait JOB_ID
+local-agent resume JOB_ID '补充测试入口'
 ```
 
 ## 常见问题
@@ -140,8 +144,14 @@ local-agent update --from /path/to/new.whl
 - 本机使用各后端原有的运行时和登录。Bitto 任务在其桌面端可见；WorkBuddy 和 GPT 的 CLI 任务不在桌面任务列表。
 - GPT 使用 `codex exec --json`，默认只读；`model` 留空时使用 Codex CLI 默认模型。`project` 对 GPT 和 WorkBuddy 不生效。WorkBuddy 只接受其官方模型 ID。
 - 任务请求、输出和事件保存在本机 `~/.local/state/bitto-agent-bridge/`，可用 `LOCAL_AGENT_MCP_STATE_DIR` 改路径。请按本机数据管理习惯处理这些记录。
-- `agent_get_task` 读取状态，`agent_cancel_task` 请求取消；仅 Bitto 支持 `agent_respond_permission`。旧的 `bitto_*` 工具名仍保留。
+- 默认结果包含任务状态、文本、错误和日志路径。需要工具调用及用量明细时，用 `agent_wait_task` 的 `include_details=true` 或读取 `result_path`。
 - MCP 工具调用结束后不会主动唤醒客户端模型；调用方需要持续调用 `agent_wait_task` 等待终态。
+
+### 旧入口迁移
+
+将 `agent_get_task(job_id)` 改为 `agent_wait_task(job_id, timeout_seconds=0)`。旧 `bitto_status` 和 `bitto_submit_task` 对应通用工具并传 `backend="bitto"`。旧 Bitto 等待、取消、授权改用对应的通用工具。迁移期间可在 MCP 服务进程的环境中设置 `LOCAL_AGENT_MCP_LEGACY_TOOLS=1`，重载后会显示旧工具，并恢复原来的结果摘要格式。原有 `job_id` 继续可查询。
+
+若客户端仍从源码目录启动旧 `bridge.py`，先安装 wheel 或源码包，运行 `local-agent setup --apply` 后重载客户端。安装、配置预览和启动统一使用已安装的 `local-agent`。
 
 ## 维护者：构建与发布
 

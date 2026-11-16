@@ -9,7 +9,7 @@ import unittest
 from unittest.mock import patch
 from packaging.version import Version
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'src'))
-from raincoat_agent_mcp import management, dependencies, updates, cli, __version__
+from raincoat_agent_mcp import bridge, management, dependencies, updates, cli, __version__
 
 class ManagementTests(unittest.TestCase):
     def test_cli_json_works_with_legacy_windows_encoding(self):
@@ -58,6 +58,23 @@ class ManagementTests(unittest.TestCase):
             self.assertTrue(result['healthy'])
             self.assertEqual(result['backends']['gpt']['method'],'ChatGPT')
             save.assert_called_once_with(codex='/stable/codex')
+    def test_status_keeps_discovery_read_only_and_reports_limits(self):
+        from raincoat_agent_mcp import bitto, gpt, workbuddy
+        with patch.object(bitto, 'discover_ws', side_effect=RuntimeError('sidecar unavailable')), \
+             patch.object(workbuddy, 'status', return_value={'installed': True, 'note': 'helper missing'}), \
+             patch.object(dependencies, 'node_check', return_value={'available': True, 'path': '/node'}), \
+             patch.object(dependencies, 'helper_path', return_value=None), \
+             patch.object(gpt.dependencies, 'codex_binary', return_value='/stable/codex'), \
+             patch.object(gpt, 'authentication', return_value={'authenticated': True, 'method': 'ChatGPT'}), \
+             patch.object(dependencies, 'save_settings') as save:
+            backends = bridge.status()['backends']
+            self.assertFalse(backends['bitto']['available'])
+            self.assertEqual(backends['workbuddy']['availability'], 'missing_dependencies')
+            self.assertEqual(backends['workbuddy']['login_status'], 'unknown')
+            self.assertEqual(backends['gpt']['login_status'], 'verified')
+            self.assertTrue(backends['gpt']['supports_read_only'])
+            self.assertEqual(bridge.status('codex'), backends['gpt'])
+            save.assert_not_called()
     def test_gpt_install_deps_does_not_install_workbuddy_helper(self):
         with self.assertRaisesRegex(ValueError,'仅用于 WorkBuddy'):
             management.doctor(backend='gpt',install_deps=True)

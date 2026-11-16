@@ -27,12 +27,12 @@ async def handshake(config,env,cwd):
     entry=config['mcp_servers']['local_agents']
     async with stdio_client(StdioServerParameters(command=entry['command'],args=entry['args'],env=env,cwd=str(cwd))) as (r,w),ClientSession(r,w) as session:
         await session.initialize()
-        tools=[x.name for x in (await session.list_tools()).tools]
-        assert len(tools)==11,tools
-        result=await session.call_tool('agent_status',{'backend':'workbuddy'})
+        tools={x.name for x in (await session.list_tools()).tools}
+        assert tools=={'agent_status','agent_submit_task','agent_wait_task','agent_cancel_task','agent_respond_permission'},tools
+        result=await session.call_tool('agent_status',{})
         assert not result.isError,result
-        result=await session.call_tool('agent_status',{'backend':'gpt'})
-        assert not result.isError,result
+        status=result.structuredContent or json.loads(result.content[0].text)
+        assert set(status['backends'])=={'bitto','workbuddy','gpt'},status
     return len(tools)
 
 
@@ -47,7 +47,7 @@ def main(wheel):
     parsed=Version(original);next_version=f'{parsed.major}.{parsed.minor}.{parsed.micro+1}'
     with tempfile.TemporaryDirectory(prefix='raincoat-package-smoke-') as tmp:
         root=Path(tmp);home=root/'home';home.mkdir()
-        env={k:v for k,v in os.environ.items() if k not in {'PYTHONPATH','PYTHONHOME','VIRTUAL_ENV','WORKBUDDY_CREDENTIAL_HELPER','LOCAL_AGENT_NODE'}}
+        env={k:v for k,v in os.environ.items() if k not in {'PYTHONPATH','PYTHONHOME','VIRTUAL_ENV','WORKBUDDY_CREDENTIAL_HELPER','LOCAL_AGENT_NODE','LOCAL_AGENT_MCP_LEGACY_TOOLS'}}
         env.update(HOME=str(home),USERPROFILE=str(home),UV_TOOL_DIR=str(root/'tools'),
                    UV_TOOL_BIN_DIR=str(root/'bin'),LOCAL_AGENT_MCP_STATE_DIR=str(root/'state'))
         run([uv,'tool','install','--python',sys.executable,'--force',wheel],env,home)
@@ -68,7 +68,7 @@ def main(wheel):
         run([cli,'setup','--client','codex','--apply'],env,home)
         configfile=home/'.codex/config.toml';before=configfile.read_text();config=tomllib.loads(before)
         assert 'bridge.py' not in before and str(ROOT) not in before
-        assert asyncio.run(handshake(config,env,home))==11
+        tool_count=asyncio.run(handshake(config,env,home))
         python=config['mcp_servers']['local_agents']['command']
         # The native adapters must import from the wheel, never the repository.
         imported=run([python,'-c','import raincoat_agent_mcp;print(raincoat_agent_mcp.__file__)'],env,home)
@@ -99,7 +99,7 @@ print(json.dumps({'worker_status':result['status']}))
         assert upgraded['installed_version']==next_version,upgraded
         assert run([cli,'--version'],env,home)==next_version
         assert configfile.read_text()==before
-        assert asyncio.run(handshake(config,env,home))==11
+        assert asyncio.run(handshake(config,env,home))==tool_count
         rolled_back=json.loads(run([cli,'update','--from',wheel],env,home))
         if sys.platform=='win32':
             assert rolled_back['status']=='external_install_required',rolled_back
@@ -110,6 +110,6 @@ print(json.dumps({'worker_status':result['status']}))
         run([cli,'setup','--client','codex','--apply'],env,home)
         assert configfile.read_text()==before
         print(json.dumps({'installed_version':version,'upgrade_version':upgraded['installed_version'],'rollback_version':rolled_back['installed_version'],
-            'tools':11,'checkout_independent':True,'dsh_absent':True,'independent_helper_installed':helper_installed,'worker_import':worker,'config_preserved':True}))
+            'tools':tool_count,'checkout_independent':True,'dsh_absent':True,'independent_helper_installed':helper_installed,'worker_import':worker,'config_preserved':True}))
 
 if __name__=='__main__':main(Path(sys.argv[1]).resolve())

@@ -1,5 +1,4 @@
 import asyncio
-import json
 from pathlib import Path
 import sys
 import tempfile
@@ -56,8 +55,8 @@ class CompletionWaitTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(r['status'],'succeeded');self.assertLess(r['completion_delivery_ms'],250)
     async def test_results_do_not_repeat_huge_tool_history_by_default(self):
         r=bridge.compact({'job_id':self.job,'status':'succeeded','tool_calls':[{'id':str(i),'result':'x'*4000} for i in range(100)],'text':'done'})
-        self.assertEqual(r['tool_call_count'],100);self.assertEqual(len(r['tool_calls']),4)
-        self.assertLess(len(json.dumps(r)),6000)
+        self.assertEqual(r['tool_call_count'],100)
+        self.assertNotIn('tool_calls',r)
     async def test_large_result_does_not_overflow_notification_channel(self):
         waiter=asyncio.create_task(shared.wait_task(self.job,2))
         await asyncio.sleep(0.03)

@@ -12,13 +12,19 @@ from mcp.client.stdio import stdio_client
 
 ROOT=Path(__file__).resolve().parents[1]
 
+def server_params(state):
+    return StdioServerParameters(
+        command=sys.executable, args=['-m', 'raincoat_agent_mcp', 'mcp'],
+        env={**os.environ, 'PYTHONPATH': str(ROOT / 'src'), 'LOCAL_AGENT_MCP_STATE_DIR': str(state)},
+    )
+
 def value(r):
     if r.isError:raise RuntimeError(r.content)
     return r.structuredContent or json.loads(r.content[0].text)
 
 async def main(backend):
-    output=Path(tempfile.mkdtemp(prefix='local-agent-integration-',dir='/private/tmp'))
-    params=StdioServerParameters(command=sys.executable,args=[os.environ.get('LOCAL_AGENT_TEST_ENTRY',str(ROOT/'bridge.py')),'mcp'],env={**os.environ,'LOCAL_AGENT_MCP_STATE_DIR':str(output/'state')})
+    output=Path(tempfile.mkdtemp(prefix='local-agent-integration-'))
+    params=server_params(output/'state')
     async with stdio_client(params) as (r,w),ClientSession(r,w) as session:
         await session.initialize()
         prompt=f'仅做本验证任务：直接调用以 python3 开头的命令，计算 [7,11,13] 的平方和，在 {output}/result.json 写入 JSON（numbers、sum_of_squares字段），重新读文件校验后回复结果与路径。仅运行 python3；不要先执行ls/pwd/mkdir或任何其他工作流。'
