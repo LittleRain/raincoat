@@ -409,7 +409,7 @@ export async function pullVault(root) {
   const before = await gitOverview(root)
   if (!before.ok) return { ok: false, message: before.error || '不是 git 仓库' }
   if (before.dirty) return { ok: false, message: `本地有 ${before.dirty} 个未提交改动，先处理再拉`, behind: before.behind }
-  const pull = await git(root, ['pull', '--ff-only', '--quiet'], 60_000)
+  const pull = await git(root, ['-c', 'merge.directoryRenames=false', 'pull', '--ff-only', '--quiet'], 60_000)
   const after = await gitOverview(root)
   return {
     ok: pull.ok,

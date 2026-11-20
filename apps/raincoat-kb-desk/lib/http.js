@@ -174,13 +174,28 @@ export function registerHttp(ctx) {
       }
       const done = mergeCount('done', liveDone)
       const failed = mergeCount('failed', liveFailed)
+      // 心跳还没上线的旧 worker 没有 /workers 记录，用「最近一次抓取完成」兜底判断活性
+      const lastDoneAt = Math.max(
+        0,
+        ...liveDone.map((job) => Number(job.finishedAt) || 0),
+        ...history.filter((job) => job.status === 'done').map((job) => Number(job.finishedAt) || 0),
+      )
+      let workers = null
+      try {
+        workers = await services.ingest.workers()
+      } catch {
+        // 老版本服务没有 /workers：心跳显示为空，不影响其它统计
+        workers = null
+      }
       return json(res, 200, {
         stats: {
           ...stats,
           done: done.total,
           failed: failed.total,
           archived: { done: done.archivedOnly, failed: failed.archivedOnly },
+        lastDoneAt: lastDoneAt || null,
         },
+        workers,
       })
     }
 

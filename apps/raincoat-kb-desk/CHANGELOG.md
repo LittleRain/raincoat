@@ -1,3 +1,22 @@
+## 0.9.7
+
+两件事：不再为「重投」多长一篇，以及队列空的时候也能回答「抓取端还活着吗」。
+
+- **入队前按 canonical_url 去重**：worker 重投、手工补录都会把同一篇再推进 Inbox。现在 tick 在入队前用 `localIngestIndex` 查一遍 `00 raw`，命中就调 `dropDuplicateInbox` 把这份重复投递从 Inbox 移走，并在 `log.md` 留一条 `triage:<space> | 标题 → drop（重复：已有 …）`，报告里也写一行。之前这类重复会白跑一次模型、多出一条 job（`S-092`/`S-094` 那次就是这么长出第二条摘要的）。
+- **抓取端活性**：`GET /ingest/stats` 新增 `workers`（读服务端 `/api/workers` 心跳）与 `lastDoneAt` 兜底；面板统计卡从 4 张变 5 张，多一张「抓取端」——在线显示「心跳 N 分钟前」，离线显示最后心跳，旧版 worker 没有心跳时退回「最近抓取 N 分钟前」，不再是空白。
+- 服务端配套：`squirrel` 新增 `POST /api/worker/heartbeat` 与 `GET /api/workers`（心跳落 `data/queue/workers.json`，3 分钟无心跳判离线），worker 每 60 秒打一次（启动先打一次）。
+
+## 0.9.6
+
+修「Inbox 明明有东西，却一整天没摄入」这一类静默停摆。根因不是模型，是闭环的两个前置条件互相锁死：工作区脏就跳过 pull、队列里有活就跳过提交，而这两件事恰好互为解法——11-19 22:20 到 11-20 13:43 就这样零摄入 15 小时，且状态只活在内存里，面板看不出来。
+
+- **提案不再能冻住提交**：`expireStaleProposals` 在每轮开头就把「原文已不存在」的提案判废（历史上一条孤儿提案卡了 2 天），本轮尝试落盘仍失败的提案超过 `proposalTtlMinutes`（默认 30 分钟）也判废；判废会写进报告，不再安静消失。
+- **提交与「全局空闲」解耦**：原来要等 `activeCount() === 0` 才提交，现在只要没有 `running` 的整理就推——已落盘的产出不再被一个坏条目扣住。tick 顺序也改成「判废 → 落盘 → 提交 → 拉取 → 入队」，脏工作区会先被自己的提交消化掉，而不是挡住 pull。
+- **重试有预算、错误有分级**：`attemptsFor(path)` 数同一篇失败次数，超过 `maxAttemptsPerDoc`（默认 5）就停下并在报告里写明「先停下等人看」；命中 `429 / insufficient_quota / 配额` 后进入 `quotaCooldownMinutes`（默认 10 分钟）冷却，不再按 60 秒节奏重撞网关（11-16 曾对同一篇重试 53 次）。
+- **两台宿主不再各跑一份内存队列**：`syncFromDisk()` 按 mtime 判断队列文件是否被另一个宿主改过，没有 running 任务时整体接管；`lastReport` 也落盘到 `watcher-state.json`，进程重启后仍能看到「上一轮为什么没动」。
+- **git 拉取关掉目录改名推断**：`-c merge.directoryRenames=false`。worker 往 `00 Inbox/<日期>/` 加文件时，git 会把「Inbox → raw」的改名误判成整目录搬家，制造假冲突并把仓库留在 detached HEAD；现在 `pull --rebase` 失败会先 `rebase --abort` 再返回，绝不从半途状态 push。
+- 新增 `tests/watcher-guards.test.mjs`：覆盖丢失原文的提案判废、存在的提案不动、失败计数与配额冷却、磁盘被另一宿主改过后整体接管。
+
 ## 0.9.5
 
 - 补上 0.9.4 没覆盖的那一半：**摄入页新增「本地摄入」区块**。0.9.4 的本地反查只能给「远端已经有任务」的行贴「已摄入」——如果一次摄入**从来没走过远端队列**（agent 用脚本直接落盘，比如播客转写；或手工整理），列表里连一行都没有，看上去就像没摄入过。现在这些只在 vault 里存在的摄入会单独列出来，带标题 / 平台 / 时间 / 「raw + 摘要」，点开即看；按 URL 与远端队列、history 去重（`urlKeys` 归一化过尾斜杠与 query），不会重复显示。

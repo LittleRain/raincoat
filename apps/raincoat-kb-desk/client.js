@@ -546,6 +546,23 @@ window.__ModuleLoader__.load({
       const statCards = [
         { title: '排队中', value: stats?.queued ?? '—', hint: stats?.oldestQueuedAt ? `最早已等 ${duration(Date.now() - stats.oldestQueuedAt)}` : '队列是空的', tone: stats?.queued ? 'warn' : null },
         { title: '处理中', value: stats?.claimed ?? '—', hint: 'worker 已领取' },
+        (() => {
+          const live = stats?.workers?.workers?.[0] || null
+          const agoOf = (sec) => (sec == null ? null : sec < 90 ? `${sec} 秒前` : `${Math.round(sec / 60)} 分钟前`)
+          const ago = live?.ageSec == null ? null : agoOf(live.ageSec)
+          const lastDoneAgo = stats?.lastDoneAt ? agoOf(Math.round((Date.now() - stats.lastDoneAt) / 1000)) : null
+          return {
+            title: '抓取端',
+            value: !live ? '—' : live.online ? '在线' : '离线',
+            // 心跳是 0.9.7 才有的：mini 上还是旧 worker 时，退回「最近一次抓取」判断
+            hint: live
+              ? `${live.name || 'worker'} · ${live.online ? `心跳 ${ago}` : `最后心跳 ${ago}`}`
+              : lastDoneAgo
+                ? `旧版 worker · 最近抓取 ${lastDoneAgo}`
+                : '没有心跳记录',
+            tone: !live ? null : live.online ? null : 'warn',
+          }
+        })(),
         { title: '已完成', value: stats?.done ?? '—', hint: stats?.archived?.done ? `含历史归档 ${stats.archived.done}` : '累计写入 vault' },
         {
           title: '失败',

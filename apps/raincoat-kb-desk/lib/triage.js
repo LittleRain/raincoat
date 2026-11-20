@@ -260,6 +260,18 @@ async function syncIndexes(root, space, { summaryPath, tldr, date }) {
   return changes
 }
 
+/** 同一篇文章已经入库过（canonical_url 命中 raw）：Inbox 这份是重投，丢弃并留 triage:drop 痕迹。 */
+export async function dropDuplicateInbox(root, doc, hit) {
+  const date = new Date().toISOString().slice(0, 10)
+  const rawPath = String(hit?.raw || '')
+  const space = rawPath.split('/')[2] && SPACE_NAMES[rawPath.split('/')[2]] ? rawPath.split('/')[2] : 'builder'
+  const changes = []
+  await rm(resolveInVault(root, doc.path), { force: true })
+  changes.push({ path: doc.path, note: '重复投递，已从 Inbox 移除' })
+  changes.push(await appendLog(root, `## [${date}] triage:${space} | ${doc.title || doc.path} → drop（重复：已有 ${rawPath || '同 URL 的 raw'}）`))
+  return { changes, rawPath }
+}
+
 async function appendLog(root, line) {
   const logFile = join(root, '01 wiki/log.md')
   const prev = (await exists(logFile)) ? await readFile(logFile, 'utf8') : ''
@@ -496,13 +508,26 @@ export async function gitCommitAndPush(root, message, options = {}) {
   const commit = await run(['commit', '-m', message || `kb: 整理 Inbox ${new Date().toISOString().slice(0, 10)}`])
   if (!commit.ok) return { ok: false, step: 'commit', message: commit.stderr }
   // worker 在远端持续 push，本地提交之后先 rebase 再推，避免被拒。
-  const pull = await run(['pull', '--rebase', '--quiet'], 90_000)
-  const pulled = pull.ok ? '' : `（pull 失败：${pull.stderr.split('\n')[0]}）`
+  // merge.directoryRenames=false：worker 往 00 Inbox/<日期>/ 加文件时，git 会把
+  // 「Inbox → raw」的改名误判成整个目录搬家，制造假冲突；这里关掉目录改名推断。
+  const pullArgs = ['-c', 'merge.directoryRenames=false', 'pull', '--rebase', '--quiet']
+  const pull = await run(pullArgs, 90_000)
+  if (!pull.ok) {
+    // 半途 rebase 会把仓库留在 detached HEAD，绝不能从那种状态继续 push
+    await run(['rebase', '--abort'], 30_000)
+    return {
+      ok: false,
+      step: 'pull',
+      message: `拉远端时冲突，已中止 rebase（${pull.stderr.split('\n')[0] || 'rebase failed'}），下一轮重试`,
+      commit: commit.stdout,
+    }
+  }
   let push = await run(['push'], 120_000)
   if (!push.ok) {
     // 期间又有新提交：rebase 一次再推。
-    const retryPull = await run(['pull', '--rebase', '--quiet'], 90_000)
+    const retryPull = await run(pullArgs, 90_000)
     if (retryPull.ok) push = await run(['push'], 120_000)
+    else await run(['rebase', '--abort'], 30_000)
   }
   return {
     ok: push.ok,

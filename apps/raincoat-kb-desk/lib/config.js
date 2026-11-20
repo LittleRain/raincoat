@@ -37,6 +37,13 @@ const DEFAULTS = {
   autoApply: true,
   autoPush: true,
   watchSeconds: 60,
+  // 闭环护栏：防止「一个坏条目冻住全部产出」
+  // 1) 提案超过这么多分钟还没落盘就判废，释放「提交」这一步
+  proposalTtlMinutes: 30,
+  // 2) 同一篇整理失败这么多次后停下等人看，不再无限重试烧模型
+  maxAttemptsPerDoc: 5,
+  // 3) 命中配额/429 后暂停入队这么久，避免每分钟重撞网关
+  quotaCooldownMinutes: 10,
 }
 
 export function expandHome(value) {

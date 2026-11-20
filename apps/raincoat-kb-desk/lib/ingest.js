@@ -244,6 +244,23 @@ export function createIngest() {
       }
       return { total: targets.length, retried, resubmitted, failed }
     },
+    /** worker 心跳：队列空的时候，只有这里能回答「抓取端还活着吗」。 */
+    async workers() {
+      const payload = await request(settings(), '/workers', { token: 'worker' })
+      const list = Array.isArray(payload?.workers) ? payload.workers : []
+      return {
+        staleAfterSec: Number(payload?.stale_after_sec) || null,
+        workers: list.map((item) => ({
+          name: item?.name || null,
+          host: item?.host || null,
+          version: item?.version || null,
+          note: item?.note || null,
+          online: Boolean(item?.online),
+          ageSec: Number(item?.age_sec) >= 0 ? Number(item.age_sec) : null,
+          lastSeenAt: toMillis(item?.last_seen_at),
+        })),
+      }
+    },
     async submit({ url, title, note }) {
       const cred = readCredentials(settings())
       const base = String(cred.apiBase || settings().apiBase).replace(/\/+$/, '')
