@@ -43,3 +43,6 @@ skills/raincoat-report-circle-weekly/docs/*.xlsx
 
 # generated Skill execution logs
 skills/**/run.log
+
+# agent / codex 临时 home（含登录态，勿入库）
+.tmp/
