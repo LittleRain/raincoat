@@ -1,0 +1,1231 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>本地 Skill 管理器</title>
+<style>
+:root{
+  --bg:#FBFBFC; --surface:#FFFFFF; --surface2:#F5F5F7; --surface3:#EFEFF2;
+  --border:#E6E6EA; --border2:#D6D6DC;
+  --tx:#1A1A1F; --tx2:#6E6E7A; --tx3:#9A9AA5;
+  --accent:#5B5BD6; --accent-bg:#EEEEFB;
+  --danger:#B4231F; --danger-bg:#FDF0EF;
+  --warn:#8A5A00; --warn-bg:#FFF7E6;
+  --ok:#1F7A4D; --ok-bg:#EDF7F1;
+  --info:#1F5FA8; --info-bg:#EAF2FB;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --r:8px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--bg);color:var(--tx);
+  font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  -webkit-font-smoothing:antialiased}
+.wrap{max-width:1300px;margin:0 auto;padding:28px 24px 120px}
+.mono{font-family:var(--mono);font-size:12px}
+header.top{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;justify-content:space-between;padding-bottom:18px;border-bottom:1px solid var(--border)}
+h1{margin:0;font-size:20px;font-weight:600;letter-spacing:-.01em}
+h1 small{display:block;font-size:12px;font-weight:400;color:var(--tx2);margin-top:4px;letter-spacing:0}
+h2{font-size:15px;font-weight:600;margin:0 0 4px;display:flex;align-items:center;gap:8px}
+h2 .num{font-family:var(--mono);font-size:11px;color:var(--tx3);border:1px solid var(--border2);border-radius:4px;padding:1px 5px}
+.sub{color:var(--tx2);font-size:12.5px;margin:0 0 14px}
+.hero{display:grid;grid-template-columns:repeat(auto-fit,minmax(126px,1fr));gap:1px;background:var(--border);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin:20px 0 8px}
+.tile{background:var(--surface);padding:12px 14px}
+.tile .k{font-size:11px;color:var(--tx3)}
+.tile .v{font-size:20px;font-weight:600;font-variant-numeric:tabular-nums;margin-top:2px;letter-spacing:-.02em}
+.tile .v.d{color:var(--danger)} .tile .v.w{color:var(--warn)} .tile .v.o{color:var(--ok)}
+.tile .v.a{color:var(--accent)}
+nav.anchors{position:sticky;top:0;z-index:30;background:rgba(251,251,252,.9);backdrop-filter:blur(8px);border-bottom:1px solid var(--border);margin:0 -24px 24px;padding:10px 24px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+nav.anchors a{font-size:12.5px;color:var(--tx2);text-decoration:none;padding:5px 10px;border-radius:6px;border:1px solid transparent}
+nav.anchors a:hover{background:var(--surface2);color:var(--tx);border-color:var(--border)}
+section{margin:0 0 44px;scroll-margin-top:64px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r)}
+.pad{padding:14px 16px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.spacer{flex:1}
+button,.btn{font:inherit;font-size:12.5px;color:var(--tx);background:var(--surface);border:1px solid var(--border2);border-radius:6px;padding:5px 11px;cursor:pointer;transition:.12s}
+button:hover,.btn:hover{background:var(--surface2);border-color:var(--tx3)}
+button:disabled{opacity:.4;cursor:not-allowed}
+button.on{background:var(--tx);color:#fff;border-color:var(--tx)}
+button.ghost{border-color:transparent;background:transparent;color:var(--tx2)}
+button.ghost:hover{background:var(--surface2);color:var(--tx)}
+button.mini{font-size:11.5px;padding:2px 7px;border-radius:5px}
+button.pri{background:var(--accent);color:#fff;border-color:var(--accent)}
+button.pri:hover{background:#4A4AC4;border-color:#4A4AC4}
+button.dgr{color:var(--danger);border-color:#E7BDBC}
+button.dgr:hover{background:var(--danger-bg)}
+input[type=search],input[type=text],select{font:inherit;font-size:13px;padding:6px 10px;border:1px solid var(--border2);border-radius:6px;background:var(--surface);color:var(--tx);min-width:0}
+input:focus,select:focus{outline:2px solid var(--accent-bg);border-color:var(--accent)}
+.pillrow{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.pill{font-size:12.5px;padding:5px 11px;border-radius:999px;border:1px solid var(--border2);background:var(--surface);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.pill:hover{border-color:var(--tx3)}
+.pill.on{background:var(--tx);color:#fff;border-color:var(--tx)}
+.pill .n{font-family:var(--mono);font-size:11px;opacity:.65;font-variant-numeric:tabular-nums}
+table{width:100%;border-collapse:collapse;font-size:13px}
+thead th{text-align:left;font-weight:500;font-size:11.5px;color:var(--tx3);padding:8px 10px;border-bottom:1px solid var(--border);white-space:nowrap;background:var(--surface)}
+tbody td{padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:top}
+tbody tr:hover{background:var(--surface2)}
+td.nm{font-weight:500;min-width:190px}
+td.pth{font-family:var(--mono);font-size:11px;color:var(--tx3);max-width:290px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nm .desc{font-weight:400;color:var(--tx2);font-size:12px;margin-top:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.b{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:1px 7px;border-radius:5px;white-space:nowrap;line-height:1.7}
+.b-builtin{background:var(--surface3);color:var(--tx2)}
+.b-market{background:var(--info-bg);color:var(--info)}
+.b-local{background:var(--ok-bg);color:var(--ok)}
+.b-auto{border:1px dashed var(--border2);color:var(--tx3);background:transparent}
+.b-container{border:1px dashed var(--info);color:var(--info);background:transparent}
+.b-plugin{border:1px dashed var(--tx3);color:var(--tx3);background:transparent}
+.b-pluginagent{border:1px dashed var(--warn);color:var(--warn);background:transparent}
+.b-coexist{background:var(--surface3);color:var(--tx2)}
+.b-duplicate{background:var(--warn-bg);color:var(--warn)}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;flex:0 0 auto}
+.d-fail{background:var(--danger)} .d-warn{background:#E0A800} .d-pass{background:#3EA96B}
+.st{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;white-space:nowrap}
+.st .dot{width:7px;height:7px}
+.st-off{color:var(--danger)} .st-model{color:var(--warn)} .st-on{color:var(--ok)} .st-na{color:var(--tx3)}
+.st-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:3px}
+.st-chip{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-family:var(--mono);border:1px solid var(--border2);border-radius:4px;padding:0 5px;color:var(--tx2)}
+.st-chip.off{border-color:#E7BDBC;color:var(--danger);background:var(--danger-bg)}
+.st-chip.model{border-color:#EFD9A8;color:var(--warn);background:var(--warn-bg)}
+.agchip{display:inline-block;font-size:10.5px;font-family:var(--mono);padding:1px 5px;border-radius:4px;margin:1px 2px 1px 0;border:1px solid var(--border2);color:var(--tx2)}
+.agchip.link{border-style:dashed;color:var(--accent);border-color:#C7C7EE}
+.cnt{font-family:var(--mono);font-size:11px;color:var(--tx3);margin-left:6px}
+.checks{display:flex;gap:10px;flex-wrap:wrap;align-items:center;white-space:nowrap}
+.ck{font-size:11px;font-family:var(--mono);color:var(--tx2)}
+.ck.f{color:var(--danger)} .ck.w{color:var(--warn)}
+.empty{color:var(--tx3);font-size:12.5px;padding:22px;text-align:center}
+pre.ev{margin:0;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-family:var(--mono);font-size:11.5px;white-space:pre-wrap;word-break:break-all;color:var(--tx2)}
+.evline{display:grid;grid-template-columns:200px 1fr;gap:10px;padding:5px 0;border-top:1px solid var(--border);font-size:12px}
+.evline:first-child{border-top:0}
+.evline .loc{font-family:var(--mono);font-size:11px;color:var(--accent);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.evline .txt{color:var(--tx2);word-break:break-all}
+details.rule{border:1px solid var(--border);border-radius:6px;margin-bottom:8px;background:var(--surface)}
+details.rule>summary{cursor:pointer;padding:9px 12px;font-size:13px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+details.rule>summary::-webkit-details-marker{display:none}
+details.rule>summary::before{content:"▸";color:var(--tx3);font-size:11px}
+details.rule[open]>summary::before{content:"▾"}
+details.rule .body{padding:0 12px 12px}
+details.rule .desc{color:var(--tx3);font-size:12px;margin:2px 0 8px}
+.ent-block{border-top:1px solid var(--border);padding:10px 0}
+.ent-block:first-child{border-top:0}
+.ent-h{display:flex;gap:8px;align-items:center;flex-wrap:wrap;cursor:pointer}
+.ent-h:hover .enm{color:var(--accent)}
+.enm{font-weight:500;font-size:13px}
+.kbadge{font-size:11px;font-family:var(--mono);padding:1px 6px;border-radius:4px}
+.k-identical{background:var(--ok-bg);color:var(--ok)}
+.k-meta-only{background:var(--surface3);color:var(--tx2)}
+.k-same-body-diff-files{background:var(--warn-bg);color:var(--warn)}
+.k-divergent{background:var(--danger-bg);color:var(--danger)}
+.cmd{background:#1A1A1F;color:#E8E8EF;border-radius:var(--r);padding:14px 16px;font-family:var(--mono);font-size:12px;white-space:pre-wrap;word-break:break-all;line-height:1.7}
+.note{font-size:12px;color:var(--tx2);background:var(--surface2);border:1px solid var(--border);border-left:3px solid var(--border2);border-radius:6px;padding:9px 12px;margin-top:10px}
+.note.warn{border-left-color:#E0A800;background:var(--warn-bg);color:var(--warn)}
+.note.danger{border-left-color:var(--danger);background:var(--danger-bg);color:var(--danger)}
+.note.ok{border-left-color:#3EA96B;background:var(--ok-bg);color:var(--ok)}
+.sec-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap}
+.more{text-align:center;padding:12px}
+.foot{color:var(--tx3);font-size:11.5px;border-top:1px solid var(--border);padding-top:14px;margin-top:32px;line-height:1.9}
+.g{border-bottom:1px dotted var(--tx3);cursor:help}
+/* 分诊卡 */
+.triage{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:10px;margin-bottom:14px}
+.tcard{border:1px solid var(--border);border-radius:var(--r);padding:11px 13px;background:var(--surface);cursor:pointer;transition:.12s}
+.tcard:hover{border-color:var(--tx3)}
+.tcard.on{border-color:var(--accent);background:var(--accent-bg)}
+.tcard .tk{font-size:12px;color:var(--tx2)}
+.tcard .tv{font-size:22px;font-weight:600;font-variant-numeric:tabular-nums;margin:1px 0 2px}
+.tcard .td{font-size:11.5px;color:var(--tx3);line-height:1.5}
+.conf{border:1px solid var(--border);border-radius:6px;margin-bottom:8px;overflow:hidden;background:var(--surface)}
+.conf.dim{opacity:.62}
+.conf-h{padding:9px 12px;background:var(--surface2);display:flex;gap:8px;align-items:center;flex-wrap:wrap;cursor:pointer}
+.conf-b{padding:0 12px 12px;display:none}
+.conf.open .conf-b{display:block}
+.rx{border:1px solid var(--border);border-radius:6px;padding:10px 12px;margin-top:8px;background:var(--surface2)}
+.rx .rxt{font-size:12.5px;font-weight:600;margin-bottom:4px}
+.grade{font-size:11px;font-family:var(--mono);padding:1px 6px;border-radius:4px}
+.gr-auto{background:var(--ok-bg);color:var(--ok)}
+.gr-semi{background:var(--warn-bg);color:var(--warn)}
+.gr-manual{background:var(--danger-bg);color:var(--danger)}
+.gr-none{background:var(--surface3);color:var(--tx2)}
+/* 抽屉 / 弹层 */
+aside#drawer{position:fixed;top:0;right:0;width:min(700px,94vw);height:100vh;background:var(--surface);border-left:1px solid var(--border2);box-shadow:-16px 0 40px rgba(20,20,30,.10);transform:translateX(102%);transition:transform .2s ease;z-index:60;display:flex;flex-direction:column}
+aside#drawer.open{transform:none}
+#drawer .dh{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:flex-start}
+#drawer .db{overflow:auto;padding:16px 18px 60px;flex:1}
+.kv{display:grid;grid-template-columns:104px 1fr;gap:4px 12px;font-size:12.5px;margin-bottom:14px}
+.kv dt{color:var(--tx3);font-size:11.5px}
+.kv dd{margin:0;word-break:break-all}
+.kv dd.mono{font-size:11.5px}
+.mask{position:fixed;inset:0;background:rgba(20,20,28,.30);opacity:0;pointer-events:none;transition:.2s;z-index:55}
+.mask.on{opacity:1;pointer-events:auto}
+#act{position:fixed;left:50%;top:50%;transform:translate(-50%,-46%) scale(.98);width:min(680px,94vw);max-height:86vh;background:var(--surface);border:1px solid var(--border2);border-radius:12px;box-shadow:0 24px 64px rgba(20,20,30,.22);z-index:70;display:none;flex-direction:column}
+#act.open{display:flex;transform:translate(-50%,-50%) scale(1)}
+#act .ah{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:flex-start}
+#act .ab{padding:14px 18px;overflow:auto;flex:1}
+#act .af{padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+#bulkbar{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;background:var(--tx);color:#fff;border-radius:10px;padding:10px 14px;display:none;gap:10px;align-items:center;z-index:40;box-shadow:0 10px 30px rgba(20,20,30,.28);font-size:12.5px}
+#bulkbar.on{display:flex}
+#bulkbar button{background:rgba(255,255,255,.12);color:#fff;border-color:rgba(255,255,255,.25)}
+#bulkbar button:hover{background:rgba(255,255,255,.22)}
+.srvbar{font-size:12px;border-radius:6px;padding:7px 11px;margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.srv-on{background:var(--ok-bg);color:var(--ok);border:1px solid #BFE3CE}
+.srv-off{background:var(--surface2);color:var(--tx2);border:1px solid var(--border)}
+tr.sel td{background:var(--accent-bg)}
+@media(max-width:820px){.hide-s{display:none}.evline{grid-template-columns:1fr}.wrap{padding:18px 14px 90px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>本地 Skill 管理器</h1>
+      <small id="meta"></small>
+    </div>
+    <div class="row">
+      <button class="btn" id="btnRescan">重扫</button>
+    </div>
+  </header>
+  <div id="srvbar"></div>
+
+  <div class="hero" id="hero"></div>
+
+  <nav class="anchors">
+    <a href="#s1">① 按 agent 看清册</a>
+    <a href="#s2">② 校验与证据</a>
+    <a href="#s3">③ 生成安装指令</a>
+    <a href="#s4">④ 重复与冲突</a>
+    <a href="#s5">⑤ 适配表与开关机制</a>
+    <a href="#s6">⑥ 术语对照</a>
+  </nav>
+
+  <section id="s1">
+    <div class="sec-head">
+      <div>
+        <h2><span class="num">01</span>按 agent 看清册</h2>
+        <p class="sub">列出每个 agent 实际能看到的 skill。<span class="g" title="术语「软链引用」。只存了一个指向别处的路径，内容不在这个 agent 目录里。">快捷方式</span>与<span class="g" title="术语「实体持有」。文件真的在这个 agent 的目录里。">本体在此</span>分开标；<span class="g" title="来自各 agent 自己的配置开关：WorkBuddy 的 skillOverrides、Claude 的 enabledPlugins、Codex 的 config.toml plugins、AutoClaw 的 skills.entries。">启用状态</span>直接读各 agent 的原生开关，不是推测。</p>
+      </div>
+    </div>
+    <div class="card pad">
+      <div class="pillrow" id="agentPills"></div>
+      <div class="row" style="margin-bottom:12px">
+        <input type="search" id="q" placeholder="搜索名称 / 描述 / 路径…" style="flex:1;min-width:200px">
+        <select id="fType">
+          <option value="">全部来源</option>
+          <option value="builtin">内置</option>
+          <option value="market">市场安装</option>
+          <option value="local">本地自建</option>
+        </select>
+        <select id="fState">
+          <option value="">全部启用状态</option>
+          <option value="off">仅已禁用</option>
+          <option value="model_off">仅「仅手动可用」</option>
+          <option value="on">仅启用</option>
+        </select>
+        <select id="fVerdict">
+          <option value="">全部校验状态</option>
+          <option value="fail">仅阻塞</option>
+          <option value="warn">仅提示</option>
+          <option value="pass">仅通过</option>
+        </select>
+        <button class="pill" id="fShared">只看多 agent 共享</button>
+        <button class="pill" id="fConflict">只看有重复的</button>
+        <button class="ghost" id="btnReset">重置</button>
+      </div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr>
+            <th style="width:26%">名称 / 描述</th>
+            <th>来源</th>
+            <th>启用状态</th>
+            <th class="hide-s">这个 agent 的引用方式</th>
+            <th class="hide-s">校验</th>
+            <th style="width:1%">操作</th>
+          </tr></thead>
+          <tbody id="tb"></tbody>
+        </table>
+      </div>
+      <div class="more" id="more"></div>
+      <div class="empty" id="tbEmpty" style="display:none">没有匹配的 skill</div>
+    </div>
+  </section>
+
+  <section id="s2">
+    <h2><span class="num">02</span>校验与证据</h2>
+    <p class="sub">两级判定：<b>阻塞</b>（原 FAIL）会挡住迁移，必须先修；<b>提示</b>（原 WARN）只影响质量。每条结论都带 <span class="mono">文件:行号</span> 证据。规则定义在 <span class="mono">rules.json</span>，可自行增删。</p>
+    <div class="card pad" style="margin-bottom:12px">
+      <div class="row" id="ruleBar"></div>
+    </div>
+    <div id="ruleList"></div>
+  </section>
+
+  <section id="s3">
+    <h2><span class="num">03</span>生成安装指令</h2>
+    <p class="sub">选一个 skill + 目标 agent，生成可直接发给那个 agent 的指令。指令里已钉死来源路径、安装位置、安装方式、备选方案与前置校验结论，目标 agent 只剩执行。</p>
+    <div class="card pad">
+      <div class="row" style="margin-bottom:14px">
+        <input type="search" id="iSearch" list="skillList" placeholder="输入 skill 名称…" style="flex:1;min-width:220px">
+        <datalist id="skillList"></datalist>
+        <select id="iAgent"></select>
+        <button class="btn" id="btnGen">生成</button>
+      </div>
+      <div class="row" style="margin-bottom:10px">
+        <span class="mono" style="color:var(--tx3)">输出形式</span>
+        <button class="pill on" id="tabAgent" data-fmt="agent">发给目标 agent</button>
+        <button class="pill" id="tabShell" data-fmt="shell">我自己跑</button>
+      </div>
+      <div id="iOut" class="empty">还没有生成。选一个 skill 和目标 agent，点「生成」。</div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn" id="btnCopyCmd" style="display:none">复制指令</button>
+        <span class="mono" id="iCopied" style="color:var(--ok);display:none">已复制</span>
+      </div>
+    </div>
+  </section>
+
+  <section id="s4">
+    <h2><span class="num">04</span>重复与冲突</h2>
+    <p class="sub">同名不等于重复。先分清<b>同名异物</b>（不同来源恰好重名，硬合并会出事）与<b>真重复</b>（同一份被复制到多处），再看两边是否还都在生效。每组都带处方：留哪一份、为什么、能不能自动做。</p>
+    <div class="triage" id="triage"></div>
+    <div class="card pad" style="margin-bottom:12px">
+      <div class="row">
+        <button class="pill on" id="cfAll">全部</button>
+        <button class="pill" id="cfTodo">只看待处理</button>
+        <button class="pill" id="cfCoexist">只看同名异物</button>
+        <button class="pill" id="cfDormant">只看已停用</button>
+        <span class="spacer"></span>
+        <button class="btn" id="btnPlan">生成处理方案包</button>
+      </div>
+    </div>
+    <div id="groupStrip"></div>
+    <div id="confList"></div>
+  </section>
+
+  <section id="s5">
+    <h2><span class="num">05</span>适配表与开关机制</h2>
+    <p class="sub">agent 适配表（<span class="mono">agents.json</span>）与每个 agent 的启用/禁用开关落点。实测下来四个 agent 四种机制、两种粒度，没法统一，所以逐个声明。</p>
+    <div class="card" style="overflow-x:auto">
+      <table>
+        <thead><tr><th>agent</th><th>注册</th><th class="hide-s">快捷方式</th><th class="hide-s">自有本体</th><th>支持快捷方式</th><th>开关粒度</th><th class="hide-s">开关落点</th></tr></thead>
+        <tbody id="agTb"></tbody>
+      </table>
+    </div>
+    <div id="excl" style="margin-top:12px"></div>
+  </section>
+
+  <section id="s6">
+    <h2><span class="num">06</span>术语对照</h2>
+    <p class="sub">页面上凡是带虚线下划线 <span class="g" title="悬停就能看到技术术语和口径定义。">这样的词</span>，鼠标放上去都能看到它的技术术语与口径。这里列全。</p>
+    <div class="card" style="overflow-x:auto">
+      <table><thead><tr><th style="width:26%">页面上显示</th><th style="width:24%">技术术语</th><th>口径定义</th></tr></thead>
+      <tbody id="gloss"></tbody></table>
+    </div>
+  </section>
+
+  <div class="foot" id="foot"></div>
+</div>
+
+<div class="mask" id="mask"></div>
+
+<aside id="drawer">
+  <div class="dh">
+    <div style="flex:1;min-width:0">
+      <div id="dTitle" style="font-size:15px;font-weight:600"></div>
+      <div id="dSub" class="mono" style="color:var(--tx3);font-size:11px;margin-top:3px;word-break:break-all"></div>
+    </div>
+    <button class="btn" id="dClose">关闭</button>
+  </div>
+  <div class="db" id="dBody"></div>
+</aside>
+
+<div id="act">
+  <div class="ah">
+    <div style="flex:1;min-width:0">
+      <div id="aTitle" style="font-size:15px;font-weight:600"></div>
+      <div id="aSub" class="mono" style="color:var(--tx3);font-size:11px;margin-top:3px;word-break:break-all"></div>
+    </div>
+    <button class="btn" id="aClose">关闭</button>
+  </div>
+  <div class="ab" id="aBody"></div>
+  <div class="af">
+    <button class="btn" id="aCopy">复制命令</button>
+    <span class="spacer"></span>
+    <span class="mono" id="aMsg" style="color:var(--tx3)"></span>
+    <button class="btn pri" id="aGo">确认执行</button>
+  </div>
+</div>
+
+<div id="bulkbar">
+  <span id="bulkText"></span>
+  <button class="btn" id="bulkClear">清空</button>
+  <button class="btn pri" id="bulkPlan">生成方案包</button>
+</div>
+
+<script>
+const DOC = /*__SKILL_DATA__*/null;
+const SRV = /*__SERVER__*/null;
+const E = DOC.entities, AG = DOC.agent_stats, RM = DOC.rule_meta, RH = DOC.rule_hits;
+const NAME2E = {}; E.forEach(e => NAME2E[e.name] = e);
+const PY = DOC.python_bin, TOOL = DOC.tool_dir;
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fnum = n => (n||0).toLocaleString('en-US');
+function fbytes(n){
+  if(!n) return '0B';
+  const u=['B','KB','MB','GB']; let i=0; n=Number(n);
+  while(n>=1024 && i<u.length-1){ n/=1024; i++; }
+  return (i===0? n.toFixed(0) : n.toFixed(1)) + u[i];
+}
+const sh = p => String(p||'').replace(/^\/Users\/[^/]+/, '~');
+const TYPELABEL = {builtin:'内置', market:'市场安装', local:'本地自建'};
+const KIND = {identical:'逐字一致','meta-only':'仅元数据不同','same-body-diff-files':'正文一致·文件集不同',divergent:'正文已不一致'};
+const GRADELABEL = {auto:'可自动',semi:'半自动',manual:'需人工',none:'无需处理'};
+const STATE = {
+  on:{t:'启用',c:'st-on',d:'#3EA96B', k:'on'},
+  model_off:{t:'仅手动可用',c:'st-model',d:'#E0A800', k:'model_off'},
+  off:{t:'已禁用',c:'st-off',d:'#B4231F', k:'off'},
+  partial_off:{t:'部分副本已禁用',c:'st-off',d:'#B4231F', k:'off'},
+  partial_model_off:{t:'部分副本仅手动可用',c:'st-model',d:'#E0A800', k:'model_off'},
+  unknown:{t:'无开关记录',c:'st-na',d:'#9A9AA5', k:'na'},
+  'n/a':{t:'无开关记录',c:'st-na',d:'#9A9AA5', k:'na'}
+};
+const stMeta = s => STATE[s] || STATE.unknown;
+
+/* ---------- 术语表 ---------- */
+const GLOSS = [
+  ['注册记录','条目（entry）','某个 agent 的 skills 目录下实际存在的一条记录。同一个 skill 被多个 agent 引用时会重复计数，所以这个数字总是大于真实副本数。'],
+  ['真实副本','唯一实体（unique entity）','把快捷方式折算掉之后，磁盘上真实存在的 skill 文件夹数量。'],
+  ['快捷方式','软链引用（symlink）','只存了一个指向别处的路径，内容不在这个 agent 的目录里。删掉它不会损失任何内容。'],
+  ['本体在此','实体持有','文件真的在这个 agent 的目录里，是内容的正身。'],
+  ['失效的快捷方式','断链（broken link）','快捷方式指向的目标已经被删除或移动了。'],
+  ['内容已不一致','真分叉（divergent）','两份同名副本的正文已经不一样，不是简单重复，合并前必须先决定留哪一份。'],
+  ['版本号不一致','版本漂移（version drift）','同一个上游包的两份副本版本号不同。通常整包升级即可，不必逐文件比。'],
+  ['内容指纹','正文指纹（body hash）','对正文算出的短哈希，用来判断两份是否逐字一致。'],
+  ['同一来源包','上游包（bundle）','这批副本来自同一个上游包，多见于把一个包装到了多个 agent。'],
+  ['保留的那一份','正本（canonical）','合并时决定留下来的那一份，其余副本改为指向它的快捷方式。'],
+  ['安装到','落位（destination）','这个 skill 装到目标 agent 之后应该待在哪个目录。'],
+  ['加载 / 拒绝加载','装载 / 拒载','agent 启动时读取 skill 的过程。被拒绝加载的 skill 等于不存在。'],
+  ['技能合集','技能集合（container）','一个目录里包含多个子技能，本身没有 SKILL.md，属于容器而非缺陷。'],
+  ['阻塞 / 提示 / 通过','FAIL / WARN / PASS','校验的两级判定。阻塞项会挡住迁移，提示项只影响质量。'],
+  ['同名异物','同名不同源（coexist）','两份东西恰好重名，来源互不相干（例如各 App 各自自带）。合并不是正确动作。'],
+  ['已禁用 / 仅手动可用','off / user-invocable-only','各 agent 自己的开关状态。已禁用 = 完全不加载；仅手动可用 = 模型不会自动调用，但你可以显式点名。'],
+];
+const TMAP = {}; GLOSS.forEach(g => TMAP[g[1]] = g[2]);
+const g = (text, tech) => `<span class="g" title="${esc((TMAP[tech]||''))}">${esc(text)}</span>`;
+
+function typeBadges(e){
+  let h = `<span class="b b-${e.type}">${TYPELABEL[e.type]}</span>`;
+  if(e.auto_created) h += `<span class="b b-auto">自动生成</span>`;
+  if(e.container) h += `<span class="b b-container">技能合集·${e.child_skill_count}</span>`;
+  const pm = e.plugin_meta;
+  if(pm && e.nested_level==='nested') h += `<span class="b b-plugin">插件技能</span>`;
+  if(pm && pm.plugin_kind==='agent') h += `<span class="b b-pluginagent">agent 型插件</span>`;
+  if(e.nested_level==='root' && (e.root_kind==='plugins'||e.root_kind==='builtin'))
+    h += `<span class="b b-pluginagent">插件根 SKILL.md</span>`;
+  if(e.overrides_applied && e.overrides_applied.length) h += `<span class="b b-auto">已人工覆盖</span>`;
+  return h;
+}
+function verdictCell(e){
+  const d = e.verdict==='fail'?'d-fail':(e.verdict==='warn'?'d-warn':'d-pass');
+  let h = `<span class="checks"><span class="dot ${d}"></span>`;
+  if(e.verdict==='pass') h += `<span class="ck">通过</span>`;
+  if(e.fail_count) h += `<span class="ck f">阻塞 ${e.fail_count}</span>`;
+  if(e.warn_count) h += `<span class="ck w">提示 ${e.warn_count}</span>`;
+  return h + '</span>';
+}
+function stateCell(e){
+  const m = stMeta(e.overall_state);
+  let h = `<span class="st ${m.c}"><span class="dot" style="background:${m.d}"></span>${m.t}</span>`;
+  const rows = e.refs.filter(r => r.state && r.state!=='on' && r.state!=='unknown' && r.state!=='n/a');
+  if(rows.length){
+    h += `<div class="st-row">` + rows.map(r => {
+      const rm = stMeta(r.state);
+      const cls = r.state==='off'||r.state==='partial_off' ? 'off' : 'model';
+      return `<span class="st-chip ${cls}" title="${esc(r.state_source||'')}">${esc(r.agent)} · ${esc(r.state_label||rm.t)}</span>`;
+    }).join('') + `</div>`;
+  }
+  return h;
+}
+
+const state = {agent:'all', q:'', type:'', st:'', verdict:'', shared:false, conflict:false,
+               limit:80, rule:'', cf:'all', fmt:'agent', sel:new Set()};
+
+/* ---------- header ---------- */
+function renderHead(){
+  const s = DOC.stats;
+  $('#meta').innerHTML = `扫描于 <span class="mono">${esc(DOC.generated_at.replace('T',' ').slice(0,19))}</span> · 主机 <span class="mono">${esc(DOC.host)}</span>`;
+  $('#srvbar').innerHTML = SRV
+    ? `<div class="srvbar srv-on"><span class="dot" style="background:#3EA96B"></span>
+        <b>直连模式已开启</b>（只绑本机回环，进程 ${SRV.pid}）。下面的禁用 / 卸载按钮点一下就真的会改文件——但任何写操作都会先给你一份干跑预览，确认后才动手。
+        <span class="spacer"></span><button class="mini" id="btnRescan2">重新扫描</button></div>`
+    : `<div class="srvbar srv-off"><span class="dot" style="background:#9A9AA5"></span>
+        <b>只读模式</b>：操作按钮只会生成命令，需要你自己粘到终端执行。
+        想点一下就生效，在终端跑
+        <span class="mono">${esc(PY)} skillctl.py serve --open</span>
+        <button class="mini" id="btnCopyServe">复制</button></div>`;
+  $('#hero').innerHTML = [
+    ['注册记录', s.entries, '', '条目(entry)'],
+    ['真实副本', s.entities, '', '唯一实体(unique entity)'],
+    ['快捷方式', s.links, '', '软链引用(symlink)'],
+    ['多 agent 共享', s.shared_entities, '', ''],
+    ['已禁用', s.fully_off, s.fully_off?'d':'', 'off'],
+    ['仅手动可用', s.model_off, s.model_off?'w':'', 'user-invocable-only'],
+    ['同名冲突', s.conflicts, 'w', ''],
+    ['其中真重复', s.conflict_duplicate, s.conflict_duplicate?'d':'', ''],
+    ['其中同名异物', s.conflict_coexist, '', '同名不同源(coexist)'],
+    ['待处理的', (s.todo_auto||0)+(s.todo_semi||0)+(s.todo_manual||0), 'w', ''],
+    ['校验阻塞', s.fail_entities, s.fail_entities?'d':'', 'FAIL'],
+    ['校验提示', s.warn_entities, 'w', 'WARN'],
+    ['全部通过', s.pass_entities, 'o', 'PASS'],
+    ['内置 / 市场 / 自建', `${s.builtin}/${s.market}/${s.local}`, '', ''],
+  ].map(([k,v,c,t])=>`<div class="tile" ${t?`title="${esc(t)}"`:''}><div class="k">${k}</div><div class="v ${c}">${fnum(v)}</div></div>`).join('');
+  $('#foot').innerHTML =
+    `数据规模 ${fbytes(s.total_bytes)} · 失效快捷方式 ${s.broken_links} · 非 skill 载体剔除 ${DOC.skipped.length}<br>` +
+    `重扫：<span class="mono">cd ${esc(TOOL)} && ${esc(PY)} skillctl.py scan</span><br>` +
+    `直连：<span class="mono">${esc(PY)} skillctl.py serve --open</span> · ` +
+    `单条详情：<span class="mono">skillctl.py state &lt;名称&gt;</span> · ` +
+    `处理方案包：<span class="mono">skillctl.py plan</span><br>` +
+    `回收站：<span class="mono">${esc(sh(DOC.paths.trash))}</span>（卸载只移到这里，不删除）`;
+  const b2 = $('#btnRescan2'); if(b2) b2.onclick = rescan;
+  const cb = $('#btnCopyServe'); if(cb) cb.onclick = () => copy(`${PY} skillctl.py serve --open`, '#btnCopyServe', '已复制');
+}
+
+/* ---------- view 1 ---------- */
+function entryFor(e, aid){ return aid==='all' ? null : e.refs.find(r => r.agent === aid); }
+function conflictNames(){ return new Set(DOC.conflicts.map(c=>c.name)); }
+function filtered(){
+  const cn = conflictNames();
+  const q = state.q.trim().toLowerCase();
+  return E.filter(e=>{
+    if(state.agent!=='all' && !e.agents.includes(state.agent)) return false;
+    if(state.type && e.type!==state.type) return false;
+    if(state.shared && e.agents.length<2) return false;
+    if(state.conflict && !cn.has(e.name)) return false;
+    if(state.verdict && e.verdict!==state.verdict) return false;
+    if(state.st){
+      if(state.st==='off' && !(e.off_agents&&e.off_agents.length)) return false;
+      if(state.st==='model_off' && !(e.model_off_agents&&e.model_off_agents.length)) return false;
+      if(state.st==='on' && e.off_agents&&e.off_agents.length) return false;
+    }
+    if(q){
+      const hay = (e.name+' '+(e.description||'')+' '+(e.description_zh||'')+' '+e.real_path+' '+(e.root_label||'')).toLowerCase();
+      if(!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+function renderPills(){
+  let h = `<span class="pill ${state.agent==='all'?'on':''}" data-a="all">全部 agent<span class="n">${E.length}</span></span>`;
+  AG.forEach(a=>{
+    h += `<span class="pill ${state.agent===a.id?'on':''}" data-a="${esc(a.id)}" title="${esc(a.note||a.install_hint||'')}">${esc(a.label)}<span class="n">${a.entries}</span></span>`;
+  });
+  $('#agentPills').innerHTML = h;
+  $('#agentPills').querySelectorAll('.pill').forEach(p=>p.onclick=()=>{
+    state.agent = p.dataset.a; state.limit = 80; renderPills(); renderTable();
+  });
+}
+function refCells(e){
+  const mine = state.agent==='all' ? null : entryFor(e, state.agent);
+  if(mine){
+    return (mine.is_link
+      ? `<span class="agchip link" title="内容在别处，这里只是一个指向它的路径">快捷方式</span>`
+      : `<span class="agchip" title="文件真的在这个 agent 的目录里">本体在此</span>`
+        + `<span class="cnt">+${e.agents.length-1} 处</span>`)
+      + `<div class="pth mono">${esc(sh(mine.path))}</div>`;
+  }
+  let h = '';
+  e.refs.slice(0,5).forEach(r=>{
+    h += `<span class="agchip ${r.is_link?'link':''}" title="${esc(r.path)}">${esc(r.agent)}${r.is_link?'↗':''}</span>`;
+  });
+  if(e.refs.length>5) h += `<span class="cnt">+${e.refs.length-5}</span>`;
+  h += `<div class="pth mono">${esc(sh(e.real_path))}</div>`;
+  return h;
+}
+function actionCell(e){
+  const aid = state.agent!=='all' ? state.agent : (e.entity_agents[0] || e.agents[0]);
+  const held = e.agents.includes(aid);
+  const off = (e.off_agents||[]).includes(aid);
+  const isBuiltin = e.type==='builtin';
+  return `<div class="row" style="gap:4px;flex-wrap:nowrap">
+    <button class="mini" data-act="install" data-n="${esc(e.name)}" title="生成安装到别的 agent 的指令">安装到…</button>
+    <button class="mini ${off?'':'dgr'}" data-act="${off?'enable':'disable'}" data-n="${esc(e.name)}" data-a="${esc(aid)}"
+      ${!held?'disabled':''} title="${!held?'该 agent 未持有':(off?'恢复启用':'禁用它（仍是写操作，会先给你干跑预览）')}">${off?'启用':'禁用'}</button>
+    <button class="mini dgr" data-act="uninstall" data-n="${esc(e.name)}" data-a="${esc(aid)}"
+      ${(!held||isBuiltin)?'disabled':''} title="${isBuiltin?'App 内置技能，删了会破坏 App 功能且升级会回来 —— 已禁用此按钮':(!held?'该 agent 未持有':'移入回收站（不删除）')}">卸载</button>
+  </div>`;
+}
+function renderTable(){
+  const rows = filtered();
+  const shown = rows.slice(0, state.limit);
+  $('#tb').innerHTML = shown.map(e=>{
+    const mine = state.agent==='all' ? null : entryFor(e, state.agent);
+    return `<tr data-n="${esc(e.name)}">
+      <td class="nm"><div>${esc(e.name)} ${e.version?`<span class="cnt">v${esc(e.version)}</span>`:''}</div>
+        <div class="desc">${esc(e.description_zh || e.description || '（无描述）')}</div></td>
+      <td>${typeBadges(e)}</td>
+      <td>${stateCell(e)}</td>
+      <td class="hide-s">${refCells(e)}</td>
+      <td class="hide-s">${verdictCell(e)}</td>
+      <td>${actionCell(e)}</td>
+    </tr>`;
+  }).join('');
+  $('#tbEmpty').style.display = rows.length ? 'none':'block';
+  $('#more').innerHTML = rows.length > shown.length
+    ? `<button class="btn" id="btnMore">再显示 ${Math.min(80, rows.length-shown.length)} 条（共 ${fnum(rows.length)}，已显示 ${shown.length}）</button>`
+    : `<span class="mono" style="color:var(--tx3)">共 ${fnum(rows.length)} 条</span>`;
+  const bm = $('#btnMore'); if(bm) bm.onclick = ()=>{ state.limit += 80; renderTable(); };
+  $('#tb').querySelectorAll('tr').forEach(tr=>{
+    tr.onclick = ev => {
+      if(ev.target.closest('button')) return;
+      openDrawer(NAME2E[tr.dataset.n]);
+    };
+  });
+  $('#tb').querySelectorAll('button[data-act]').forEach(b=>{
+    b.onclick = ev => { ev.stopPropagation(); startAction(b.dataset.act, b.dataset.n, b.dataset.a); };
+  });
+}
+
+/* ---------- view 2 ---------- */
+function renderRules(){
+  const ids = Object.keys(RH);
+  $('#ruleBar').innerHTML = ids.map(id=>{
+    const m = RM[id] || {}; const cls = m.level==='fail' ? 'ck f':'ck w';
+    return `<button class="${state.rule===id?'on':''}" data-r="${esc(id)}">
+      <span class="${cls}" style="font-weight:600">${m.level==='fail'?'阻塞':'提示'}</span>
+      ${esc(m.label)} <span class="cnt">${RH[id]}</span></button>`;
+  }).join('') + `<button class="${state.rule===''?'on':''}" data-r="">全部</button>`;
+  $('#ruleBar').querySelectorAll('button').forEach(b=>b.onclick=()=>{
+    state.rule = b.dataset.r; renderRules(); renderRuleList();
+  });
+}
+function renderRuleList(){
+  const ids = state.rule ? [state.rule] : Object.keys(RH);
+  let h = '';
+  ids.forEach(id=>{
+    const m = RM[id] || {};
+    const hit = E.filter(e => e.checks.some(c=>c.id===id));
+    if(!hit.length) return;
+    h += `<details class="rule" ${state.rule? 'open':''}>
+      <summary>
+        <span class="b" style="background:${m.level==='fail'?'var(--danger-bg)':'var(--warn-bg)'};color:${m.level==='fail'?'var(--danger)':'var(--warn)'}">${m.level==='fail'?'阻塞':'提示'}</span>
+        <b style="font-weight:600">${esc(m.label)}</b>
+        <span class="cnt">命中 ${hit.length} 个 skill</span><span class="spacer"></span>
+      </summary>
+      <div class="body">
+        <div class="desc">${esc(m.desc||'')}</div>
+        ${hit.slice(0,40).map(e=>{
+          const c = e.checks.find(x=>x.id===id);
+          return `<div class="ent-block">
+            <div class="ent-h" data-n="${esc(e.name)}">
+              <span class="dot ${e.verdict==='fail'?'d-fail':'d-warn'}"></span>
+              <span class="enm">${esc(e.name)}</span>
+              <span class="b b-${e.type}">${TYPELABEL[e.type]}</span>
+              <span class="cnt">×${c.count}${c.evidence_truncated? '（仅列前 5 条）':''}</span>
+            </div>
+            ${c.evidence.map(ev=>`<div class="evline">
+              <span class="loc">${esc(ev.file)}${ev.line?':'+ev.line:''}</span>
+              <span class="txt">${esc(ev.text)}</span></div>`).join('')}
+          </div>`;
+        }).join('')}
+        ${hit.length>40? `<div class="more mono" style="color:var(--tx3)">还有 ${hit.length-40} 个未列出 —— 用上方搜索或 ① 里筛选</div>`:''}
+      </div></details>`;
+  });
+  $('#ruleList').innerHTML = h || '<div class="empty">没有任何校验命中</div>';
+  $('#ruleList').querySelectorAll('.ent-h').forEach(el=>el.onclick=()=>openDrawer(NAME2E[el.dataset.n]));
+}
+
+/* ---------- view 3 ---------- */
+function agentOf(aid){ return AG.find(a=>a.id===aid); }
+function shellText(e, agent){
+  const dest = (agent.install_hint||'~/skills/').replace(/\/+$/,'') + '/' + e.name;
+  const sup = agent.supports_symlink;
+  const L = [];
+  if(sup===true){ L.push(`ln -s "${e.real_path}" "${dest}"`); L.push(`# 备选（不支持快捷方式时）`); L.push(`cp -R "${e.real_path}" "${dest}"`); }
+  else { L.push(`cp -R "${e.real_path}" "${dest}"`); }
+  return L.join('\n');
+}
+function installText(e, agent, fmt){
+  const dest = (agent.install_hint||'~/skills/').replace(/\/+$/,'') + '/' + e.name;
+  const sup = agent.supports_symlink;
+  let mode;
+  if(sup===true) mode = `快捷方式（${agent.label} 已验证支持）`;
+  else if(sup===false) mode = `复制（${agent.label} 已知不支持快捷方式）`;
+  else mode = `复制优先（${agent.label} 是否支持快捷方式未知，保守用复制）`;
+  const fails = e.checks.filter(c=>c.level==='fail');
+  const warns = e.checks.filter(c=>c.level==='warn');
+  let verdict;
+  if(fails.length) verdict = `阻塞 — ${fails.length} 项未清：` + fails.map(c=>c.label).join('、');
+  else if(warns.length) verdict = `通过（${warns.length} 项提示：` + warns.map(c=>c.label).join('、') + '）';
+  else verdict = '通过 — 无阻塞项、无提示';
+  const bits = [];
+  if(e.deps.tools.length) bits.push('命令行工具: ' + e.deps.tools.join(', '));
+  if(e.deps.skills.length) bits.push('依赖其他 skill: ' + e.deps.skills.join(', '));
+  if(e.deps.mcp.length) bits.push('需要 MCP 连接');
+  const deps = bits.length ? bits.join('；') : '无显式依赖声明';
+  const st = stMeta(e.overall_state);
+  if(fmt==='shell') return shellText(e, agent);
+  const L = [
+    `请帮我安装一个 skill，装到 ${agent.label}。`,
+    ``,
+    `· skill 名称：${e.name}`,
+    `· 来源路径（磁盘上真实存在的那一份）：${e.real_path}`,
+    `· 安装位置：${dest}`,
+    `· 安装方式：${mode}`,
+    `· 该 skill 目前的状态：${st.t}${e.off_agents&&e.off_agents.length?`（${e.off_agents.join('、')} 已关掉它）`:''}`,
+    `· 迁移前校验：${verdict}`,
+    `· 依赖：${deps}`,
+    ``,
+    `请按下面的方式执行，并在完成后回报实际生成的路径：`,
+    ``,
+    shellText(e, agent),
+    ``,
+  ];
+  if(e.link_count) L.push(`注意：这份内容当前已被 ${e.link_count} 处快捷方式引用（${e.link_agents.join('、')}），安装后请勿直接改动来源目录里的内容，否则会同时影响它们。`);
+  if(fails.length) L.push(`注意：这个 skill 有 ${fails.length} 项阻塞问题（${fails.map(c=>c.label).join('、')}）。先修再装，否则目标 agent 一定会踩同样的坑。`);
+  return L.filter(x=>x!==undefined).join('\n');
+}
+function renderInstall(){
+  $('#skillList').innerHTML = E.map(e=>`<option value="${esc(e.name)}"></option>`).join('');
+  refreshAgentOptions(null);
+}
+function refreshAgentOptions(e, keep){
+  const sel = $('#iAgent');
+  const cur = keep || sel.value;
+  const order = AG.slice().sort((a,b)=>{
+    const ha = e && e.agents.includes(a.id) ? 1 : 0;
+    const hb = e && e.agents.includes(b.id) ? 1 : 0;
+    if(ha !== hb) return ha - hb;
+    if(!ha){
+      const pa = a.prefer_as_target ? 1 : 0, pb = b.prefer_as_target ? 1 : 0;
+      if(pa !== pb) return pb - pa;
+      if(a.entries !== b.entries) return b.entries - a.entries;
+    }
+    return String(a.label).localeCompare(String(b.label));
+  });
+  sel.innerHTML = order.map(a=>{
+    const held = e && e.agents.includes(a.id);
+    return `<option value="${esc(a.id)}">${esc(a.label)}${held?' · 已持有':' · 未持有'}</option>`;
+  }).join('');
+  if(cur && [...sel.options].some(o=>o.value===cur)) sel.value = cur;
+}
+function doGen(){
+  const nm = $('#iSearch').value.trim();
+  const e = NAME2E[nm] || E.find(x=>x.name.toLowerCase()===nm.toLowerCase()) || E.find(x=>x.name.toLowerCase().includes(nm.toLowerCase()));
+  if(!e){ $('#iOut').className='empty'; $('#iOut').textContent = nm? `没找到「${nm}」` : '先输入一个 skill 名称'; $('#btnCopyCmd').style.display='none'; return; }
+  refreshAgentOptions(e);
+  let a = agentOf($('#iAgent').value);
+  let switched = false, noTarget = false;
+  if(a && e.agents.includes(a.id)){
+    const cand = AG.find(x=>!e.agents.includes(x.id));
+    if(cand){ a = cand; $('#iAgent').value = cand.id; switched = true; }
+    else noTarget = true;
+  }
+  const txt = installText(e, a, state.fmt);
+  refreshAgentOptions(e, a.id);
+  const notes = [];
+  if(switched) notes.push(`<div class="note">原选中的 agent 已持有该 skill，已自动切换到 <b>${esc(a.label)}</b>。</div>`);
+  if(noTarget) notes.push(`<div class="note warn">适配表里所有 agent 都已持有该 skill，下面这条指令仅作参照。</div>`);
+  notes.push(`<div class="note">该 skill 当前被 <b>${e.agents.length}</b> 个 agent 持有：${esc(e.agents.join('、'))}${e.link_count?`（其中 ${e.link_count} 处是快捷方式，真实副本只有一份）`:''}。</div>`);
+  if(e.off_agents && e.off_agents.length) notes.push(`<div class="note warn">注意：${esc(e.off_agents.join('、'))} 已经把这个 skill 关掉了。装到新 agent 之前先确认这是你要的。</div>`);
+  if(a.prefer_as_target) notes.push(`<div class="note">${esc(a.label)} 是你在 <span class="mono">agents.json</span> 里指定的默认安装位置（<span class="mono">prefer_as_target</span>）。</div>`);
+  if(e.verdict==='fail') notes.push(`<div class="note danger">该 skill 有 ${e.fail_count} 项阻塞问题未清。迁移前先修，否则目标 agent 一定会踩同样的坑。</div>`);
+  if(a.supports_symlink===null) notes.push(`<div class="note warn">${esc(a.label)} 是否支持快捷方式未经验证 —— 指令已自动回退为复制。</div>`);
+  if(e.link_count) notes.push(`<div class="note">该份内容已被 ${e.link_count} 处快捷方式引用，改动来源目录会同时影响它们。</div>`);
+  $('#iOut').className = '';
+  $('#iOut').innerHTML = `<div class="cmd" id="cmdBox">${esc(txt)}</div>` + notes.join('');
+  $('#btnCopyCmd').style.display='';
+  $('#btnCopyCmd').onclick = () => copy(txt, '#btnCopyCmd', '已复制');
+}
+
+/* ---------- view 4 ---------- */
+function conflictShown(){
+  return DOC.conflicts.filter(c=>{
+    if(state.cf==='todo') return c.nature==='duplicate' && c.liveness!=='dormant';
+    if(state.cf==='coexist') return c.nature==='coexist';
+    if(state.cf==='dormant') return c.liveness==='dormant' || (c.nature==='coexist'&&c.liveness!=='live');
+    return true;
+  });
+}
+function renderTriage(){
+  const s = DOC.stats;
+  const cards = [
+    ['todo','待处理', (s.todo_auto||0)+(s.todo_semi||0)+(s.todo_manual||0), `真重复且仍有副本在生效`, 'var(--warn)'],
+    ['coexist','同名异物', s.conflict_coexist, '不同来源恰好重名，不该合并', 'var(--tx3)'],
+    ['dormant','已停用', s.conflict_dormant + (s.coexist_dormant||0), '两边都已关掉或历史残留', 'var(--tx3)'],
+    ['all','全部冲突', s.conflicts, `其中真重复 ${s.conflict_duplicate} 组`, 'var(--tx2)'],
+  ];
+  $('#triage').innerHTML = cards.map(([k,label,v,d,color])=>`
+    <div class="tcard ${state.cf===k?'on':''}" data-k="${k}">
+      <div class="tk">${label}</div>
+      <div class="tv" style="color:${color}">${fnum(v)}</div>
+      <div class="td">${d}</div>
+    </div>`).join('');
+  $('#triage').querySelectorAll('.tcard').forEach(c=>c.onclick=()=>{ state.cf=c.dataset.k; syncCfPills(); renderTriage(); renderConf(); });
+}
+function syncCfPills(){
+  [['cfAll','all'],['cfTodo','todo'],['cfCoexist','coexist'],['cfDormant','dormant']].forEach(([id,k])=>{
+    $('#'+id).classList.toggle('on', state.cf===k);
+  });
+}
+function renderGroups(){
+  const groups = DOC.conflict_groups || [];
+  if(!groups.length){ $('#groupStrip').innerHTML=''; return; }
+  const s = DOC.stats;
+  $('#groupStrip').innerHTML = `<div class="card pad" style="margin-bottom:12px">
+    <div style="font-size:13px;font-weight:600;margin-bottom:6px">这批冲突来自同一个来源包（已归组，${groups.length} 组）</div>
+    <div class="sub" style="margin-bottom:8px">它们不是各自独立的问题。修一次就一起修，或者一起判定为「不用管」。</div>
+    ${groups.map(gr=>`<div class="evline" style="grid-template-columns:210px 1fr">
+      <span class="loc">${esc(gr.bundle)} <span class="cnt">×${gr.count}</span></span>
+      <span class="txt">${gr.version_drift?`<b style="color:var(--warn)">版本号不一致 ${esc(gr.versions.join(' → '))}</b> · `:''}${esc(gr.kinds.map(k=>KIND[k]||k).join('、'))} · ${esc(gr.names.slice(0,6).join(', '))}${gr.names.length>6?` 等 ${gr.names.length} 个`:''}</span>
+    </div>`).join('')}
+  </div>`;
+}
+function renderConf(){
+  const list = conflictShown();
+  if(!DOC.conflicts.length){ $('#confList').innerHTML = '<div class="empty">没有同名冲突</div>'; return; }
+  if(!list.length){ $('#confList').innerHTML = '<div class="empty">这个筛选下没有冲突</div>'; return; }
+  $('#confList').innerHTML = list.map((c)=>{
+    const p = c.prescription || {};
+    const i = DOC.conflicts.indexOf(c);
+    const dim = c.nature==='coexist' || c.liveness==='dormant';
+    const canPick = c.nature==='duplicate' && c.liveness!=='dormant';
+    return `<div class="conf ${dim?'dim':''}" data-i="${i}">
+      <div class="conf-h">
+        ${canPick?`<input type="checkbox" data-pick="${esc(c.name)}" ${state.sel.has(c.name)?'checked':''} style="cursor:pointer">`:''}
+        <span class="kbadge k-${c.kind}">${KIND[c.kind]||c.kind}</span>
+        <span class="b ${c.nature==='coexist'?'b-coexist':'b-duplicate'}">${c.nature==='coexist'?'同名异物':'真重复'}</span>
+        <b style="font-weight:600">${esc(c.name)}</b>
+        <span class="cnt">${c.count} 份不同副本</span>
+        ${c.version_drift&&c.version_drift.length?`<span class="b b-market">版本 ${esc(c.version_drift.join(' → '))}</span>`:''}
+        ${c.liveness!=='live'?`<span class="b b-auto">${c.liveness==='dormant'?'两面都已停用':`${c.disabled_count} 份已停用`}</span>`:''}
+        <span class="grade gr-${p.grade||'none'}">${GRADELABEL[p.grade||'none']}</span>
+      </div>
+      <div class="conf-b">
+        ${c.entities.map(x=>{
+          const m = stMeta(x.state);
+          return `<div class="ent-block">
+          <div class="ent-h" data-n="${esc(c.name)}">
+            <span class="b b-${x.type}">${TYPELABEL[x.type]}</span>
+            <span class="mono" style="font-size:11px;color:var(--tx2);word-break:break-all">${esc(sh(x.real_path))}</span>
+          </div>
+          <div class="row mono" style="gap:14px;color:var(--tx3);font-size:11px;margin-top:3px">
+            ${x.version?`<span>v${esc(x.version)}</span>`:''}
+            <span>文件 ${x.file_count}</span><span>${fbytes(x.total_bytes)}</span>
+            <span>内容指纹 ${esc(x.body_hash? x.body_hash.slice(0,8):'-')}</span>
+            <span>引用 ${esc(x.agents.join(', '))}</span>
+            <span class="st ${m.c}"><span class="dot" style="background:${m.d}"></span>${m.t}</span>
+          </div></div>`;
+        }).join('')}
+        <div class="rx">
+          <div class="rxt">处理方案 <span class="grade gr-${p.grade||'none'}">${GRADELABEL[p.grade||'none']}</span></div>
+          <div style="font-size:12.5px;color:var(--tx2)">${esc(p.action||'')}</div>
+          <div style="font-size:12px;color:var(--tx3);margin-top:3px">${esc(p.why||c.nature_why||'')}</div>
+          ${p.canonical?`<div style="font-size:12px;margin-top:7px">
+            <b>建议保留的那一份</b>：<span class="mono">${esc(sh(p.canonical))}</span>
+            <div style="color:var(--tx3);margin-top:2px">理由：${esc(p.canonical_why||'')}</div>
+            ${p.rewrite&&p.rewrite.length?`<div style="color:var(--tx3);margin-top:3px">其余 ${p.rewrite.length} 份改为指向它的快捷方式：${p.rewrite.map(r=>`<span class="mono">${esc(sh(r.path))}</span>`).join('、')}</div>`:''}
+          </div>`:''}
+          ${p.grade==='semi'?`<div class="note">脚本已备好，但默认不执行。先跑方案包里的对比命令看清差在哪，确认没有你要保留的独有文件，再加 <span class="mono">CONFIRM_SEMI=1</span> 重跑。</div>`:''}
+          ${p.grade==='manual'?`<div class="note">正文已真实分叉，留哪份是你自己的取舍。方案包只给对比命令，不会动手。</div>`:''}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  $('#confList').querySelectorAll('.conf-h').forEach(h=>h.onclick=(ev)=>{
+    if(ev.target.matches('input[type=checkbox]')) return;
+    h.parentElement.classList.toggle('open');
+  });
+  $('#confList').querySelectorAll('.ent-h').forEach(el=>el.onclick=()=>openDrawer(NAME2E[el.dataset.n]));
+  $('#confList').querySelectorAll('input[data-pick]').forEach(cb=>{
+    cb.onclick = ev => {
+      ev.stopPropagation();
+      const n = cb.dataset.pick;
+      if(cb.checked) state.sel.add(n); else state.sel.delete(n);
+      renderBulk();
+    };
+  });
+  renderBulk();
+}
+function renderBulk(){
+  const bar = $('#bulkbar');
+  if(!state.sel.size){ bar.classList.remove('on'); return; }
+  bar.classList.add('on');
+  const picked = DOC.conflicts.filter(c=>state.sel.has(c.name));
+  const auto = picked.filter(c=>c.prescription.grade==='auto').length;
+  const semi = picked.filter(c=>c.prescription.grade==='semi').length;
+  const man  = picked.filter(c=>c.prescription.grade==='manual').length;
+  $('#bulkText').innerHTML = `已选 <b>${state.sel.size}</b> 组　可自动 ${auto}　半自动 ${semi}　需人工 ${man}`;
+}
+
+/* ---------- view 5 ---------- */
+function renderAgents(){
+  $('#agTb').innerHTML = AG.map(a=>{
+    const sup = a.toggle_granularity;
+    const supTxt = sup==='skill' ? '<span class="b b-local">技能级</span>'
+      : (sup==='plugin' ? '<span class="b b-market">插件级</span>'
+      : (sup==='none' ? '<span class="b b-auto">无原生开关</span>' : '<span class="b b-builtin">—</span>'));
+    const sl = a.supports_symlink===true?'<span class="b b-local">支持</span>'
+      : (a.supports_symlink===false?'<span class="b b-market">不支持</span>':'<span class="b b-auto">未知</span>');
+    const kinds = Object.entries(a.by_kind||{}).map(([k,v])=>`<span class="agchip">${esc(k)} ${v}</span>`).join('');
+    const store = a.toggle_store && a.toggle_store!=='—' ? sh(a.toggle_store) : '—';
+    return `<tr style="cursor:default">
+      <td class="nm">${esc(a.label)}<div class="mono" style="color:var(--tx3);font-size:11px">${esc(a.id)} · ${esc(a.install_hint||'')}</div></td>
+      <td class="mono">${a.entries}</td>
+      <td class="hide-s mono">${a.links}</td><td class="hide-s mono">${a.owned_entities}</td>
+      <td>${sl}</td>
+      <td>${supTxt}<div class="mono" style="font-size:11px;color:var(--tx3)">${kinds||'-'}</div></td>
+      <td class="hide-s mono" style="font-size:11px;color:var(--tx3)">${esc(store)}</td>
+    </tr>`;
+  }).join('');
+  let h = '';
+  const toggles = AG.filter(a=>a.toggle_granularity && a.toggle_granularity!=='—');
+  if(toggles.length) h += `<div class="card pad" style="margin-bottom:10px">
+    <div style="font-size:13px;font-weight:600;margin-bottom:4px">各 agent 的开关机制（实测，不是推测）</div>
+    <div class="sub" style="margin-bottom:8px">四个 agent 四种机制、两种粒度，没法统一成一套规则。所以禁用/启用都走它自己的原生开关，而不是改文件名。</div>
+    ${AG.map(a=>a.toggle_evidence?`<div class="evline" style="grid-template-columns:190px 1fr">
+      <span class="loc">${esc(a.label)} · ${a.toggle_granularity==='skill'?'技能级':(a.toggle_granularity==='plugin'?'插件级':'无原生')}</span>
+      <span class="txt">${esc(a.toggle_evidence)}</span></div>`:'').join('')}
+  </div>`;
+  if((DOC.builtin_libraries||[]).length) h += `<div class="card pad" style="margin-bottom:10px"><div style="font-size:13px;font-weight:600;margin-bottom:4px">内置库（只作来源索引，不产出条目）</div><div class="sub" style="margin-bottom:6px">这些目录是 App 随包分发的技能库，其内容会被投影成用户目录里的「已安装副本」。两边都扫会凭空产生大量假冲突，所以只建索引。</div>` +
+    DOC.builtin_libraries.map(x=>`<div class="evline" style="grid-template-columns:280px 1fr"><span class="loc">${esc(x.path)}</span><span class="txt">${x.count} 个 · 服务于 ${esc(x.for_agent)} — ${esc(x.reason||'')}</span></div>`).join('') + '</div>';
+  if((DOC.ledger||[]).length) h += `<div class="card pad" style="margin-bottom:10px"><div style="font-size:13px;font-weight:600;margin-bottom:6px">最近的操作记录（${DOC.ledger.length} 条）</div>` +
+    DOC.ledger.slice(-12).reverse().map(x=>`<div class="evline" style="grid-template-columns:250px 1fr"><span class="loc">${esc(x.at)} · ${esc(x.action)}</span><span class="txt">${esc(x.name)} @ ${esc(x.agent||'')}</span></div>`).join('') + '</div>';
+  if(DOC.excluded.length) h += `<div class="card pad"><div style="font-size:13px;font-weight:600;margin-bottom:6px">主动排除的路径</div>` +
+    DOC.excluded.map(x=>`<div class="evline" style="grid-template-columns:280px 1fr"><span class="loc">${esc(x.path)}</span><span class="txt">${esc(x.reason)}</span></div>`).join('') + '</div>';
+  if(DOC.skipped.length) h += `<div class="card pad" style="margin-top:10px"><div style="font-size:13px;font-weight:600;margin-bottom:4px">判定为非 skill 载体、已剔除（${DOC.skipped.length}）</div><div class="sub" style="margin-bottom:6px">这些目录既没有 SKILL.md 也没有嵌套 skills/（例如只有 plugin.json + mcp.json 的 MCP 插件），列出来仅为透明。</div>` +
+    DOC.skipped.map(x=>`<div class="evline" style="grid-template-columns:280px 1fr"><span class="loc">${esc(sh(x.path))}</span><span class="txt">${esc(x.agent)} — ${esc(x.reason)}</span></div>`).join('') + '</div>';
+  $('#excl').innerHTML = h;
+}
+
+/* ---------- 术语表 ---------- */
+function renderGloss(){
+  $('#gloss').innerHTML = GLOSS.map(([plain, tech, def])=>
+    `<tr style="cursor:default"><td style="font-weight:500">${esc(plain)}</td>
+     <td class="mono" style="font-size:11.5px;color:var(--tx2)">${esc(tech)}</td>
+     <td style="color:var(--tx2);font-size:12.5px">${esc(def)}</td></tr>`).join('');
+}
+
+/* ---------- drawer ---------- */
+function pluginRow(pm, nestedLevel){
+  const extra = [];
+  if(pm.has_mcp) extra.push('mcp.json');
+  if(pm.has_agents) extra.push('agents/');
+  if(pm.has_commands) extra.push('commands/');
+  const where = nestedLevel==='nested'
+    ? '位于插件的 skills/ 子目录（bitto 规范形态）'
+    : 'SKILL.md 直接在插件根（bitto 校验会拒载）';
+  return `<dt>插件清单</dt><dd>${esc(pm.id||'-')}${pm.version?` <span class="mono">v${esc(pm.version)}</span>`:''}`
+    + `${pm.plugin_kind?` · ${esc(pm.plugin_kind)} 型`:''}`
+    + `${pm.display_name?`（${esc(pm.display_name)}）`:''}`
+    + `${pm.author?`<br><span style="color:var(--tx3);font-size:11px">作者 ${esc(pm.author)}</span>`:''}`
+    + `<br><span style="color:var(--tx3);font-size:11px">${esc(where)}</span>`
+    + `${extra.length?`<br><span style="color:var(--warn);font-size:11px">该插件还含 ${esc(extra.join(' / '))} —— 只迁这一个 skill、不等于迁走整个插件</span>`:''}</dd>`;
+}
+function openDrawer(e){
+  if(!e) return;
+  $('#dTitle').textContent = e.name;
+  $('#dSub').textContent = e.real_path;
+  const refs = e.refs.map(r=>{
+    const m = stMeta(r.state);
+    return `<div style="margin-bottom:6px">
+      <span class="agchip ${r.is_link?'link':''}">${esc(r.agent_label||r.agent)}</span>
+      <span class="st ${m.c}"><span class="dot" style="background:${m.d}"></span>${esc(r.state_label||m.t)}</span>
+      <span class="mono" style="font-size:11px;color:var(--tx3);word-break:break-all">${esc(sh(r.path))}${r.is_link?`<br>↗ ${esc(sh(r.link_raw||''))}`:''}</span>
+      ${r.state_source?`<div class="mono" style="font-size:11px;color:var(--tx3)">← ${esc(r.state_source)}</div>`:''}
+    </div>`;
+  }).join('');
+  const checks = e.checks.length ? e.checks.map(c=>`
+    <details class="rule" open>
+      <summary>
+        <span class="b" style="background:${c.level==='fail'?'var(--danger-bg)':'var(--warn-bg)'};color:${c.level==='fail'?'var(--danger)':'var(--warn)'}">${c.level==='fail'?'阻塞':'提示'}</span>
+        <b style="font-weight:600">${esc(c.label)}</b><span class="cnt">×${c.count}</span>
+      </summary>
+      <div class="body"><div class="desc">${esc(c.desc||'')}</div>
+      ${c.evidence.map(ev=>`<div class="evline"><span class="loc">${esc(ev.file)}${ev.line?':'+ev.line:''}</span><span class="txt">${esc(ev.text)}</span></div>`).join('')}
+      ${c.evidence_truncated?`<div class="txt" style="color:var(--tx3);margin-top:6px">仅列前 ${c.evidence.length} 条</div>`:''}
+      </div></details>`).join('') : '<div class="note ok">全部校验通过</div>';
+  const deps = [];
+  if(e.deps.tools.length) deps.push('命令行工具: ' + e.deps.tools.join(', '));
+  if(e.deps.skills.length) deps.push('其他 skill: ' + e.deps.skills.join(', '));
+  if(e.deps.mcp.length) deps.push('MCP');
+  const targets = AG.filter(a=>!e.agents.includes(a.id));
+  const sm = stMeta(e.overall_state);
+  $('#dBody').innerHTML = `
+    <div style="margin-bottom:12px">${typeBadges(e)} ${verdictCell(e)} <span class="st ${sm.c}"><span class="dot" style="background:${sm.d}"></span>${sm.t}</span></div>
+    <div class="row" style="margin-bottom:14px">
+      ${e.agents.map(a=>{
+        const off = (e.off_agents||[]).includes(a);
+        return `<button class="mini ${off?'':'dgr'}" data-act2="${off?'enable':'disable'}" data-n="${esc(e.name)}" data-a="${esc(a)}">${off?'启用':'禁用'} @ ${esc(a)}</button>`;
+      }).join('')}
+      ${e.type!=='builtin'?`<button class="mini dgr" data-act2="uninstall" data-n="${esc(e.name)}" data-a="${esc(e.entity_agents[0]||e.agents[0])}">卸载（移入回收站）</button>`:
+        `<span class="mono" style="font-size:11px;color:var(--tx3)">内置技能，卸载已禁用</span>`}
+    </div>
+    <dl class="kv">
+      <dt>真实副本</dt><dd class="mono">${esc(e.real_path)}</dd>
+      <dt>来源判定</dt><dd>${esc(e.type_evidence)}</dd>
+      ${e.market_meta?`<dt>安装元信息</dt><dd>${esc(e.market_meta.plugin)}@${esc(e.market_meta.marketplace)} v${esc(e.market_meta.version)}<br><span class="mono" style="font-size:11px;color:var(--tx3)">${esc((e.market_meta.installed_at||'').slice(0,10))}</span></dd>`:''}
+      ${e.plugin_meta?pluginRow(e.plugin_meta, e.nested_level):''}
+      <dt>来源根</dt><dd>${esc(e.root_label)} <span class="mono" style="color:var(--tx3)">(${esc(e.root_kind)})</span></dd>
+      <dt>持有 / 引用</dt><dd>本体在此 ${e.entity_agents.length? esc(e.entity_agents.join('、')):'-'} · 快捷方式 ${e.link_agents.length? esc(e.link_agents.join('、')):'-'}</dd>
+      <dt>体量</dt><dd>${e.file_count} 文件 · ${fbytes(e.total_bytes)} · ${fnum(e.line_count)} 行${e.truncated?'（文本超预算，已截断扫描）':''}</dd>
+      <dt>内容指纹</dt><dd class="mono">${esc(e.body_hash? e.body_hash.slice(0,16):'-')}</dd>
+      <dt>依赖</dt><dd>${esc(deps.join('；')||'未探测到')}</dd>
+      ${e.author?`<dt>作者</dt><dd>${esc(e.author)}</dd>`:''}
+      ${e.version?`<dt>版本</dt><dd class="mono">${esc(e.version)}${e.version_source?` <span style="color:var(--tx3);font-size:11px">← ${esc(e.version_source)}</span>`:''}</dd>`:''}
+      ${e.from_builtin_library?`<dt>同名内置副本</dt><dd>App 内置库中另有同名技能：<span class="mono" style="font-size:11px">${esc(e.library_path)}</span><div class="sub" style="margin-top:3px">两份内容基本一致；内置那份随 App 升级被覆盖，本份不受影响。</div></dd>`:''}
+    </dl>
+    <div style="font-size:12px;color:var(--tx3);margin:0 0 4px">描述</div>
+    <div style="font-size:13px;color:var(--tx2);margin-bottom:16px">${esc(e.description_zh||e.description||'（无描述）')}</div>
+    <div style="font-size:12px;color:var(--tx3);margin:0 0 6px">各 agent 的引用方式与启用状态（${e.refs.length} 处）</div>
+    <div style="margin-bottom:16px">${refs}</div>
+    <div style="font-size:12px;color:var(--tx3);margin:0 0 6px">校验证据</div>
+    ${checks}
+    <div style="font-size:12px;color:var(--tx3);margin:16px 0 6px">安装指令预览</div>
+    ${targets.length? targets.slice(0,2).map(a=>`<div class="cmd" style="margin-bottom:8px">${esc(installText(e,a,state.fmt))}</div>`).join('') : '<div class="note">所有 agent 都已持有该 skill，没有待安装目标。</div>'}
+  `;
+  $('#dBody').querySelectorAll('button[data-act2]').forEach(b=>{
+    b.onclick = () => startAction(b.dataset.act2, b.dataset.n, b.dataset.a);
+  });
+  $('#drawer').classList.add('open'); $('#mask').classList.add('on');
+}
+function closeDrawer(){ $('#drawer').classList.remove('open'); closeAct(); }
+
+/* ---------- 操作层 ---------- */
+let ACT = null;
+function cliLine(action, name, agentId){
+  const base = `cd ${TOOL} && ${PY} skillctl.py`;
+  if(action==='install') return `${base} install "${name}" --to ${agentId}`;
+  if(action==='plan') return `${base} plan`;
+  return `${base} ${action} "${name}" --agent ${agentId} --yes`;
+}
+function startAction(kind, name, agentId){
+  const e = NAME2E[name];
+  if(kind==='install'){
+    const held = e && e.agents.includes(agentId);
+    openAct('install', name, agentId, e);
+    return;
+  }
+  openAct(kind, name, agentId, e);
+}
+function openAct(kind, name, agentId, e){
+  const agent = agentOf(agentId) || {label:agentId, id:agentId};
+  const title = {disable:'禁用', enable:'恢复启用', uninstall:'卸载', install:'安装到…'}[kind] || kind;
+  ACT = {kind, name, agentId, ops:null, apply:false};
+  $('#aTitle').textContent = `${title}：${name}`;
+  $('#aSub').textContent = `${agent.label} (${agentId}) · ${e? sh(e.real_path):''}`;
+  $('#aGo').style.display = (kind==='install') ? 'none' : '';
+  $('#aGo').textContent = '确认执行';
+  $('#aGo').className = 'btn ' + (kind==='uninstall' ? 'dgr' : 'pri');
+  $('#aMsg').textContent = '';
+  if(kind==='install'){ renderActInstall(e, agent); return; }
+  if(!SRV){ renderActOffline(kind, name, agentId, e, agent); return; }
+  $('#aBody').innerHTML = '<div class="empty">正在做干跑检查…</div>';
+  callServer({action:kind, name, agent:agentId, apply:false}).then(r=>renderActResult(r, kind, name, agentId, e, agent));
+  $('#act').classList.add('open'); $('#mask').classList.add('on');
+}
+function renderActInstall(e, agent){
+  if(!e){ $('#aBody').innerHTML = `<div class="empty">没找到「${ACT.name}」</div>`; return; }
+  const targets = AG.filter(a=>!e.agents.includes(a.id));
+  const pick = targets.length ? targets[0].id : agent.id;
+  $('#aBody').innerHTML = `
+    <div class="row" style="margin-bottom:12px">
+      <span class="mono" style="color:var(--tx3)">目标 agent</span>
+      <select id="aTarget">${AG.map(a=>`<option value="${esc(a.id)}" ${a.id===pick?'selected':''}>${esc(a.label)}${e.agents.includes(a.id)?' · 已持有':' · 未持有'}</option>`).join('')}</select>
+      <span class="spacer"></span>
+      <button class="pill ${state.fmt==='agent'?'on':''}" data-fmt="agent">发给目标 agent</button>
+      <button class="pill ${state.fmt==='shell'?'on':''}" data-fmt="shell">我自己跑</button>
+    </div>
+    <div id="aInstallOut"></div>`;
+  const paint = () => {
+    const a = agentOf($('#aTarget').value);
+    ACT.agentId = a.id;
+    const txt = installText(e, a, state.fmt);
+    ACT.text = txt;
+    $('#aInstallOut').innerHTML =
+      `<div class="cmd">${esc(txt)}</div>`
+      + (e.verdict==='fail' ? `<div class="note danger">这个 skill 有 ${e.fail_count} 项阻塞问题未清，迁移前先修。</div>` : '')
+      + (a.prefer_as_target ? `<div class="note">${esc(a.label)} 是你在适配表里指定的默认安装位置。</div>` : '');
+  };
+  $('#aBody').querySelectorAll('.pill[data-fmt]').forEach(b=>b.onclick=()=>{
+    state.fmt = b.dataset.fmt;
+    $('#aBody').querySelectorAll('.pill[data-fmt]').forEach(x=>x.classList.toggle('on', x.dataset.fmt===state.fmt));
+    renderInstall(); doGen(); paint();
+  });
+  $('#aTarget').onchange = paint;
+  paint();
+  $('#act').classList.add('open'); $('#mask').classList.add('on');
+}
+function renderActOffline(kind, name, agentId, e, agent){
+  const cmd = cliLine(kind === 'enable' ? 'enable' : kind, name, agentId);
+  const spec = agent.toggle_granularity;
+  const isBuiltin = e && e.type==='builtin';
+  $('#aBody').innerHTML = `
+    ${isBuiltin ? `<div class="note danger"><b>这是 App 内置技能，卸载按钮已被禁用。</b>删掉它会破坏 App 功能，而且下次升级/重装还会回来。</div>` : ''}
+    <div class="note">当前是<b>只读模式</b>，页面不会改动任何文件。下面这条命令需要你自己粘到终端跑（默认是干跑，加 <span class="mono">--yes</span> 才真执行）。</div>
+    <dl class="kv" style="margin-top:12px">
+      <dt>操作对象</dt><dd class="mono">${esc(name)}</dd>
+      <dt>作用 agent</dt><dd>${esc(agent.label)}　<span class="mono" style="color:var(--tx3)">${esc(agentId)}</span></dd>
+      <dt>开关粒度</dt><dd>${spec==='skill'?'技能级（只影响这一个）':spec==='plugin'?'插件级（会连带同插件其他技能）':spec==='none'?'无原生开关，退到文件级':'—'}</dd>
+      <dt>落点</dt><dd class="mono">${esc(sh(agent.toggle_store||'—'))}</dd>
+    </dl>
+    <div class="cmd">${esc(cmd)}</div>
+    <div class="note" style="margin-top:12px">想点一下就生效，在终端启动直连服务：<br><span class="mono">${esc(PY)} skillctl.py serve --open</span></div>`;
+  ACT.cmd = cmd;
+  $('#aGo').style.display = 'none';
+  $('#aCopy').textContent = '复制命令';
+  $('#act').classList.add('open'); $('#mask').classList.add('on');
+}
+function actHeaderInfo(kind, e, agent, ops){
+  const blast = (ops||[]).map(o=>o.blast).find(Boolean);
+  const spec = agent.toggle_granularity;
+  return `<dl class="kv" style="margin-bottom:10px">
+      <dt>作用 agent</dt><dd>${esc(agent.label)}　<span class="mono" style="color:var(--tx3)">${esc(agent.id)}</span></dd>
+      <dt>开关粒度</dt><dd>${spec==='skill'?'技能级（只影响这一个）':spec==='plugin'?'插件级（会连带同插件其他技能）':spec==='none'?'无原生开关，退到文件级':'—'}</dd>
+      <dt>落点</dt><dd class="mono">${esc(sh(agent.toggle_store||'—'))}</dd>
+      ${kind==='uninstall'?`<dt>回收站</dt><dd class="mono">${esc(sh(DOC.paths.trash))}</dd>`:''}
+    </dl>`
+    + (blast?`<div class="note warn">${esc(blast)}</div>`:'')
+    + (kind==='uninstall'?`<div class="note ok">卸载只是把目录移进回收站，不会删除。台账记在 <span class="mono">${esc(sh(DOC.paths.ledger))}</span>。</div>`:'');
+}
+function renderActResult(r, kind, name, agentId, e, agent){
+  if(!r.ok){
+    $('#aBody').innerHTML = actHeaderInfo(kind, e, agent, null)
+      + `<div class="note danger"><b>已拒绝：</b>${esc(r.error||'未知错误')}</div>`;
+    $('#aGo').style.display = 'none';
+    return;
+  }
+  const ops = r.ops||[];
+  $('#aBody').innerHTML = actHeaderInfo(kind, e, agent, ops)
+    + `<div style="font-size:12px;color:var(--tx3);margin:10px 0 6px">干跑预览（还没有改动任何文件）</div>`
+    + `<div class="cmd">${esc((r.log||[]).join('\n'))}</div>`
+    + (r.warnings&&r.warnings.length? r.warnings.map(w=>`<div class="note warn">${esc(w)}</div>`).join('') : '');
+  ACT.ops = ops;
+  ACT.preview = (r.log||[]).join('\n');
+  $('#aGo').style.display = '';
+  $('#aCopy').textContent = '复制命令';
+  $('#aMsg').textContent = '确认后才会真正执行';
+}
+async function callServer(payload){
+  try{
+    const res = await fetch(SRV.base + '/api/action', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-Skillctl-Token':SRV.token},
+      body: JSON.stringify(payload)
+    });
+    return await res.json();
+  }catch(err){
+    return {ok:false, error:'连不上本地服务（可能已经停掉了）：' + err.message};
+  }
+}
+function closeAct(){
+  $('#act').classList.remove('open');
+  if(!$('#drawer').classList.contains('open')) $('#mask').classList.remove('on');
+  ACT = null;
+}
+async function doApply(){
+  if(!ACT || !SRV) return;
+  $('#aGo').disabled = true;
+  $('#aMsg').textContent = '执行中…';
+  const r = await callServer({action:ACT.kind, name:ACT.name, agent:ACT.agentId, apply:true});
+  $('#aGo').disabled = false;
+  if(!r.ok){ $('#aMsg').textContent = ''; $('#aBody').innerHTML += `<div class="note danger">执行失败：${esc(r.error||'')}</div>`; return; }
+  $('#aMsg').innerHTML = '<span style="color:var(--ok)">已执行</span>';
+  $('#aBody').innerHTML += `<div class="note ok">已执行：<br><span class="mono">${esc((r.log||[]).join('\n'))}</span></div>`;
+  $('#aGo').style.display = 'none';
+  setTimeout(()=>{ rescan(); }, 900);
+}
+async function rescan(){
+  if(!SRV){ copy(`cd ${TOOL} && ${PY} skillctl.py scan`, '#btnRescan', '已复制'); return; }
+  const t = $('#btnRescan'); t.disabled = true; t.textContent = '扫描中…';
+  const r = await callServer({action:'rescan'});
+  t.disabled = false; t.textContent = '重扫';
+  if(r.ok) location.reload(); else alert(r.error||'重扫失败');
+}
+function planNow(){
+  const names = [...state.sel];
+  const picked = DOC.conflicts.filter(c=>state.sel.has(c.name));
+  const grades = ['auto','semi','manual'].filter(g=>picked.some(c=>(c.prescription||{}).grade===g));
+  const useGrades = grades.length ? grades : ['auto','semi'];
+  if(!SRV){
+    const cmd = names.length
+      ? `cd ${TOOL} && ${PY} skillctl.py plan --names "${names.join(',')}" --grades ${useGrades.join(',')}`
+      : `cd ${TOOL} && ${PY} skillctl.py plan --grades ${useGrades.join(',')}`;
+    alert('当前是只读模式，已复制命令，请自行执行：\n\n' + cmd);
+    copy(cmd, '#btnPlan', '已复制');
+    return;
+  }
+  const t = $('#btnPlan'); t.disabled = true; t.textContent = '生成中…';
+  callServer({action:'plan', names, grades:useGrades}).then(r=>{
+    t.disabled = false; t.textContent = '生成处理方案包';
+    if(!r.ok){ alert(r.error||'生成失败'); return; }
+    alert('已生成：\n' + (r.log||[]).join('\n'));
+  });
+}
+
+/* ---------- utils ---------- */
+function copy(txt, sel, done){
+  const el = $(sel);
+  const flash = ()=>{
+    if(!el) return;
+    if(el.tagName==='BUTTON'){ const o=el.textContent; el.textContent = done||'已复制'; setTimeout(()=>el.textContent=o,1500); }
+    else { el.style.display=''; setTimeout(()=>el.style.display='none',1600); }
+  };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(txt).then(flash, ()=>fallback());
+  } else fallback();
+  function fallback(){
+    const ta=document.createElement('textarea'); ta.value=txt; ta.style.position='fixed'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.select();
+    try{ document.execCommand('copy'); flash(); }catch(e){ alert('复制失败，请手动选中文本'); }
+    document.body.removeChild(ta);
+  }
+}
+
+/* ---------- init ---------- */
+renderHead(); renderPills(); renderTable(); renderRules(); renderRuleList();
+renderInstall(); renderTriage(); renderGroups(); renderConf(); renderAgents(); renderGloss();
+$('#q').oninput = e => { state.q = e.target.value; state.limit=80; renderTable(); };
+$('#fType').onchange = e => { state.type = e.target.value; state.limit=80; renderTable(); };
+$('#fState').onchange = e => { state.st = e.target.value; state.limit=80; renderTable(); };
+$('#fVerdict').onchange = e => { state.verdict = e.target.value; state.limit=80; renderTable(); };
+$('#fShared').onclick = () => { state.shared=!state.shared; $('#fShared').classList.toggle('on',state.shared); state.limit=80; renderTable(); };
+$('#fConflict').onclick = () => { state.conflict=!state.conflict; $('#fConflict').classList.toggle('on',state.conflict); state.limit=80; renderTable(); };
+$('#btnReset').onclick = () => {
+  Object.assign(state,{agent:'all',q:'',type:'',st:'',verdict:'',shared:false,conflict:false,limit:80});
+  $('#q').value=''; $('#fType').value=''; $('#fState').value=''; $('#fVerdict').value='';
+  $('#fShared').classList.remove('on'); $('#fConflict').classList.remove('on');
+  renderPills(); renderTable();
+};
+$('#btnGen').onclick = doGen;
+$('#iSearch').oninput = () => { if($('#iOut').querySelector('.cmd')) doGen(); };
+$('#iSearch').onkeydown = e => { if(e.key==='Enter') doGen(); };
+$('#iAgent').onchange = () => { if($('#iOut').querySelector('.cmd')) doGen(); };
+[['tabAgent','agent'],['tabShell','shell']].forEach(([id,f])=>{
+  $('#'+id).onclick = () => {
+    state.fmt = f;
+    $('#tabAgent').classList.toggle('on', f==='agent');
+    $('#tabShell').classList.toggle('on', f==='shell');
+    if($('#iOut').querySelector('.cmd')) doGen();
+  };
+});
+[['cfAll','all'],['cfTodo','todo'],['cfCoexist','coexist'],['cfDormant','dormant']].forEach(([id,k])=>{
+  $('#'+id).onclick = () => { state.cf = k; syncCfPills(); renderTriage(); renderConf(); };
+});
+$('#btnPlan').onclick = planNow;
+$('#bulkClear').onclick = () => { state.sel.clear(); renderConf(); };
+$('#bulkPlan').onclick = planNow;
+$('#btnRescan').onclick = rescan;
+$('#dClose').onclick = closeDrawer;
+$a = $('#aClose'); $a.onclick = closeAct;
+$('#aCopy').onclick = () => {
+  const txt = ACT ? (ACT.cmd || ACT.text || ACT.preview || '') : '';
+  if(txt) copy(txt, '#aCopy', '已复制');
+};
+$('#aGo').onclick = doApply;
+$('#mask').onclick = () => { closeDrawer(); closeAct(); };
+document.addEventListener('keydown', e => { if(e.key==='Escape'){ closeDrawer(); closeAct(); } });
+(function(){
+  const t = E.filter(e=>e.verdict!=='fail').sort((a,b)=>b.link_count-a.link_count)[0];
+  if(t){ $('#iSearch').value = t.name; }
+})();
+</script>
+</body>
+</html>

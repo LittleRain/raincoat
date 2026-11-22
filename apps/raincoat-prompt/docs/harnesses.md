@@ -14,7 +14,7 @@
 ## 运行证据与来源
 
 - [识别代码](../Sources/PromptCore/PromptCore.swift)、[窗口 OCR](../Sources/RaincoatPrompt/WindowRecognition.swift)：可见标签仅是 UI 信号，多个模型名出现时返回未知。应用未启动 Codex 窗口检测，仅新增独立 CLI 预设，避免把它当 ChatGPT。
-- 本机 `local-agent 0.2.0 submit --help`、`local-agent wait --help` 与安装包 `raincoat_agent_mcp/bridge.py` / `shared.py`：确认新会话参数、`LOCAL_AGENT_MCP_STATE_DIR`、终态 `succeeded` 及原始 state 格式。CLI 版本与命令也固化在新计划中。
+- 本机 `local-agent 0.2.0 submit --help`、`local-agent wait --help` 与源码 `apps/raincoat-buck/src/raincoat_buck/bridge.py` / `shared.py`：确认新会话参数、`LOCAL_AGENT_MCP_STATE_DIR`、终态 `succeeded` 及原始 state 格式。CLI 版本与命令也固化在新计划中。
 - [首轮报告](../.build/evaluation/round-01/report.md)：两环境各12份有效输出，工具调用均0；模型和环境同时变化，不能分别归因。
 - [扩展报告](../.build/evaluation/round-02/report.md)：40次启动失败；本地进程发现 `ps` 被当前沙箱拒绝，尚无本阶段有效回答。Codex 失败见 [探针](../.build/evaluation/smoke-stage1/report.md)。
 
@@ -26,7 +26,7 @@ Stage8选择独立候选文件harness-v0.1.0.json中的bitto-readonly（bitto/de
 
 本轮固定材料共同指令禁止工具/读写文件。候选按已确认权限作条件式改写：只读时交付最小补丁与建议验证、不假称执行；确实可读写且用户授权时才交付实际落盘路径；仅材料时给建议路径、未知待确认。因此结果只支持该文本边界任务，不能冒称已验证检索/编辑/命令真实落地。各环境只测当前DeepSeek/Kimi标签，不能归因于脱离模型的harness独立能力。
 
-来源：本机CLI help与raincoat_agent_mcp/bridge.py权限参数校验、stage8-preregistration.md和真实raw记录；未联网补造工具能力。实际盲评与发布状态见本地stage8-report.md。
+来源：本机CLI help与 `apps/raincoat-buck/src/raincoat_buck/bridge.py` 权限参数校验、stage8-preregistration.md和真实raw记录；未联网补造工具能力。实际盲评与发布状态见本地stage8-report.md。
 
 本轮28份新增答题工具调用数均0，与固定材料约束一致。候选不发布：只读规则有效子集净胜但缺完整盲评/错误核验；工作区规则有效子集回退且另一评委无完整配对。16个联合批次7次失败，不能把这种缺失当规则无收益。正式两条仍disabled，dist0.2.0不动；真实工作区读写能力应在另一个预注册的权限/产物实验验证。
 

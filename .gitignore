@@ -12,6 +12,9 @@ skills/raincoat-trade-weekly-report/input/
 skills/raincoat-trade-weekly-report/output/
 skills/raincoat-trade-weekly-report/scripts/__pycache__/
 
+# skill-panel 的产物不落在 skill 目录里（默认 ~/.skill-panel/，可用 --out 改），
+# 它自己的 .gitignore 是兜底，导出成独立仓库时跟着一起走。
+
 # all skill local input artifacts
 skills/**/input/
 
@@ -46,3 +49,6 @@ skills/**/run.log
 
 # agent / codex 临时 home（含登录态，勿入库）
 .tmp/
+
+# skill-panel 的产物不落在 skill 目录里（默认 ~/.skill-panel/，可用 --out 改），
+# 它自己的 .gitignore 是兜底，导出成独立仓库时跟着一起走。

@@ -1,0 +1,83 @@
+name: Raincoat Buck package
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'raincoat-buck/v*'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: astral-sh/setup-uv@v6
+      - name: Install build and test dependencies
+        run: python -m pip install 'setuptools>=77' wheel build twine -e apps/raincoat-buck
+      - name: Validate release tag
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          python - <<'PY'
+          import os
+          from raincoat_buck import __version__
+          assert os.environ['RELEASE_TAG'] == f'raincoat-buck/v{__version__}'
+          PY
+      - name: Model-free regression tests
+        run: python -m unittest discover -s apps/raincoat-buck/tests -v
+      - name: Build wheel and source distribution
+        run: python -m build apps/raincoat-buck --outdir dist-raincoat-buck
+      - name: Check distribution metadata
+        run: python -m twine check dist-raincoat-buck/*
+      - name: Isolated install, upgrade and rollback
+        run: python apps/raincoat-buck/tests/distribution_smoke.py dist-raincoat-buck/*.whl
+      - uses: actions/upload-artifact@v4
+        with:
+          name: raincoat-buck-dist
+          path: dist-raincoat-buck/*
+          if-no-files-found: error
+
+  windows-test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: astral-sh/setup-uv@v6
+      - name: Install test dependencies
+        run: python -m pip install -e apps/raincoat-buck
+      - name: Windows regression tests
+        run: python -m unittest discover -s apps/raincoat-buck/tests -v
+      - name: Build Windows wheel
+        run: uv build apps/raincoat-buck --wheel --out-dir dist-raincoat-buck
+      - name: Windows isolated install and MCP handshake
+        env:
+          RAINCOAT_SMOKE_INSTALL_HELPER: '1'
+        run: |
+          $wheel = (Get-ChildItem 'dist-raincoat-buck/*.whl' | Select-Object -First 1).FullName
+          python apps/raincoat-buck/tests/distribution_smoke.py $wheel
+
+  publish:
+    needs: [build, windows-test]
+    if: startsWith(github.ref, 'refs/tags/raincoat-buck/v') && vars.RAINCOAT_BUCK_PYPI_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: raincoat-buck-dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1

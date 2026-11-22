@@ -1,0 +1,14 @@
+{
+  "_comment": "人工覆盖表。自动判定不可能全对，这里是你纠正的唯一入口，改完重跑 scan 即生效。",
+  "_keys": "key 用 skill 的实体名（目录名）即可；如遇同名冲突，可写完整 realpath",
+  "_example": {
+    "some-skill": {
+      "type": "local",
+      "auto_created": true,
+      "note": "这是我手工改过的说明",
+      "ignore_rules": ["local-abs-path", "oversize-text"]
+    }
+  },
+
+  "by_entity": {}
+}

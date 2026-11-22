@@ -1,0 +1,11 @@
+{
+  "name": "skill-panel",
+  "title": "Skill Panel",
+  "description": "Inventory, validate, de-duplicate and toggle the skills installed across local agents (WorkBuddy, Codex, Claude, shared pool, MiniMax, Bitto, AutoClaw), and generate a self-contained dashboard of the whole estate.",
+  "version": "0.1.0",
+  "status": "draft",
+  "visibility": "incubating",
+  "entry": "SKILL.md",
+  "tags": ["skills", "inventory", "multi-agent", "symlink", "dedupe", "validation", "dashboard"],
+  "author": "raincai"
+}

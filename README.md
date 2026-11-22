@@ -16,6 +16,10 @@
 
 存量作品仍处于孵化与迁移阶段，各自的说明和限制以对应目录为准。
 
+## 本地 Agent 入口
+
+[Buck（raincoat-buck）](apps/raincoat-buck/README.md) 是一个本地 MCP 服务：调用方只面对它一个，由它把任务派给本机已装的 Bitto、WorkBuddy、Codex CLI 或 Antigravity CLI。安装、客户端注册和各后端的权限边界见它的 README。
+
 ## 开发
 
 需要 Python 3.10+；用系统可用的 `python` 或 `python3`：
@@ -33,7 +37,7 @@ python -m unittest discover -s tooling/tests -p 'test_*.py'
 ## 仓库结构
 
 - `skills/`：Skill 与最小模板。
-- `apps/`：独立应用与插件，包含 [Sport Cut Studio](apps/football-ai-studio/README.md) 和 [raincoat-wecom-clipper](apps/raincoat-wecom-clipper/README.md)。
+- `apps/`：独立应用与插件，包含 [Buck](apps/raincoat-buck/README.md)（本机 agent 派发 MCP）、[Sport Cut Studio](apps/football-ai-studio/README.md)、[raincoat-kb-desk](apps/raincoat-kb-desk/README.md)、[raincoat-prompt](apps/raincoat-prompt/README.md)、[raincoat-watch-recorder](apps/raincoat-watch-recorder/README.md) 和 [raincoat-wecom-clipper](apps/raincoat-wecom-clipper/README.md)。
 - `tooling/`：脚手架、校验、导出与测试。
 - `docs/skills/`：约定、发布流程与迁移记录。
 
