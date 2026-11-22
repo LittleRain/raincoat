@@ -56,14 +56,19 @@ def normalize(values: list[float]) -> list[float]:
     return [max(0.0, min(1.0, (value - low) / (high - low))) for value in values]
 
 
-def motion_per_second(path: Path, width: int, height: int, duration: float) -> list[float]:
+def motion_per_second(path: Path, width: int, height: int, duration: float, roi: tuple[float, float, float, float] | None = None) -> list[float]:
+    if roi:
+        _, _, roi_width, roi_height = roi
+        height = max(2, round(height * roi_height))
+        width = max(2, round(width * roi_width))
     sample_width = min(160, width)
     sample_height = max(2, round(height * sample_width / width) // 2 * 2)
     frame_size = sample_width * sample_height
+    crop = '' if roi is None else f'crop=iw*{roi[2]}:ih*{roi[3]}:iw*{roi[0]}:ih*{roi[1]},'
     process = subprocess.Popen(
         [
             "ffmpeg", "-v", "error", "-i", str(path), "-vf",
-            f"fps=1,scale={sample_width}:{sample_height}", "-pix_fmt", "gray",
+            f"fps=1,{crop}scale={sample_width}:{sample_height}", "-pix_fmt", "gray",
             "-f", "rawvideo", "-",
         ],
         stdout=subprocess.PIPE,
@@ -136,8 +141,16 @@ def active_ranges(activity: list[float], pre_roll: float, post_roll: float, tota
         elif value < threshold and start is not None:
             raw.append((float(start), float(second)))
             start = None
-    expanded = [(max(0.0, start - pre_roll), min(total, end + post_roll)) for start, end in raw]
-    return [(start, end) for start, end in merge_ranges(expanded, gap=3.0) if end - start >= minimum]
+    # Group short pauses before adding context. Merging padded ranges would join
+    # separate rallies whenever their safety margins touch.
+    groups = merge_ranges(raw, gap=1.0)
+    expanded = [[max(0.0, start - pre_roll), min(total, end + post_roll)] for start, end in groups]
+    for index in range(len(expanded) - 1):
+        if expanded[index][1] > expanded[index + 1][0]:
+            boundary = (groups[index][1] + groups[index + 1][0]) / 2
+            expanded[index][1] = boundary
+            expanded[index + 1][0] = boundary
+    return [(start, end) for start, end in expanded if end - start >= minimum]
 
 
 def fallback_ranges(total: float, window: float, step: float) -> list[tuple[float, float]]:
@@ -191,27 +204,45 @@ def main() -> int:
     parser.add_argument("--out", type=Path, default=Path("clips.json"))
     parser.add_argument("--window", type=float, default=30.0, help="Fallback candidate-window duration")
     parser.add_argument("--step", type=float, default=24.0, help="Fallback candidate-window step")
-    parser.add_argument("--pre-roll", type=float, default=4.0)
-    parser.add_argument("--post-roll", type=float, default=6.0)
+    parser.add_argument("--pre-roll", type=float, default=2.0)
+    parser.add_argument("--post-roll", type=float, default=3.0)
     parser.add_argument("--min-duration", type=float, default=3.0)
+    parser.add_argument("--court-roi", type=float, nargs=4, metavar=("X", "Y", "W", "H"),
+                        help="Normalized court area to analyze, e.g. 0.1 0.2 0.8 0.7")
+    parser.add_argument("--ignore-before", type=float, default=0.0,
+                        help="Ignore camera setup before this source-video second")
     args = parser.parse_args()
     video = args.video.expanduser().resolve()
     if not video.is_file():
         raise SystemExit(f"Input not found: {video}")
     total, width, height, has_audio = probe(video)
-    motion = normalize(motion_per_second(video, width, height, total))
+    roi = tuple(args.court_roi) if args.court_roi else None
+    if roi:
+        x, y, w, h = roi
+        if not all(math.isfinite(v) for v in roi) or x < 0 or y < 0 or w <= 0 or h <= 0 or x + w > 1 or y + h > 1:
+            raise SystemExit("--court-roi must be normalized X Y W H within the video")
+    if not math.isfinite(args.ignore_before) or not 0 <= args.ignore_before < total:
+        raise SystemExit("--ignore-before must be within the source video")
+    if any(not math.isfinite(value) or value < 0 for value in (args.pre_roll, args.post_roll)) or not math.isfinite(args.min_duration) or args.min_duration <= 0:
+        raise SystemExit("Safety margins must be non-negative and minimum duration must be positive")
+    motion = normalize(motion_per_second(video, width, height, total, roi))
     audio = normalize(audio_per_second(video, total)) if has_audio else [0.0] * len(motion)
-    activity = [0.75 * movement + 0.25 * sound for movement, sound in zip(motion, audio)]
+    activity = [0.9 * movement + 0.1 * sound for movement, sound in zip(motion, audio)]
+    for second in range(math.ceil(args.ignore_before)):
+        activity[second] = 0.0
     ranges = active_ranges(activity, args.pre_roll, args.post_roll, total, args.min_duration)
+    ranges = [(max(args.ignore_before, start), end) for start, end in ranges if end - max(args.ignore_before, start) >= args.min_duration]
     fallback = not ranges
     if fallback:
-        ranges = fallback_ranges(total, max(3.0, args.window), max(1.0, args.step))
+        ranges = [(max(args.ignore_before, start), end) for start, end in fallback_ranges(total, max(3.0, args.window), max(1.0, args.step))
+                  if end - max(args.ignore_before, start) >= args.min_duration]
     candidates = [candidate(index, start, end, motion, audio, fallback) for index, (start, end) in enumerate(ranges, 1)]
-    candidates.sort(key=lambda item: item["score"], reverse=True)
+    # Review in source order; ranking is only used for optional top-N preselection.
     result = {
         "source": str(video), "duration": total,
         "provider": "local-heuristic" if not fallback else "baseline-window-fallback",
-        "feature_summary": {"motion_samples": len(motion), "audio_samples": len(audio), "used_fallback": fallback},
+        "feature_summary": {"motion_samples": len(motion), "audio_samples": len(audio), "used_fallback": fallback,
+                            "court_roi": roi, "ignore_before": args.ignore_before},
         "candidates": candidates,
     }
     args.out.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")

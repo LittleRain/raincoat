@@ -60,7 +60,7 @@ def handler_for(review_dir: Path):
 def main() -> int:
     parser = argparse.ArgumentParser(description="Serve a Rain Badminton Cut review directory on localhost.")
     parser.add_argument("review_dir", type=Path)
-    parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument("--port", type=int, default=8766)
     args = parser.parse_args()
     review_dir = args.review_dir.resolve()
     if not (review_dir / "review.html").is_file():

@@ -48,9 +48,17 @@ def main() -> int:
     )
     parser.add_argument("--window", type=float, default=30.0)
     parser.add_argument("--step", type=float, default=24.0)
+    parser.add_argument("--court-roi", type=float, nargs=4, metavar=("X", "Y", "W", "H"),
+                        help="Analyze only this normalized court area")
+    parser.add_argument("--ignore-before", type=float, default=0.0,
+                        help="Skip camera setup before this source-video second")
+    parser.add_argument("--mode", choices=("activity", "person"), default="activity",
+                        help="Review mode shown before selecting rallies")
+    parser.add_argument("--target-description", default="",
+                        help="Clothing or location description of the target player")
     parser.add_argument("--open", action="store_true", help="Open review.html after creation")
     parser.add_argument("--serve", action="store_true", help="Serve the review page and render confirmed edits")
-    parser.add_argument("--port", type=int, default=8765, help="Local review-server port")
+    parser.add_argument("--port", type=int, default=8766, help="Local review-server port")
     args = parser.parse_args()
 
     video = args.video.expanduser().resolve()
@@ -65,16 +73,11 @@ def main() -> int:
     run_script("preflight.py")
     review_source = source_link(output_dir, video)
     clips_path = output_dir / "clips.json"
-    run_script(
-        "analyze_video.py",
-        str(video),
-        "--out",
-        str(clips_path),
-        "--window",
-        str(args.window),
-        "--step",
-        str(args.step),
-    )
+    analysis_args = [str(video), "--out", str(clips_path), "--window", str(args.window),
+                     "--step", str(args.step), "--ignore-before", str(args.ignore_before)]
+    if args.court_roi:
+        analysis_args += ["--court-roi", *(str(value) for value in args.court_roi)]
+    run_script("analyze_video.py", *analysis_args)
     review_path = output_dir / "review.html"
     run_script(
         "generate_review_html.py",
@@ -83,6 +86,8 @@ def main() -> int:
         str(review_path),
         "--video-src",
         os.path.relpath(review_source, review_path.parent),
+        "--mode", args.mode,
+        "--target-description", args.target_description,
     )
     print(f"Review ready: {review_path}")
     if args.serve:
@@ -92,7 +97,7 @@ def main() -> int:
             subprocess.run(["open", url], check=False)
         subprocess.run([sys.executable, str(SCRIPT_DIR / "review_server.py"), str(output_dir), "--port", str(args.port)], check=True)
     else:
-        print("Export edits.json from the page, then run:")
+        print("Review the page and export the ChatCut handoff JSON. For an optional MP4 preview, export edits.json and run:")
         print(f"  python3 {SCRIPT_DIR / 'render_highlights.py'} {output_dir / 'edits.json'}")
         if args.open:
             subprocess.run(["open", str(review_path)], check=False)

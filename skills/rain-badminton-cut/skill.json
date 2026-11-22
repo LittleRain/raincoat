@@ -1,0 +1,11 @@
+{
+  "name": "rain-badminton-cut",
+  "title": "Badminton Rally Review",
+  "description": "Create local badminton activity candidates, review exact rally bounds and target participation, and export a montage for Jianying.",
+  "version": "0.1.0",
+  "status": "beta",
+  "visibility": "internal",
+  "entry": "SKILL.md",
+  "tags": ["badminton", "video", "highlights", "local"],
+  "author": "raincai"
+}

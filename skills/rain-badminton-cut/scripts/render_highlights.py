@@ -13,6 +13,12 @@ def main():
  src=Path(d['source']); src=src if src.is_absolute() else (a.edits.parent / src).resolve(); clips=[c for c in d['clips'] if c.get('keep')]
  if not src.is_file(): raise SystemExit(f'Source video not found: {src}')
  if not clips: raise SystemExit('No clips selected')
+ if 'target_count' in d and (not isinstance(d['target_count'],int) or isinstance(d['target_count'],bool) or d['target_count'] != len(clips)):
+  raise SystemExit('Selected clip count does not match target_count')
+ if d.get('mode') not in (None, 'activity', 'person'):
+  raise SystemExit('Unknown highlight mode')
+ if d.get('mode') == 'person' and (not str(d.get('target_description','')).strip() or any(c.get('target_confirmed') is not True for c in clips)):
+  raise SystemExit('Person highlights require a target description and confirmed participation in every selected clip')
  source_duration=video_duration(src)
  validated=[]
  for c in clips:
@@ -29,7 +35,12 @@ def main():
  with tempfile.TemporaryDirectory(prefix='rain-cut-') as td:
   parts=[]
   for i,(_,_,c) in enumerate(validated):
-   part=Path(td)/f'part-{i:03d}.mp4'; subprocess.run(['ffmpeg','-y','-hide_banner','-loglevel','error','-ss',str(float(c['start'])),'-to',str(float(c['end'])),'-i',str(src),'-c','copy',str(part)],check=True);parts.append(part)
+   part=Path(td)/f'part-{i:03d}.mp4'
+   subprocess.run(['ffmpeg','-y','-hide_banner','-loglevel','error','-ss',str(float(c['start'])),'-i',str(src),
+                   '-t',str(float(c['end'])-float(c['start'])),'-map','0:v:0','-map','0:a:0?',
+                   '-c:v','libx264','-preset','veryfast','-crf','20','-pix_fmt','yuv420p',
+                   '-c:a','aac','-b:a','160k','-movflags','+faststart',str(part)],check=True)
+   parts.append(part)
   listing=Path(td)/'concat.txt';listing.write_text(''.join(f"file '{p.as_posix().replace("'","'\\''")}'\n" for p in parts))
   subprocess.run(['ffmpeg','-y','-hide_banner','-loglevel','error','-f','concat','-safe','0','-i',str(listing),'-c','copy',str(a.out)],check=True)
  print(f'Wrote {a.out}')
