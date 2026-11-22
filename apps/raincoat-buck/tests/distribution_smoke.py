@@ -32,7 +32,7 @@ async def handshake(config,env,cwd):
         result=await session.call_tool('agent_status',{})
         assert not result.isError,result
         status=result.structuredContent or json.loads(result.content[0].text)
-        assert set(status['backends'])=={'bitto','workbuddy','gpt'},status
+        assert set(status['backends'])=={'bitto','workbuddy','gpt','agy'},status
     return len(tools)
 
 
@@ -41,6 +41,7 @@ def main(wheel):
     with zipfile.ZipFile(wheel) as archive:
         assert 'raincoat_buck/workbuddy.mjs' in archive.namelist()
         assert 'raincoat_buck/gpt.py' in archive.namelist()
+        assert 'raincoat_buck/agy.py' in archive.namelist()
         assert not any(x.endswith(('state.json','auth.json','runtime.json')) for x in archive.namelist())
         name=next(x for x in archive.namelist() if x.endswith('.dist-info/METADATA'))
         original=email.parser.Parser().parsestr(archive.read(name).decode())['Version']

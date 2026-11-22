@@ -77,7 +77,7 @@ class ContractTests(unittest.IsolatedAsyncioTestCase):
                 await session.initialize()
                 result = await session.call_tool('agent_status', {})
                 self.assertFalse(result.isError, result.content)
-                self.assertEqual(set(tool_value(result)['backends']), {'bitto', 'workbuddy', 'gpt'})
+                self.assertEqual(set(tool_value(result)['backends']), {'bitto', 'workbuddy', 'gpt', 'agy'})
 
     @unittest.skipUnless(sys.platform == 'darwin', 'Fixture uses a POSIX executable script')
     async def test_codex_job_resumes_with_the_same_session_and_permissions(self):

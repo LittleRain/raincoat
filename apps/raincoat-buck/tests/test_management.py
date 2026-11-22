@@ -58,9 +58,18 @@ class ManagementTests(unittest.TestCase):
             self.assertTrue(result['healthy'])
             self.assertEqual(result['backends']['gpt']['method'],'ChatGPT')
             save.assert_called_once_with(codex='/stable/codex')
+    def test_agy_doctor_checks_saved_login_without_calling_a_model(self):
+        from raincoat_buck import agy
+        with patch.object(agy.dependencies,'agy_binary',return_value='/stable/agy'),patch.object(agy,'authentication',return_value={'authenticated':True,'method':'saved Antigravity login'}),patch.object(dependencies,'save_settings') as save:
+            result=management.doctor(backend='agy')
+            self.assertTrue(result['healthy'])
+            self.assertEqual(result['backends']['agy']['method'],'saved Antigravity login')
+            save.assert_called_once_with(agy='/stable/agy')
     def test_status_keeps_discovery_read_only_and_reports_limits(self):
-        from raincoat_buck import bitto, gpt, workbuddy
+        from raincoat_buck import agy, bitto, gpt, workbuddy
         with patch.object(bitto, 'discover_ws', side_effect=RuntimeError('sidecar unavailable')), \
+             patch.object(agy.dependencies, 'agy_binary', return_value='/stable/agy'), \
+             patch.object(agy, 'authentication', return_value={'authenticated': True, 'method': 'saved Antigravity login'}), \
              patch.object(workbuddy, 'status', return_value={'installed': True, 'note': 'helper missing'}), \
              patch.object(dependencies, 'node_check', return_value={'available': True, 'path': '/node'}), \
              patch.object(dependencies, 'helper_path', return_value=None), \
@@ -73,7 +82,10 @@ class ManagementTests(unittest.TestCase):
             self.assertEqual(backends['workbuddy']['login_status'], 'unknown')
             self.assertEqual(backends['gpt']['login_status'], 'verified')
             self.assertTrue(backends['gpt']['supports_read_only'])
+            self.assertEqual(backends['agy']['login_status'], 'verified')
+            self.assertTrue(backends['agy']['supports_read_only'])
             self.assertEqual(bridge.status('codex'), backends['gpt'])
+            self.assertEqual(bridge.status('agy'), backends['agy'])
             save.assert_not_called()
     def test_gpt_install_deps_does_not_install_workbuddy_helper(self):
         with self.assertRaisesRegex(ValueError,'仅用于 WorkBuddy'):

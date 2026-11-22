@@ -14,7 +14,7 @@ from typing import Literal
 import uuid
 from . import bitto, management, shared
 
-Backend = Literal['bitto', 'workbuddy', 'gpt', 'codex']
+Backend = Literal['bitto', 'workbuddy', 'gpt', 'agy', 'codex']
 BACKEND_NAMES = (*management.BACKENDS, 'codex')
 
 
@@ -81,14 +81,14 @@ def submit_task(backend: Backend, prompt: str, title='本地 Agent 委派任务'
     if allowed_tools and (not isinstance(allowed_tools,list) or any(not isinstance(x,str) or not re.fullmatch(r'[A-Za-z][A-Za-z0-9_]*(?:\([^\r\n]*\))?',x) for x in allowed_tools)):
         raise ValueError('allowed_tools must contain explicit tool names or Tool(rule) patterns')
     if allowed_tools and backend != 'workbuddy':
-        raise ValueError('allowed_tools applies only to WorkBuddy; use sandbox to authorize GPT file/command access')
-    if sandbox and (backend != 'gpt' or sandbox not in {'read-only','workspace-write','danger-full-access'}):
-        raise ValueError('sandbox applies only to GPT: read-only, workspace-write or danger-full-access')
+        raise ValueError('allowed_tools applies only to WorkBuddy; use sandbox to authorize GPT/Antigravity file and command access')
+    if sandbox and (backend not in {'gpt','agy'} or sandbox not in {'read-only','workspace-write','danger-full-access'}):
+        raise ValueError('sandbox applies only to GPT and Antigravity: read-only, workspace-write or danger-full-access')
     effective_cwd = str(Path(cwd).expanduser()) if cwd else ('' if backend == 'bitto' else str(Path.home()))
     request = dict(backend=backend,prompt=prompt,title=title,project=project,model=model,
                    cwd=effective_cwd,session_id=session_id,
                    timeout_seconds=timeout_seconds,allowed_tools=allowed_tools or [],
-                   sandbox=sandbox or ('read-only' if backend == 'gpt' else ''))
+                   sandbox=sandbox or ('read-only' if backend in {'gpt','agy'} else ''))
     if backend == 'bitto':
         request.update(ws_url=bitto.discover_ws(), model=model or bitto.settings_model())
         bitto.token()
@@ -101,11 +101,16 @@ def submit_task(backend: Backend, prompt: str, title='本地 Agent 委派任务'
         if not discovery['execution_ready']:
             raise RuntimeError(discovery['note'])
         workbuddy.validate_model(request['model'])
-    else:
+    elif backend == 'gpt':
         from . import gpt
         discovery = gpt.status()
         if not discovery['execution_ready']:
             raise RuntimeError('Codex CLI not installed; install codex and run codex login')
+    else:
+        from . import agy
+        discovery = agy.status()
+        if not discovery['execution_ready']:
+            raise RuntimeError('Antigravity CLI not installed; install agy from https://antigravity.google/cli and sign in')
     job_id = uuid.uuid4().hex
     directory = shared.job_dir(job_id)
     shared.atomic_json(directory / 'request.json', request)
@@ -152,7 +157,7 @@ def cancel_task(job_id):
 def respond_permission(job_id,request_id,allow):
     state = shared.get_task(job_id)
     if state['backend'] != 'bitto':
-        raise ValueError('仅 Bitto 支持交互授权；WorkBuddy 使用 allowed_tools，GPT 使用 sandbox，均需提交时明确授权')
+        raise ValueError('仅 Bitto 支持交互授权；WorkBuddy 使用 allowed_tools，GPT 与 Antigravity 使用 sandbox，均需提交时明确授权')
     pending = state.get('permission',{})
     if state['status'] != 'waiting_permission' or pending.get('requestId',pending.get('request_id')) != request_id:
         raise ValueError('No matching pending permission request')
@@ -171,9 +176,12 @@ async def run_worker(job_id):
         elif ctx.request['backend'] == 'workbuddy':
             from . import workbuddy
             await workbuddy.run(ctx)
-        else:
+        elif ctx.request['backend'] == 'gpt':
             from . import gpt
             await gpt.run(ctx)
+        else:
+            from . import agy
+            await agy.run(ctx)
     except Exception as e:
         if ctx.state['status'] not in shared.TERMINAL:
             ctx.state.update(status='interrupted' if ctx.state.get('status') in {'submitted','running','cancelling'} else 'failed',
@@ -187,13 +195,13 @@ def serve_mcp():
     legacy = os.environ.get('LOCAL_AGENT_MCP_LEGACY_TOOLS') == '1'
     mcp = FastMCP('buck', log_level='WARNING', instructions=(
         'Buck 是队首：调用方只需面对它一个，由它为每个任务挑选最合适的本机 agent。'
-        '用 agent_status 发现可用后端（backend 可选 bitto、workbuddy、codex 即 gpt）；'
+        '用 agent_status 发现可用后端（backend 可选 bitto、workbuddy、codex 即 gpt、agy 即 Antigravity）；'
         '不确定谁最合适时先 agent_status 看可用性和登录状态，再 agent_submit_task 派活。'
-        'agent_submit_task 接受 bitto、workbuddy 或 codex（gpt）。'
+        'agent_submit_task 接受 bitto、workbuddy、codex（gpt）或 agy（Antigravity CLI）。'
         '提交默认等待 25 秒，wait_seconds=0 立即返回任务快照。'
         '需要取回结果时继续调用 agent_wait_task；等待超时不取消任务。'
         '按原 job_id 续接时只传 resume_from_job_id 和新指令，原目录和权限沿用。'
-        'Codex 默认只读，写文件需显式授予 workspace-write；WorkBuddy 工具通过 allowed_tools 授权。'
+        'Codex 与 Antigravity 默认只读，写文件需显式授予 workspace-write 或 danger-full-access；WorkBuddy 工具通过 allowed_tools 授权。'
     ))
     @mcp.tool()
     async def agent_status(backend: Backend | None = None) -> dict:

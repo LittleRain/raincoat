@@ -45,4 +45,4 @@ async def main(backend):
         print(json.dumps({'backend':backend,'status':result['status'],'completion_delivery_ms':result['completion_delivery_ms'],'wait_transport':result['wait_transport'],'model':result.get('model'),'provider':result.get('provider'),'evidence':str(output)},ensure_ascii=False),flush=True)
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser();p.add_argument('backend',choices=['bitto','workbuddy','gpt']);asyncio.run(main(p.parse_args().backend))
+    p=argparse.ArgumentParser();p.add_argument('backend',choices=['bitto','workbuddy','gpt','agy']);asyncio.run(main(p.parse_args().backend))

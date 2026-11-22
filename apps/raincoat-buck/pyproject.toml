@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "raincoat-buck"
 dynamic = ["version"]
-description = "Buck delegates each task to the right local agent (Bitto, WorkBuddy, GPT/Codex), so you only talk to one"
+description = "Buck delegates each task to the right local agent (Bitto, WorkBuddy, GPT/Codex, Antigravity), so you only talk to one"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = ["mcp>=1.20,<2", "websockets>=14,<17", "packaging>=23", "psutil>=5.9; sys_platform == 'win32'"]

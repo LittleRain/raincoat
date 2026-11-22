@@ -82,6 +82,17 @@ def codex_binary():
     return None
 
 
+def agy_binary():
+    override=os.environ.get('BUCK_AGY') or os.environ.get('AGY_BINARY')
+    if override:
+        path=Path(override).expanduser()
+        return str(path) if path.is_file() else None
+    # MCP 进程的 PATH 常常不含 ~/.local/bin，官方安装器默认就装在那里。
+    for value in [settings().get('agy'),shutil.which('agy'),str(Path.home()/'.local/bin/agy')]:
+        if value and Path(value).expanduser().is_file():return str(Path(value).expanduser())
+    return None
+
+
 def node_check():
     binary=node_binary()
     if not binary:return {'available':False,'error':'WorkBuddy 需要 Node.js 22.19+（22系）或 24+，安装后重新运行 doctor。'}

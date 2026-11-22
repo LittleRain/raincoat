@@ -8,14 +8,14 @@ import re
 import sys
 from . import __version__, client_config, dependencies
 
-BACKENDS = ('bitto', 'workbuddy', 'gpt')
+BACKENDS = ('bitto', 'workbuddy', 'gpt', 'agy')
 
 
 def canonical_backend(backend):
     if backend == 'codex':
         return 'gpt'
     if backend not in BACKENDS:
-        raise ValueError('backend must be bitto, workbuddy, gpt or codex')
+        raise ValueError('backend must be bitto, workbuddy, gpt, agy or codex')
     return backend
 
 
@@ -57,6 +57,19 @@ def probe_backend(backend):
                 'availability': availability, 'node': node, 'credential_helper': helper,
                 'login_status': 'unknown', 'authentication_checked': False, 'supports_read_only': False,
                 'next': '安装并登录 WorkBuddy；缺辅助模块时运行 doctor --backend workbuddy --install-deps。'}
+
+    if backend == 'agy':
+        from . import agy
+
+        status = agy.status()
+        auth = agy.authentication() if status['installed'] else {'authenticated': False}
+        availability = 'not_installed'
+        if status['installed']:
+            availability = 'ready' if auth['authenticated'] else 'login_required'
+        return {**status, **auth, 'backend': backend, 'available': availability == 'ready',
+                'availability': availability, 'authentication_checked': status['installed'],
+                'login_status': 'verified' if auth['authenticated'] else 'unknown' if not status['installed'] else 'unverified',
+                'supports_read_only': True, 'next': '安装 Antigravity CLI（curl -fsSL https://antigravity.google/cli | bash）并登录。'}
 
     from . import gpt
 
@@ -116,4 +129,6 @@ def doctor(backend='all',install_deps=False):
             dependencies.save_settings(node=result['node']['path'])
         if name == 'gpt' and result['codex']:
             dependencies.save_settings(codex=result['codex'])
+        if name == 'agy' and result.get('agy'):
+            dependencies.save_settings(agy=result['agy'])
     return {**report, 'healthy': all(result['available'] for result in report['backends'].values())}
