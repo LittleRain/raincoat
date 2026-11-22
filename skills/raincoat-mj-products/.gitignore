@@ -1,0 +1,12 @@
+# 本地运行产物，不入库
+data/
+output/
+*.jsonl
+*.jsonl.tmp
+state.json
+config.json
+auth.json
+
+__pycache__/
+*.py[cod]
+.venv/

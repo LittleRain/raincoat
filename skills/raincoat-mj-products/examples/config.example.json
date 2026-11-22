@@ -1,0 +1,63 @@
+{
+  "platforms": [
+    {
+      "plat": "all",
+      "label": "淘宝+天猫",
+      "group": "taobao"
+    },
+    {
+      "plat": "tmall",
+      "label": "天猫",
+      "group": "taobao"
+    },
+    {
+      "plat": "jd",
+      "label": "京东",
+      "group": "jd"
+    }
+  ],
+  "auth_state": "~/.config/raincoat/mktindex/auth.json",
+  "data_dir": "~/.config/raincoat/mj-products/data",
+  "output_dir": "~/.config/raincoat/mj-products/output",
+  "categories": [
+    {
+      "path": "面部清洁/护理/面膜",
+      "alias": "面膜",
+      "paths": {
+        "jd": "美妆护肤/面部护肤/面膜"
+      }
+    },
+    {
+      "cid": "202044801",
+      "alias": "纸尿裤"
+    },
+    {
+      "cid": "201821102",
+      "alias": "全价猫主粮"
+    }
+  ],
+  "window": {
+    "days": 7,
+    "cadence": "daily"
+  },
+  "new_product": {
+    "baseline_months": 3,
+    "min_sold": 1
+  },
+  "fetch": {
+    "max_items_per_category": 100,
+    "page_size": 100,
+    "min_interval_ms": 4000,
+    "max_retries": 3,
+    "per_request_ms": 4000,
+    "max_categories": 50,
+    "order_by_slices": [
+      "sale",
+      "sold"
+    ]
+  },
+  "budget": {
+    "max_requests": 3000,
+    "max_categories": 300
+  }
+}
