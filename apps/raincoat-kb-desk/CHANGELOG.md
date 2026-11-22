@@ -1,3 +1,13 @@
+## 0.9.8
+
+闭环改成「一台机器、一个写者」，并把「静默」本身当成故障来修。
+
+- **单写者**：抓取端 worker 不再提交/推送 vault（`KB_LOCAL_ONLY=1`），只把稿写进本地 `00 Inbox/`；插件的 tick 是唯一 commit/push 的人。跨机双写这一类故障（目录改名假冲突、rebase 半途、推送滞留）没有前提了。
+- **未跟踪文件不再挡住 pull**：`pullVault` 原来要求工作区「零改动」，而 worker 刚推进 Inbox 的稿天然是未跟踪文件——每次有新稿的那一轮就拒绝 pull。现在只看已跟踪改动（`trackedDirty`），未跟踪文件照常拉取。`gitOverview` 同时返回 `dirty`（全部）与 `trackedDirty`（已跟踪），体检报告仍按全部算。
+- **灵感不再丢原文**：`decision=idea` 以前只写摘要就删 Inbox 原件，摘要里的 `[Source: 00 Inbox/...]` 指向一个已删除的文件（违反 Hard Rule 12）。现在先写 `02 outputs/builder/ideas/<slug>.md`（带 `captured_from`）再删，摘要的 `source:` 指向这份留存件；`02 outputs/builder/ideas` 纳入自动提交白名单。历史上 6 篇的原文已从 git 历史恢复到 ideas/ 并回填 Source。
+- **看门狗**：新增 `scripts/watchdog.mjs`（launchd `com.rain.kb.watchdog`，每 10 分钟）：闭环心跳、卡住超过 45 分钟的整理任务、抓取端心跳、24 小时内新增的失败摄取、本地领先/落后、磁盘余量。异常推系统通知（同一问题 30 分钟不重复，可配 `settings.alertWebhook`），状态写 `~/.dsh/raincoat-kb-desk/ingest-status.md`，异常或跨天才在 `02 outputs/health/ingest-status.md` 留一份，避免每 10 分钟制造提交。
+- **修掉每轮提交后抛错**：`gitCommitAndPush` 的返回里引用了未定义变量 `pulled`，每次成功提交推送后都会抛 `ReferenceError` 并把 tick 打断。
+
 ## 0.9.7
 
 两件事：不再为「重投」多长一篇，以及队列空的时候也能回答「抓取端还活着吗」。

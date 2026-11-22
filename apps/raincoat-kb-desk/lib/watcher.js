@@ -25,7 +25,7 @@ import {
 import { gitOverview, listInbox, localIngestIndex, pullVault } from './vault.js'
 
 // 只提交插件自己会写的路径，避免把用户正在编辑的笔记一起卷进去。
-const WRITE_PATHS = ['00 Inbox', '00 raw', '01 wiki', '02 outputs/health', '02 outputs/drafts']
+const WRITE_PATHS = ['00 Inbox', '00 raw', '01 wiki', '02 outputs/health', '02 outputs/drafts', '02 outputs/builder/ideas']
 // applied 不算「在跑」：同一篇被 worker 重新推回 Inbox 时应该再走一遍，
 // 重复写入由 triage 的幂等保护兜住（复用摘要编号、跳过已写段落）。
 const OPEN = new Set(['queued', 'running', 'proposal'])
@@ -153,8 +153,9 @@ async function tick(ctx) {
     // 4) 收远端提交：上一步已经把本地出品推走，这里通常不会再被脏工作区挡住
     const before = await gitOverview(root, { fetch: true })
     if (before.ok && before.behind > 0) {
-      if (before.dirty) {
-        report.notes.push(`本地有 ${before.dirty} 个未提交改动，先不 pull`)
+      // 未跟踪文件（刚推进 Inbox 的稿）不该挡住拉取，只有已跟踪改动才会冲突。
+      if (before.trackedDirty) {
+        report.notes.push(`本地有 ${before.trackedDirty} 个未提交改动，先不 pull`)
       } else {
         const pull = await pullVault(root)
         if (pull.ok) report.pulled = before.behind

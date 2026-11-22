@@ -293,6 +293,8 @@ export async function applyTriage(ctx, root, proposal) {
   }
 
   const rawRel = `00 raw/${space}/${date.slice(0, 4)}/${date.slice(5, 7)}/${proposal.slug}.md`
+  // 灵感也必须落一份原文：只写摘要就删 Inbox，等于把唯一一份证据丢掉。
+  const ideaRel = `02 outputs/builder/ideas/${proposal.slug}.md`
   // 幂等：同一篇被重复整理时复用已有摘要，不再新起一个编号（否则会 S-2075 / S-2077 各存一份）。
   const existing = await findExistingSummary(root, space, proposal.slug, proposal.title)
   const summaryId = existing ? existing.id : (await maxSummaryId(root)) + 1
@@ -328,6 +330,31 @@ export async function applyTriage(ctx, root, proposal) {
       tags: ['ingest/kb-desk', ...(Array.isArray(source.frontmatter?.tags) ? source.frontmatter.tags : [])].slice(0, 12),
     })}${rawBody}`, 'utf8')
     changes.push({ path: rawRel, note: '原文归档（不可变）' })
+  } else if (proposal.decision === 'idea') {
+    const source = await readDoc(root, proposal.inboxPath)
+    const ideaFull = resolveInVault(root, ideaRel)
+    await mkdir(join(ideaFull, '..'), { recursive: true })
+    await writeFile(
+      ideaFull,
+      `${buildFrontmatter({
+        title: proposal.title || source.title || proposal.slug,
+        type: 'idea',
+        space: 'builder',
+        created: date,
+        last_updated: date,
+        captured_from: proposal.inboxPath,
+        source_url: source.frontmatter?.source_url || source.frontmatter?.url || '',
+        captured_at: source.frontmatter?.captured_at || date,
+        tags: ['idea', ...(Array.isArray(proposal.tags) ? proposal.tags : [])].slice(0, 10),
+      })}# ${proposal.title || source.title || proposal.slug}
+
+${source.body.trim()}
+
+> 由 Inbox 分流而来：${proposal.inboxPath}（${date}）
+`,
+      'utf8',
+    )
+    changes.push({ path: ideaRel, note: '灵感留存（原文不丢）' })
   }
 
   const summaryText = [
@@ -340,12 +367,12 @@ export async function applyTriage(ctx, root, proposal) {
       source_count: proposal.decision === 'raw' ? 1 : 0,
       status: 'draft',
       tags: Array.isArray(proposal.tags) ? proposal.tags.slice(0, 10) : [],
-      source: proposal.decision === 'raw' ? rawRel : proposal.inboxPath,
+      source: proposal.decision === 'raw' ? rawRel : ideaRel,
     }),
     `# S-${summaryId} ${proposal.title || ''}`.trim(),
     '',
-    `> 来源：${proposal.decision === 'raw' ? rawRel : '（仅灵感，未归档原文）'}`,
-    `> [Source: ${proposal.decision === 'raw' ? rawRel : proposal.inboxPath}]`,
+    `> 来源：${proposal.decision === 'raw' ? rawRel : `灵感，原文在 ${ideaRel}`}`,
+    `> [Source: ${proposal.decision === 'raw' ? rawRel : ideaRel}]`,
     '',
     '---',
     '',
@@ -467,7 +494,7 @@ export async function applyTriage(ctx, root, proposal) {
   changes.push(...indexChanges)
 
   const conceptNote = (proposal.concepts || []).map((c) => (c.action === 'create' ? `新建 ${c.title}` : `${basename(c.path || '', '.md')} +1`)).join('、')
-  const logLine = `## [${date}] ingest:${space} | ${proposal.title || ''} → ${proposal.decision === 'raw' ? rawRel : '（仅灵感）'} + ${basename(summaryRel)}${conceptNote ? `；${conceptNote}` : ''}`
+  const logLine = `## [${date}] ingest:${space} | ${proposal.title || ''} → ${proposal.decision === 'raw' ? rawRel : ideaRel} + ${basename(summaryRel)}${conceptNote ? `；${conceptNote}` : ''}`
   changes.push(await appendLog(root, logLine))
 
   const inboxFull = resolveInVault(root, proposal.inboxPath)
@@ -532,7 +559,7 @@ export async function gitCommitAndPush(root, message, options = {}) {
   return {
     ok: push.ok,
     step: 'push',
-    message: push.ok ? `已提交并推送${pulled}` : `${pulled}${push.stderr}`.trim() || '推送失败',
+    message: push.ok ? '已提交并推送' : push.stderr.trim() || '推送失败',
     commit: commit.stdout,
   }
 }

@@ -364,12 +364,39 @@ export async function searchVault(root, query, limit = 5) {
   return scored.sort((a, b) => b.score - a.score).slice(0, limit)
 }
 
+function splitStatusLines(stdout) {
+  return String(stdout || '').split('\n').filter(Boolean)
+}
+
+/**
+ * 未跟踪文件（??）和已跟踪改动要分开看。
+ *
+ * 拉取只需要「不会和远端打架」的条件：新出现的未跟踪文件不会冲突，
+ * 而 worker 刚写进 00 Inbox/ 的文件天然是未跟踪的 —— 以前把它算进 dirty，
+ * 结果每次有稿进 Inbox 的那一轮就拒绝 pull，远端更新永远进不来。
+ */
+function countDirty(lines) {
+  let tracked = 0
+  for (const line of lines) {
+    const code = line.slice(0, 2)
+    if (code === '??' || code === '!!') continue
+    tracked += 1
+  }
+  return { total: lines.length, tracked }
+}
+
 function gitStatus(root) {
   return new Promise((resolvePromise) => {
     execFile('git', ['-C', root, 'status', '--porcelain'], { timeout: 5000 }, (error, stdout) => {
-      if (error) return resolvePromise({ ok: false, dirty: null, error: error.message.split('\n')[0] })
-      const lines = String(stdout || '').split('\n').filter(Boolean)
-      resolvePromise({ ok: true, dirty: lines.length, files: lines.slice(0, 6).map((line) => line.slice(3)) })
+      if (error) return resolvePromise({ ok: false, dirty: null, trackedDirty: null, error: error.message.split('\n')[0] })
+      const lines = splitStatusLines(stdout)
+      const { tracked } = countDirty(lines)
+      resolvePromise({
+        ok: true,
+        dirty: lines.length,
+        trackedDirty: tracked,
+        files: lines.slice(0, 6).map((line) => line.slice(3)),
+      })
     })
   })
 }
@@ -390,6 +417,8 @@ export async function gitOverview(root, { fetch = false } = {}) {
   const behind = await git(root, ['rev-list', '--count', 'HEAD..@{u}'])
   const ahead = await git(root, ['rev-list', '--count', '@{u}..HEAD'])
   const status = await git(root, ['status', '--porcelain'])
+  const dirtyLines = status.ok ? splitStatusLines(status.stdout) : []
+  const dirtyCount = status.ok ? countDirty(dirtyLines) : { total: null, tracked: null }
   const last = await git(root, ['log', '-1', '--format=%h%x09%s%x09%ct'])
   const [hash = '', subject = '', at = ''] = last.stdout.split('\t')
   return {
@@ -398,7 +427,8 @@ export async function gitOverview(root, { fetch = false } = {}) {
     upstream: branch.ok,
     behind: Number(behind.stdout || 0),
     ahead: Number(ahead.stdout || 0),
-    dirty: status.ok ? status.stdout.split('\n').filter(Boolean).length : null,
+    dirty: dirtyCount.total,
+    trackedDirty: dirtyCount.tracked,
     lastCommit: hash ? { hash, subject, at: Number(at) * 1000 } : null,
     error: branch.ok ? null : branch.stderr.split('\n')[0],
   }
@@ -408,7 +438,10 @@ export async function gitOverview(root, { fetch = false } = {}) {
 export async function pullVault(root) {
   const before = await gitOverview(root)
   if (!before.ok) return { ok: false, message: before.error || '不是 git 仓库' }
-  if (before.dirty) return { ok: false, message: `本地有 ${before.dirty} 个未提交改动，先处理再拉`, behind: before.behind }
+  // 只看已跟踪改动：未跟踪文件与远端不会冲突，挡住 pull 只会让入口停摆。
+  if (before.trackedDirty) {
+    return { ok: false, message: `本地有 ${before.trackedDirty} 个未提交改动，先处理再拉`, behind: before.behind }
+  }
   const pull = await git(root, ['-c', 'merge.directoryRenames=false', 'pull', '--ff-only', '--quiet'], 60_000)
   const after = await gitOverview(root)
   return {
