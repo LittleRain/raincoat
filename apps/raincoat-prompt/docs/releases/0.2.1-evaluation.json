@@ -1,0 +1,20 @@
+{
+  "version": "0.2.1",
+  "protocol": "tools-v1-deterministic",
+  "enabled_rules": [
+    "workbuddy-no-tools"
+  ],
+  "scene_base_catalog": "docs/releases/0.2.0-catalog.json",
+  "catalog_sha256": "448dfa9128ed5cf2111db74c85ac10ce46b50f218f4bcca443c668827bf547da",
+  "artifacts": {
+    ".build/evaluation/stage10/tools-lane/runs.json": "8989b4d1784ad110e534ef600a1f557e5578cae81ead71cd3115b3ae067690a4",
+    "docs/eval-cases-tools.json": "19979ee2fe0b32550b90d92f168a9c337332add4ad290399bd560e04cb5956cd",
+    "scripts/eval/tools_release.py": "e13a606086e1c5bbe7bdc53aafb7b45dbe08bc8605a5a709116607c9aa4209af"
+  },
+  "residual_risks": [
+    "Gate criteria were written after the exploratory C/D/E runs; the holdout split (4 frozen cases) was added after and passed 3/4 with 0 regressions.",
+    "workbuddy was probed without tool execution; a backend upgrade could invalidate the no-tools assumption.",
+    "Rule text was one paraphrase among three tried; only the third reached 4/4 clean answers on the exploratory split.",
+    "One holdout case (tools-05-perm) already answered usably at baseline, so the rule is fixing fabrication, not adding capability."
+  ]
+}

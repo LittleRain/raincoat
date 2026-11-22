@@ -1,0 +1,17 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "title":"Raincoat anonymous judge attempt",
+  "type":"object","additionalProperties":false,
+  "required":["schema_version","id","pair_id","judge","requested_model","observed_model","mode","order","status","output","raw_response","error","duration_seconds","tokens","provenance"],
+  "properties":{
+    "schema_version":{"const":1},"id":{"type":"string"},"pair_id":{"type":"string"},"judge":{"enum":["bitto","workbuddy"]},
+    "requested_model":{"type":"string"},"observed_model":{"type":["string","null"]},"mode":{"enum":["pair","critical"]},"order":{"enum":[0,1]},
+    "status":{"enum":["completed","failed"]},"output":{"oneOf":[{"$ref":"#/$defs/pair"},{"$ref":"#/$defs/critical"},{"type":"null"}]},
+    "raw_response":{"type":"string"},"error":{},"duration_seconds":{"type":["number","null"]},"tokens":{},"provenance":{"type":"object"}
+  },
+  "$defs":{
+    "pair":{"type":"object","additionalProperties":false,"required":["verdict","reason"],"properties":{"verdict":{"enum":["A","B","tie"]},"reason":{"type":"string","minLength":1}}},
+    "finding":{"type":"object","additionalProperties":false,"required":["criterion","quote"],"properties":{"criterion":{"type":"integer","minimum":0},"quote":{"type":"string","minLength":1}}},
+    "critical":{"type":"object","additionalProperties":false,"required":["verdict","reason","critical_A","critical_B"],"properties":{"verdict":{"enum":["A","B","tie"]},"reason":{"type":"string","minLength":1},"critical_A":{"type":"array","items":{"$ref":"#/$defs/finding"}},"critical_B":{"type":"array","items":{"$ref":"#/$defs/finding"}}}}
+  }
+}

@@ -1,0 +1,167 @@
+{
+  "version": "0.2.0",
+  "protocol": "stage7-two-order-v1",
+  "evidence": ".build/evaluation/stage7/release-evidence",
+  "critical_judges": [
+    "bitto"
+  ],
+  "datasets": [
+    {
+      "name": "main",
+      "source": ".build/evaluation/round-03",
+      "minimum_margin": 1
+    },
+    {
+      "name": "existing-holdout",
+      "source": ".build/evaluation/round-04-holdout",
+      "minimum_margin": 0
+    }
+  ],
+  "catalog_sha256": "8075d6a04676f51071dc9d2b76ff07b61138e8665c7562a0e6bbc277518f19cf",
+  "quality": {
+    "main/bitto": {
+      "win": 17,
+      "tie": 5,
+      "loss": 5,
+      "valid": 27,
+      "incomplete": 0,
+      "consistent": 23,
+      "consistency": 0.8518518518518519,
+      "gates": {
+        "complete": true,
+        "win_margin": true,
+        "order_consistency": true
+      },
+      "passed": true
+    },
+    "main/workbuddy": {
+      "win": 17,
+      "tie": 5,
+      "loss": 5,
+      "valid": 27,
+      "incomplete": 0,
+      "consistent": 23,
+      "consistency": 0.8518518518518519,
+      "gates": {
+        "complete": true,
+        "win_margin": true,
+        "order_consistency": true
+      },
+      "passed": true
+    },
+    "existing-holdout/bitto": {
+      "win": 4,
+      "tie": 2,
+      "loss": 2,
+      "valid": 8,
+      "incomplete": 0,
+      "consistent": 6,
+      "consistency": 0.75,
+      "gates": {
+        "complete": true,
+        "win_margin": true,
+        "order_consistency": true
+      },
+      "passed": true
+    },
+    "existing-holdout/workbuddy": {
+      "win": 4,
+      "tie": 2,
+      "loss": 2,
+      "valid": 8,
+      "incomplete": 0,
+      "consistent": 6,
+      "consistency": 0.75,
+      "gates": {
+        "complete": true,
+        "win_margin": true,
+        "order_consistency": true
+      },
+      "passed": true
+    }
+  },
+  "artifacts": {
+    ".build/evaluation/stage7-preregistration.md": "781c091cd0c9767752a91afd124c4a7b7831571a24b9abdf538669f644124ae8",
+    ".build/evaluation/stage7/release-evidence/judges.jsonl": "323db964c23b95450e0dfd6a88a5ee6c8c25e39d933a8c2cf7bc54bb081dae54",
+    ".build/evaluation/stage7/release-evidence/private-mapping.json": "94e3bc797df1d443ee1508587de65fc3327fc9bd3310ebf4cb335ca92060a2ea",
+    "docs/candidates/scene-v0.2.1.json": "27ea40702a02b2715679e648ed5d129f413befa60765a0e03f765973140556f9",
+    "docs/candidates/scene-baseline-0.1.4.json": "c73cf4dc237eaffbf94df89fc742020c72f4a484faaacf6b9f52813cb6b16d86",
+    "scripts/eval/judge.py": "b9df2e4a5c1e417c6ecd9158664a5b5a7a9fb371a61ac5667d36296d07cbdd43",
+    "scripts/eval/judge_release.py": "d3f60664af8d04067b1315b8261b1db1c8878de85e412d9837247c59b1e0cdf9",
+    ".build/evaluation/stage7/release-evidence/blind-review/4fdaf87b7d0067446d5d720c-0.json": "894069e899d3bb3f67384070f0f8400adb60649cbe8afcd1830f20d908a320de",
+    ".build/evaluation/stage7/release-evidence/blind-review/65fc33e8f2f11a88ecb2c8f2-0.json": "00ce2213bcfab5e40123002737bd5c64e19b79f5fe3edca48229edfac54bb070",
+    ".build/evaluation/stage7/release-evidence/blind-review/65ca8a45da43186e53b4bd5a-0.json": "7bf964ea21751fe86a7f41145162f5e5a8ef7bd1b6a4dd290af9bf5d276fdc70",
+    ".build/evaluation/stage7/release-evidence/blind-review/87ff25255175b3a28c2676e6-0.json": "7017a911d72cbce9f5ba932be3fb701189c66bb388686f35a2c3ad14da57faa3",
+    ".build/evaluation/stage7/release-evidence/blind-review/eca82882ddf462b1d700e05d-0.json": "e18923e9b527798cb460aab036b279af6a08c4bd83481644f517cf3897fc63a7",
+    ".build/evaluation/stage7/release-evidence/blind-review/a26420abc2f5bb8bcb347f51-0.json": "6eacdebe1ab2b6148b35c9eaa9bb623fd2685d1c0c3511f231c7384b226b8b62",
+    ".build/evaluation/stage7/release-evidence/blind-review/b28594276743c733b20d53ca-1.json": "503f1f0c00268db5d9af0b0a8e493d1c5a976a8c8e144b11e49f5fe314f745af",
+    ".build/evaluation/stage7/release-evidence/blind-review/b28594276743c733b20d53ca-0.json": "ecc8d7bcf6d3fe172e491fda108bcf45a6248418a759636de434c9cb31a0d6d0",
+    ".build/evaluation/stage7/release-evidence/blind-review/a26420abc2f5bb8bcb347f51-1.json": "39f189e096a42bae2460adb459bf43a212618677e7281ef850f4da36c8525eb1",
+    ".build/evaluation/stage7/release-evidence/blind-review/eca82882ddf462b1d700e05d-1.json": "2dc7f87323e574157240b2be837d430a58b6971bd803eedf4da5cf798819c7a7",
+    ".build/evaluation/stage7/release-evidence/blind-review/65ca8a45da43186e53b4bd5a-1.json": "f085ed1f72421e4b31986e4dd65a6db7bca86df2fc5be5320ea7ee6b96029aae",
+    ".build/evaluation/stage7/release-evidence/blind-review/87ff25255175b3a28c2676e6-1.json": "2d3efc4f9208c39b5392e8dbb811b68c39d3fc094a71c54f73d64a7ef1e0fd2d",
+    ".build/evaluation/stage7/release-evidence/blind-review/65fc33e8f2f11a88ecb2c8f2-1.json": "553de6b1e1af5179c1dba0943b50974c92f6214fb59da7584645cf3c26e78adc",
+    ".build/evaluation/stage7/release-evidence/blind-review/4fdaf87b7d0067446d5d720c-1.json": "4a15cab7fbbfa90df31c3b95c5a4c9e6175d7c415121ebe0b1bc414c3dbdfbd4",
+    ".build/evaluation/stage7/release-evidence/blind-review/8d33543e20ae0c6affeee4ec-0.json": "f148b7bae6e52e25f8c8e81b6f5716b280327e981c3de4f7805161a8c2d438a8",
+    ".build/evaluation/stage7/release-evidence/blind-review/bb7310a74a89575260fbd359-0.json": "170caae7961b08671d197ca9d6b6ec97b8f10bdedd5cbf6452bc525611e14f32",
+    ".build/evaluation/stage7/release-evidence/blind-review/eb3a3f6ed29240d2e080166d-1.json": "ac1090ea04138ff6da4c9bc54104456295a7ee45af4f85af585c745397e2014b",
+    ".build/evaluation/stage7/release-evidence/blind-review/eb449fe64f445c2099f84b51-1.json": "bdbe975e0076f013cc0987ec0150548a4c1eddfa442a1701dab729fc6ae78805",
+    ".build/evaluation/stage7/release-evidence/blind-review/1606ad7e23df690c0d515cf7-0.json": "8dab1d300f7e42b312aea3a32439acdff60cb858b6142b5495cc6e3b0cbb252c",
+    ".build/evaluation/stage7/release-evidence/blind-review/04078a4fac972ae2369f86d6-1.json": "ce86b1ada3d74c24042812e80430578209578be4c4ea2e56235670084d9981be",
+    ".build/evaluation/stage7/release-evidence/blind-review/72253d19be42a937689e99e8-1.json": "d41b6d4a9d448c02b3906c80884f9f590858803846e98d5453e4e791c609f884",
+    ".build/evaluation/stage7/release-evidence/blind-review/0341d7ec713e424134ac31b8-1.json": "a78d4b335504b48a0a9a55160d73702b347511a62176f04c93bad522fb030460",
+    ".build/evaluation/stage7/release-evidence/blind-review/22446443caf35f7770b89e2f-0.json": "498f27863b8e2ed87e5a7f8422135094edea4f9897d67cee33bd722374acbc8b",
+    ".build/evaluation/stage7/release-evidence/blind-review/22446443caf35f7770b89e2f-1.json": "b491890ab257cda1215326ee79e33102fa872bbec2c5c5cf8b06a9d5e84b1607",
+    ".build/evaluation/stage7/release-evidence/blind-review/0341d7ec713e424134ac31b8-0.json": "a77371f9c93800c5bc896dff7c932c44b4e8affce31feb0ec7af35c10d4b6b41",
+    ".build/evaluation/stage7/release-evidence/blind-review/72253d19be42a937689e99e8-0.json": "e23f991a0a9a0806ec1c0fb162eecb454020739b8bceff80318abaffdc14e8fe",
+    ".build/evaluation/stage7/release-evidence/blind-review/04078a4fac972ae2369f86d6-0.json": "1f803f8cd41e4d0573a6e93dfc9232c979b155c28fc9a6d9ec6f26cbe60f611e",
+    ".build/evaluation/stage7/release-evidence/blind-review/eb449fe64f445c2099f84b51-0.json": "a9805060ceda37422bc29ef814a4d095489dda145b0abd7d5d4b69200c5afaae",
+    ".build/evaluation/stage7/release-evidence/blind-review/1606ad7e23df690c0d515cf7-1.json": "ed91ad286c2b20e8c69740439b5730db6adffa328d1f64b61372d52922442fbb",
+    ".build/evaluation/stage7/release-evidence/blind-review/eb3a3f6ed29240d2e080166d-0.json": "2b5e09ccd76e3ce01dc49f8499568b9d7d80b8d63639959cdd5d1cf957d09f50",
+    ".build/evaluation/stage7/release-evidence/blind-review/8d33543e20ae0c6affeee4ec-1.json": "bcc5fce6e354ac535999379c38843676ce38b2720a5bcbe7e6154e5dd93de992",
+    ".build/evaluation/stage7/release-evidence/blind-review/bb7310a74a89575260fbd359-1.json": "8883ce7b7ebf08bd69331921e5dfe5db89a8670813f2e0922428664443483319",
+    ".build/evaluation/stage7/release-evidence/blind-review/fac0d7b37ed7d633a4839b4e-0.json": "413924faa64d79d5fed1fe72195ca8fab3a8368e518be323060f10661cae0108",
+    ".build/evaluation/stage7/release-evidence/blind-review/952ee6f3f470a196ed3e58d8-1.json": "6a7e5b071232eed207f828bcf2d6347e89212c006fc1e93689a4810d5ab3f3de",
+    ".build/evaluation/stage7/release-evidence/blind-review/137e3f0e858831fe736c53c9-1.json": "4b0a5a37a6da10983e12dfa5d84a9952e7bb67e497fa05c73f7e8ba8f71c3478",
+    ".build/evaluation/stage7/release-evidence/blind-review/7c0da95886ada0b064ad57dc-1.json": "3ba5275e1b765c6d6c8daa62a1fd48071ffb917185989dbcfc62645ef9531ef1",
+    ".build/evaluation/stage7/release-evidence/blind-review/66d5a631248bbc5daea3cfc9-0.json": "ef87efd2fec5723ef9c66f9bca854df0f5af04520ffc054582f8cf633881b99f",
+    ".build/evaluation/stage7/release-evidence/blind-review/1c14e78710d7a20e6c4f828a-0.json": "171fcc856b813a1d9ffb105fa651b844839fe0ee6ff655757625871e30154283",
+    ".build/evaluation/stage7/release-evidence/blind-review/f7372791871e6c25eff2c578-1.json": "4b33cd0b9b7f09090be9b3f9b8d958b7dd96f72c431a827363416e880fb643f1",
+    ".build/evaluation/stage7/release-evidence/blind-review/87fe6a6f450e0c878d081ed6-0.json": "877f9144c34df49f0606e94856d9d3c39f406c1164a73de4371fb8475cfadf5c",
+    ".build/evaluation/stage7/release-evidence/blind-review/224269c6856559526283bcd5-1.json": "4330f24d9c936682eeba22365542746de8318a49e1d86dd5a3a46e345e194129",
+    ".build/evaluation/stage7/release-evidence/blind-review/d8d59d1a7ccab192d4893855-0.json": "23dea8ea7f2429af08c12f6fba1cd1d2f2a332cece67dba15356be862c9bd435",
+    ".build/evaluation/stage7/release-evidence/blind-review/08378f5cb8ee483290a59776-0.json": "64bd6cbf9582dfea6b7808f39239badcc2478295df394c180a46625b72034267",
+    ".build/evaluation/stage7/release-evidence/blind-review/53c2c0d948fb37b52bc34432-1.json": "255f3f9aef7c704226c975edcc7cd5ccc213a9d64dc9934e9675b13b633b9fe5",
+    ".build/evaluation/stage7/release-evidence/blind-review/cf2df949c8207ee2069efbe1-1.json": "78b302bfe5fc53f209e88c8bcba34046e17f9513b34203f5c4c9f80ae9536ddc",
+    ".build/evaluation/stage7/release-evidence/blind-review/53c2c0d948fb37b52bc34432-0.json": "0ccad9cb628dc00e075ef13d9cfbc468ae4e2af50f4032620d6a85f924bf534f",
+    ".build/evaluation/stage7/release-evidence/blind-review/cf2df949c8207ee2069efbe1-0.json": "19a82d98f970e38b8642584e0bb2141ba653e369a406c23ba9faf93fc4c22956",
+    ".build/evaluation/stage7/release-evidence/blind-review/08378f5cb8ee483290a59776-1.json": "b4c6c9fb08bdb3475663361d0cbb21f659551e9671c0a2b5e227c728c84c2554",
+    ".build/evaluation/stage7/release-evidence/blind-review/d8d59d1a7ccab192d4893855-1.json": "6c6cef9a2f6383da233cc8f2c84c7260c56f665931390214d60f9f94a3b49d23",
+    ".build/evaluation/stage7/release-evidence/blind-review/224269c6856559526283bcd5-0.json": "152bac8f7f2803e42bd8871e65be38ebdfddec8d0140b256294b399525b2b4c6",
+    ".build/evaluation/stage7/release-evidence/blind-review/87fe6a6f450e0c878d081ed6-1.json": "881f203f47499079f78761c5f3b3608221f3b77008c8429c60023577da92a0e2",
+    ".build/evaluation/stage7/release-evidence/blind-review/f7372791871e6c25eff2c578-0.json": "c81569f6e4b6b7642ec52b5ef9687c56809ac2b19b7f939b5ddf46a3fbcb20e1",
+    ".build/evaluation/stage7/release-evidence/blind-review/1c14e78710d7a20e6c4f828a-1.json": "2105faa7226d8d3020daab4a3f317a8f2ff47b2d00a340916942829d331b7b3e",
+    ".build/evaluation/stage7/release-evidence/blind-review/66d5a631248bbc5daea3cfc9-1.json": "bdd3fbd12ebe779aef07356e9b934c84f543e12b8c1b99f5a71e7b89a3f59e2b",
+    ".build/evaluation/stage7/release-evidence/blind-review/7c0da95886ada0b064ad57dc-0.json": "2f63c7f58b27bc309845f8f9152250a4e4c3609dcb45f79f41572f9ecbcd3bb2",
+    ".build/evaluation/stage7/release-evidence/blind-review/137e3f0e858831fe736c53c9-0.json": "280f1f21da06c1bb56d0c4305a0539367a139832d56cceaf15fe5a43233e44c2",
+    ".build/evaluation/stage7/release-evidence/blind-review/952ee6f3f470a196ed3e58d8-0.json": "a39bcf3613f971bcd94c1d0864e285278f56704c1f1de0ec25a2a4466f9f8121",
+    ".build/evaluation/stage7/release-evidence/blind-review/fac0d7b37ed7d633a4839b4e-1.json": "7ed7982b3df2045cfebd544ec11657d6a8c8b0c0dd272f30979aa842b96c4914",
+    ".build/evaluation/stage7/release-evidence/blind-review/7c5ed72df44f9be45d614e71-1.json": "13671a891f3b9a8d8a2fee3de4d0f0e1088748d32aa0d3dfe78fedae8e1bc00e",
+    ".build/evaluation/stage7/release-evidence/blind-review/2c07296674dbc96f64a678b2-0.json": "addb9ab7f443030f7184168abcc9dd9e00d8e887fbeafd5e1daf5ae9fb3c50b9",
+    ".build/evaluation/stage7/release-evidence/blind-review/5c52edb7465ddf659af44497-1.json": "aab66d0a23594b26e80e1b31c3d7c3516b8758f8ecbb89f5802cdd7ef817a117",
+    ".build/evaluation/stage7/release-evidence/blind-review/15f4244b3d18eec1c09dcd42-0.json": "affe2ec5d9c46b31f94c7bcdba00b6e09ffbd988b704982a6d4c3c3258260cb6",
+    ".build/evaluation/stage7/release-evidence/blind-review/88b402380fe89a90724c3d9f-0.json": "013c3a5b3300ab87b292d6c542529ab523369548ef0660454f6aef564f06dc84",
+    ".build/evaluation/stage7/release-evidence/blind-review/f6b2421ce8d217e5f4287234-1.json": "5ff0202c6c292cafd126a1fd4916845c80ec59a57aba9b11cf82b9a20a74eee0",
+    ".build/evaluation/stage7/release-evidence/blind-review/f6b2421ce8d217e5f4287234-0.json": "10f10515f7992bb606d52915ab50a2b1cb2a3842a5db4b15ad3517dbb7a84cc8",
+    ".build/evaluation/stage7/release-evidence/blind-review/15f4244b3d18eec1c09dcd42-1.json": "f717f4bb6d625dd68937ab38eab5bc6980a177bb51044b76d02ca43cece61fd3",
+    ".build/evaluation/stage7/release-evidence/blind-review/88b402380fe89a90724c3d9f-1.json": "9254f0ac00562950596650a2d359175aa7ed836848ae0eee189ef258ee410530",
+    ".build/evaluation/stage7/release-evidence/blind-review/5c52edb7465ddf659af44497-0.json": "e4e11888052d12be117df54672e8321ed84fd01f8137c65dbf32e91b2c7d57a3",
+    ".build/evaluation/stage7/release-evidence/blind-review/7c5ed72df44f9be45d614e71-0.json": "dc3ef088020348139a26a2fad8646c77ecccf7d08260924acbd2838e854b9559",
+    ".build/evaluation/stage7/release-evidence/blind-review/2c07296674dbc96f64a678b2-1.json": "61bc15cbfc49c7c5d663c846222c95afc6837fee2a39fead23c2ec2591dded2c"
+  },
+  "residual_risks": [
+    "Critical audit used one free judge in both orders; two overall quality judges used imported records.",
+    "Existing holdout is regression replay, not unseen generalization.",
+    "Legacy judge observations do not attest actual provider model or usage."
+  ]
+}

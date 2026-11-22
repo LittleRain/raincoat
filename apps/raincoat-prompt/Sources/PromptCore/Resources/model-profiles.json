@@ -1,0 +1,94 @@
+{
+  "version": "0.3.0",
+  "profiles": [
+    {
+      "id": "gpt",
+      "display": "ChatGPT / Codex",
+      "tier": "frontier",
+      "sentence_budget": 4,
+      "char_budget": 120,
+      "order": [
+        "goal",
+        "acceptance",
+        "constraint"
+      ],
+      "official": true,
+      "source": "https://developers.openai.com/api/docs/guides/prompt-engineering",
+      "fetched_at": "2026-11-18",
+      "notes": "官方：reasoning model 像资深同事，给目标即可；GPT 模型像初级同事，需要明确指令。前沿档按前者取最小指令。"
+    },
+    {
+      "id": "claude",
+      "display": "Claude / Claude Code",
+      "tier": "frontier",
+      "sentence_budget": 4,
+      "char_budget": 120,
+      "order": [
+        "goal",
+        "acceptance",
+        "constraint"
+      ],
+      "official": true,
+      "source": "https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices",
+      "fetched_at": "2026-11-18",
+      "notes": "官方迁移章节 Remove over-prompting：新模型多数场景不再需要显式逐步指令。用户要求纯文本，故不采用 XML 标签。"
+    },
+    {
+      "id": "bitto",
+      "display": "Bitto（DeepSeek V4）",
+      "tier": "mid",
+      "sentence_budget": 7,
+      "char_budget": 220,
+      "order": [
+        "role",
+        "goal",
+        "constraint",
+        "acceptance",
+        "format"
+      ],
+      "official": false,
+      "source": "https://api-docs.deepseek.com/guides/prompt_engineering",
+      "fetched_at": "2026-11-18",
+      "notes": "未找到官方 prompt 结构指南（该路径返回 404）；按模型类别归档为中档，不冒充官方建议。"
+    },
+    {
+      "id": "workbuddy",
+      "display": "WorkBuddy（Kimi K2.5）",
+      "tier": "mid",
+      "sentence_budget": 7,
+      "char_budget": 220,
+      "order": [
+        "role",
+        "goal",
+        "constraint",
+        "acceptance",
+        "format"
+      ],
+      "official": false,
+      "source": "https://platform.moonshot.cn/docs",
+      "fetched_at": "2026-11-18",
+      "notes": "未找到官方 prompt 结构指南；当前桥接无工具执行能力，附加一句工具边界，依据 .build/evaluation/stage10 的确定性判据。",
+      "extra": [
+        "no_tools_boundary"
+      ]
+    },
+    {
+      "id": "deepseek",
+      "display": "DeepSeek 官方 App",
+      "tier": "mid",
+      "sentence_budget": 7,
+      "char_budget": 220,
+      "order": [
+        "role",
+        "goal",
+        "constraint",
+        "acceptance",
+        "format"
+      ],
+      "official": false,
+      "source": "https://api-docs.deepseek.com/guides/prompt_engineering",
+      "fetched_at": "2026-11-18",
+      "notes": "未找到官方 prompt 结构指南；按模型类别归档为中档。"
+    }
+  ]
+}

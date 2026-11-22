@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleIdentifier</key>
+	<string>app.raincoat.prompt</string>
+	<key>CFBundleName</key>
+	<string>Raincoat Prompt</string>
+	<key>CFBundleDisplayName</key>
+	<string>Raincoat Prompt</string>
+	<key>CFBundleExecutable</key>
+	<string>RaincoatPrompt</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.3.0</string>
+	<key>CFBundleVersion</key>
+	<string>7</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSScreenCaptureUsageDescription</key>
+	<string>在唤起 Raincoat Prompt 时识别 Agent 窗口显示的模型名称。</string>
+</dict>
+</plist>

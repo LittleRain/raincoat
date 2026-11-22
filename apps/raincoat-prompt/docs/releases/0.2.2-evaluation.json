@@ -1,0 +1,29 @@
+{
+  "version": "0.2.2",
+  "protocol": "tools-v1-deterministic",
+  "enabled_rules": [
+    "workbuddy-no-tools"
+  ],
+  "scene_base_catalog": "docs/releases/0.2.0-catalog.json",
+  "catalog_sha256": "f503020cd9b9f5108ddfde89e763c80fc14d3f017031b3e3a26ee5a92e01ab70",
+  "artifacts": {
+    ".build/evaluation/stage10/tools-lane/runs.json": "8989b4d1784ad110e534ef600a1f557e5578cae81ead71cd3115b3ae067690a4",
+    "docs/eval-cases-tools.json": "19979ee2fe0b32550b90d92f168a9c337332add4ad290399bd560e04cb5956cd",
+    "scripts/eval/tools_release.py": "e13a606086e1c5bbe7bdc53aafb7b45dbe08bc8605a5a709116607c9aa4209af",
+    "docs/releases/0.2.1-evaluation.json": "49df810cab2e67c0eb46ad824f843bbc56d476eca44ec106b67ca789ff9ca3f0",
+    ".build/rebuild-0.2.2/baseline/Sources/PromptCore/Resources/prompt-rules.json": "448dfa9128ed5cf2111db74c85ac10ce46b50f218f4bcca443c668827bf547da"
+  },
+  "residual_risks": [
+    "Gate criteria were written after the exploratory C/D/E runs; the holdout split (4 frozen cases) was added after and passed 3/4 with 0 regressions.",
+    "workbuddy was probed without tool execution; a backend upgrade could invalidate the no-tools assumption.",
+    "Rule text was one paraphrase among three tried; only the third reached 4/4 clean answers on the exploratory split.",
+    "One holdout case (tools-05-perm) already answered usably at baseline, so the rule is fixing fabrication, not adding capability."
+  ],
+  "change_class": "rebuild-only",
+  "no_behavior_change": true,
+  "base_manifest": "docs/releases/0.2.1-evaluation.json",
+  "base_manifest_sha256": "49df810cab2e67c0eb46ad824f843bbc56d476eca44ec106b67ca789ff9ca3f0",
+  "behavior_base_catalog": ".build/rebuild-0.2.2/baseline/Sources/PromptCore/Resources/prompt-rules.json",
+  "behavior_base_catalog_sha256": "448dfa9128ed5cf2111db74c85ac10ce46b50f218f4bcca443c668827bf547da",
+  "notes": "Rebuild of the 09:22 0.2.1 distribution; only version metadata and documentation change. Templates remain0.2.0, enabled rule and original evidence hashes are unchanged. No new model calls."
+}

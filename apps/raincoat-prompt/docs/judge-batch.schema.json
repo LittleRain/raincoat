@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Compact joint blind judgment transport (harness-repair-v1)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["items"],
+  "properties": {
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["pair_id", "verdict", "critical_flags", "reason"],
+        "properties": {
+          "pair_id": {"type": "string", "minLength": 1},
+          "verdict": {"enum": ["A", "B", "tie"]},
+          "reason": {"type": "string", "minLength": 1},
+          "critical_flags": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["A", "B"],
+            "properties": {
+              "A": {"type": "array", "items": {"$ref": "#/$defs/finding"}},
+              "B": {"type": "array", "items": {"$ref": "#/$defs/finding"}}
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["criterion", "quote"],
+      "properties": {
+        "criterion": {"type": "integer", "minimum": 0},
+        "quote": {"type": "string", "minLength": 1}
+      }
+    }
+  },
+  "$comment": "Runtime also requires a unique recognized 24-hex ID after normalization, rejects duplicate IDs per item, and verifies criterion range and verbatim quote against the anonymous packet. Valid items survive other item failures. No default flags or fabricated tie."
+}

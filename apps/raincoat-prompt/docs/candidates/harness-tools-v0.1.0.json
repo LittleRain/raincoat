@@ -1,0 +1,871 @@
+{
+  "version": "0.2.1-tools-candidate",
+  "templates": [
+    {
+      "id": "research-compare",
+      "scene": "research",
+      "target": "*",
+      "version": "0.2.0",
+      "evidence": [
+        "candidate, unpublished; parent: scene-v0.2.0.json; stage3 failures; three stage4 guards only",
+        "local: stage7-two-order-v1; .build/evaluation/stage7/release-evidence; docs/releases/0.2.0-evaluation.json"
+      ],
+      "text": "按同一使用条件比较，逐项核对必须满足的要求。 先核对材料已经说明的事实，区分已发生、条件意愿和计划；计算前确认人群、时间、粒度和分母可比，不把事件条数当受影响人数。可确认的结论直接交付，不确定项列清单待审，并给能改变结论的最小验证方法。\n\n硬前置不得自行豁免：安全、合规、发版及验收门槛均为阻塞项；尚未完成的发版验收不得自行归为体验项，改成可并行、后续补或不阻塞。只有材料明确允许降低或延期才可调整；否则未满足时不得发版、放量或宣称验收完成，交付中写明阻塞及其后果。\n固定输出形态优先：任务或材料要求JSON、固定字段或固定行数时，严格只交付该形态，不追加解释段落、前后围栏或额外小节；场景模板的结论、待审清单及建议仅在不与指定形态冲突时生效。\n限定词与未知项：全文包括标题、表格、推荐和总结均保留“预计”“待定”等限定；未知成本仅用变量或待定，不自行给数值区间；未知责任角色、负责人和期限写“待分配”，不补造具体人名、数字或时间。",
+      "label": "证据与验收",
+      "any": [
+        "比较",
+        "对比",
+        "推荐",
+        "竞品",
+        "compare",
+        "alternatives"
+      ]
+    },
+    {
+      "id": "research",
+      "scene": "research",
+      "target": "*",
+      "version": "0.2.0",
+      "evidence": [
+        "candidate, unpublished; parent: scene-v0.2.0.json; stage3 failures; three stage4 guards only",
+        "local: stage7-two-order-v1; .build/evaluation/stage7/release-evidence; docs/releases/0.2.0-evaluation.json"
+      ],
+      "text": "先明确要查证的对象、时点与范围，覆盖会影响结论的证据。 先核对材料已经说明的事实，区分已发生、条件意愿和计划；计算前确认人群、时间、粒度和分母可比，不把事件条数当受影响人数。可确认的结论直接交付，不确定项列清单待审，并给能改变结论的最小验证方法。\n\n硬前置不得自行豁免：安全、合规、发版及验收门槛均为阻塞项；尚未完成的发版验收不得自行归为体验项，改成可并行、后续补或不阻塞。只有材料明确允许降低或延期才可调整；否则未满足时不得发版、放量或宣称验收完成，交付中写明阻塞及其后果。\n固定输出形态优先：任务或材料要求JSON、固定字段或固定行数时，严格只交付该形态，不追加解释段落、前后围栏或额外小节；场景模板的结论、待审清单及建议仅在不与指定形态冲突时生效。\n限定词与未知项：全文包括标题、表格、推荐和总结均保留“预计”“待定”等限定；未知成本仅用变量或待定，不自行给数值区间；未知责任角色、负责人和期限写“待分配”，不补造具体人名、数字或时间。",
+      "label": "证据与验收"
+    },
+    {
+      "id": "ranking",
+      "scene": "dataAnalysis",
+      "target": "*",
+      "version": "0.2.0",
+      "evidence": [
+        "candidate, unpublished; parent: scene-v0.2.0.json; stage3 failures; three stage4 guards only",
+        "local: stage7-two-order-v1; .build/evaluation/stage7/release-evidence; docs/releases/0.2.0-evaluation.json"
+      ],
+      "text": "已有候选清单时逐项评估；需要整理清单时，先说明候选的纳入范围。按任务指定的工具和范围取数，在同一平台、统计时段和口径下比较。若没有可直接比较的热度值，说明采用的代理指标和排序规则。按要求排序，默认从高到低；默认用表格列出名次、对象、指标值与来源，单列缺少可比数据的对象。\n\n硬前置不得自行豁免：安全、合规、发版及验收门槛均为阻塞项；尚未完成的发版验收不得自行归为体验项，改成可并行、后续补或不阻塞。只有材料明确允许降低或延期才可调整；否则未满足时不得发版、放量或宣称验收完成，交付中写明阻塞及其后果。\n固定输出形态优先：任务或材料要求JSON、固定字段或固定行数时，严格只交付该形态，不追加解释段落、前后围栏或额外小节；场景模板的结论、待审清单及建议仅在不与指定形态冲突时生效。\n限定词与未知项：全文包括标题、表格、推荐和总结均保留“预计”“待定”等限定；未知成本仅用变量或待定，不自行给数值区间；未知责任角色、负责人和期限写“待分配”，不补造具体人名、数字或时间。",
+      "label": "热度口径与排名表",
+      "condition": "ranking"
+    },
+    {
+      "id": "estimate",
+      "scene": "dataAnalysis",
+      "target": "*",
+      "version": "0.2.0",
+      "evidence": [
+        "candidate, unpublished; parent: scene-v0.2.0.json; stage3 failures; three stage4 guards only",
+        "local: stage7-two-order-v1; .build/evaluation/stage7/release-evidence; docs/releases/0.2.0-evaluation.json"
+      ],
+      "text": "说明可用数据、抽样范围、外推公式及关键假设。材料足够时给估算区间和可复算的依据。\n\n硬前置不得自行豁免：安全、合规、发版及验收门槛均为阻塞项；尚未完成的发版验收不得自行归为体验项，改成可并行、后续补或不阻塞。只有材料明确允许降低或延期才可调整；否则未满足时不得发版、放量或宣称验收完成，交付中写明阻塞及其后果。\n固定输出形态优先：任务或材料要求JSON、固定字段或固定行数时，严格只交付该形态，不追加解释段落、前后围栏或额外小节；场景模板的结论、待审清单及建议仅在不与指定形态冲突时生效。\n限定词与未知项：全文包括标题、表格、推荐和总结均保留“预计”“待定”等限定；未知成本仅用变量或待定，不自行给数值区间；未知责任角色、负责人和期限写“待分配”，不补造具体人名、数字或时间。",
+      "label": "估算口径与区间",
+      "any": [
+        "反推",
+        "估算",
+        "推算",
+        "estimate"
+      ]
+    },
+    {
+      "id": "attribution",
+      "scene": "dataAnalysis",
+      "target": "*",
+      "version": "0.2.0",
+      "evidence": [
+        "candidate, unpublished; parent: scene-v0.2.0.json; stage3 failures; three stage4 guards only",
+        "local: stage7-two-order-v1; .build/evaluation/stage7/release-evidence; docs/releases/0.2.0-evaluation.json"
+      ],
+      "text": "先核对指标定义、分子分母、数据粒度和比较期间。用可比基线区分样本结构和各组自身变化。量化贡献时给出可复算的计算式并核对加总，标明仍需证据的原因。\n\n硬前置不得自行豁免：安全、合规、发版及验收门槛均为阻塞项；尚未完成的发版验收不得自行归为体验项，改成可并行、后续补或不阻塞。只有材料明确允许降低或延期才可调整；否则未满足时不得发版、放量或宣称验收完成，交付中写明阻塞及其后果。\n固定输出形态优先：任务或材料要求JSON、固定字段或固定行数时，严格只交付该形态，不追加解释段落、前后围栏或额外小节；场景模板的结论、待审清单及建议仅在不与指定形态冲突时生效。\n限定词与未知项：全文包括标题、表格、推荐和总结均保留“预计”“待定”等限定；未知成本仅用变量或待定，不自行给数值区间；未知责任角色、负责人和期限写“待分配”，不补造具体人名、数字或时间。",
+      "label": "口径与复算",
+      "any": [
+        "为什么",
+        "变高",
+        "变低",
+        "问题主要",
+        "变少",
+        "变多",
+        "下降",
+        "下滑",
+        "上涨",
+        "归因",
+        "why",
+        "rose",
+        "increase"
+      ]
+    },
+    {
+      "id": "data",
+      "scene": "dataAnalysis",
+      "target": "*",
+      "version": "0.2.0",
+      "evidence": [
+        "candidate, unpublished; parent: scene-v0.2.0.json; stage3 failures; three stage4 guards only",
+        "local: stage7-two-order-v1; .build/evaluation/stage7/release-evidence; docs/releases/0.2.0-evaluation.json"
+      ],
+      "text": "先核对指标定义、分子分母、数据粒度和比较期间。给出结论及可复算的计算依据，标明缺失数据。\n\n硬前置不得自行豁免：安全、合规、发版及验收门槛均为阻塞项；尚未完成的发版验收不得自行归为体验项，改成可并行、后续补或不阻塞。只有材料明确允许降低或延期才可调整；否则未满足时不得发版、放量或宣称验收完成，交付中写明阻塞及其后果。\n固定输出形态优先：任务或材料要求JSON、固定字段或固定行数时，严格只交付该形态，不追加解释段落、前后围栏或额外小节；场景模板的结论、待审清单及建议仅在不与指定形态冲突时生效。\n限定词与未知项：全文包括标题、表格、推荐和总结均保留“预计”“待定”等限定；未知成本仅用变量或待定，不自行给数值区间；未知责任角色、负责人和期限写“待分配”，不补造具体人名、数字或时间。",
+      "label": "口径与复算"
+    },
+    {
+      "id": "development",
+      "scene": "development",
+      "target": "*",
+      "version": "0.2.0",
+      "evidence": [
+        "candidate, unpublished; parent: scene-v0.2.0.json; stage3 failures; three stage4 guards only",
+        "local: stage7-two-order-v1; .build/evaluation/stage7/release-evidence; docs/releases/0.2.0-evaluation.json"
+      ],
+      "text": "交代目标行为和允许的改动范围。能操作项目时，用实际入口复现或验收，并列出已运行的检查及结果。\n\n硬前置不得自行豁免：安全、合规、发版及验收门槛均为阻塞项；尚未完成的发版验收不得自行归为体验项，改成可并行、后续补或不阻塞。只有材料明确允许降低或延期才可调整；否则未满足时不得发版、放量或宣称验收完成，交付中写明阻塞及其后果。\n固定输出形态优先：任务或材料要求JSON、固定字段或固定行数时，严格只交付该形态，不追加解释段落、前后围栏或额外小节；场景模板的结论、待审清单及建议仅在不与指定形态冲突时生效。\n限定词与未知项：全文包括标题、表格、推荐和总结均保留“预计”“待定”等限定；未知成本仅用变量或待定，不自行给数值区间；未知责任角色、负责人和期限写“待分配”，不补造具体人名、数字或时间。",
+      "label": "行为与验收"
+    },
+    {
+      "id": "plan",
+      "scene": "plan",
+      "target": "*",
+      "version": "0.2.0",
+      "evidence": [
+        "candidate, unpublished; parent: scene-v0.2.0.json; stage3 failures; three stage4 guards only",
+        "local: stage7-two-order-v1; .build/evaluation/stage7/release-evidence; docs/releases/0.2.0-evaluation.json"
+      ],
+      "text": "围绕目标和已有约束比较可行做法，给出取舍与推荐。明确依赖、最小试点和能够验证成效的条件。 先满足硬约束再比较路线，保留“预计”等限定词，不把工期估计写成保证。已确定的方案直接给出，不确定的费用、依赖或承诺列清单待审；写明完成定义及一种对应的验证方法，建议门槛标为建议。\n\n硬前置不得自行豁免：安全、合规、发版及验收门槛均为阻塞项；尚未完成的发版验收不得自行归为体验项，改成可并行、后续补或不阻塞。只有材料明确允许降低或延期才可调整；否则未满足时不得发版、放量或宣称验收完成，交付中写明阻塞及其后果。\n固定输出形态优先：任务或材料要求JSON、固定字段或固定行数时，严格只交付该形态，不追加解释段落、前后围栏或额外小节；场景模板的结论、待审清单及建议仅在不与指定形态冲突时生效。\n限定词与未知项：全文包括标题、表格、推荐和总结均保留“预计”“待定”等限定；未知成本仅用变量或待定，不自行给数值区间；未知责任角色、负责人和期限写“待分配”，不补造具体人名、数字或时间。",
+      "label": "取舍与试点"
+    },
+    {
+      "id": "meeting",
+      "scene": "report",
+      "target": "*",
+      "version": "0.2.0",
+      "evidence": [
+        "candidate, unpublished; parent: scene-v0.2.0.json; stage3 failures; three stage4 guards only",
+        "local: stage7-two-order-v1; .build/evaluation/stage7/release-evidence; docs/releases/0.2.0-evaluation.json"
+      ],
+      "text": "逐条列出确认的待办、负责人和截止时间。保留影响执行的决定，未明确的项标为待确认。 事实、提议和待确认项分开，保留“疑似”“未发现”等限定词；不扩写成确定结论，不补造负责人、日期或材料外的系统信息。确定内容直接成稿，不确定项列清单待审；新增行动标为建议，完成定义与验证方法不冒充既定承诺。\n\n硬前置不得自行豁免：安全、合规、发版及验收门槛均为阻塞项；尚未完成的发版验收不得自行归为体验项，改成可并行、后续补或不阻塞。只有材料明确允许降低或延期才可调整；否则未满足时不得发版、放量或宣称验收完成，交付中写明阻塞及其后果。\n固定输出形态优先：任务或材料要求JSON、固定字段或固定行数时，严格只交付该形态，不追加解释段落、前后围栏或额外小节；场景模板的结论、待审清单及建议仅在不与指定形态冲突时生效。\n限定词与未知项：全文包括标题、表格、推荐和总结均保留“预计”“待定”等限定；未知成本仅用变量或待定，不自行给数值区间；未知责任角色、负责人和期限写“待分配”，不补造具体人名、数字或时间。",
+      "label": "待办与负责人",
+      "condition": "meeting"
+    },
+    {
+      "id": "report",
+      "scene": "report",
+      "target": "*",
+      "version": "0.2.0",
+      "evidence": [
+        "candidate, unpublished; parent: scene-v0.2.0.json; stage3 failures; three stage4 guards only",
+        "local: stage7-two-order-v1; .build/evaluation/stage7/release-evidence; docs/releases/0.2.0-evaluation.json"
+      ],
+      "text": "按指定受众和篇幅组织内容。开头给结论，关键数字和判断附可回查的材料与口径，列出需要读者确认或采取行动的事项。 事实、提议和待确认项分开，保留“疑似”“未发现”等限定词；不扩写成确定结论，不补造负责人、日期或材料外的系统信息。确定内容直接成稿，不确定项列清单待审；新增行动标为建议，完成定义与验证方法不冒充既定承诺。\n\n硬前置不得自行豁免：安全、合规、发版及验收门槛均为阻塞项；尚未完成的发版验收不得自行归为体验项，改成可并行、后续补或不阻塞。只有材料明确允许降低或延期才可调整；否则未满足时不得发版、放量或宣称验收完成，交付中写明阻塞及其后果。\n固定输出形态优先：任务或材料要求JSON、固定字段或固定行数时，严格只交付该形态，不追加解释段落、前后围栏或额外小节；场景模板的结论、待审清单及建议仅在不与指定形态冲突时生效。\n限定词与未知项：全文包括标题、表格、推荐和总结均保留“预计”“待定”等限定；未知成本仅用变量或待定，不自行给数值区间；未知责任角色、负责人和期限写“待分配”，不补造具体人名、数字或时间。",
+      "label": "受众与依据"
+    },
+    {
+      "id": "editing",
+      "scene": "general",
+      "target": "*",
+      "version": "0.2.0",
+      "evidence": [
+        "candidate, unpublished; parent: scene-v0.2.0.json; stage3 failures; three stage4 guards only",
+        "local: stage7-two-order-v1; .build/evaluation/stage7/release-evidence; docs/releases/0.2.0-evaluation.json"
+      ],
+      "text": "保留原意、事实和关键信息，沿用指定的语气与输出格式。\n\n硬前置不得自行豁免：安全、合规、发版及验收门槛均为阻塞项；尚未完成的发版验收不得自行归为体验项，改成可并行、后续补或不阻塞。只有材料明确允许降低或延期才可调整；否则未满足时不得发版、放量或宣称验收完成，交付中写明阻塞及其后果。\n固定输出形态优先：任务或材料要求JSON、固定字段或固定行数时，严格只交付该形态，不追加解释段落、前后围栏或额外小节；场景模板的结论、待审清单及建议仅在不与指定形态冲突时生效。\n限定词与未知项：全文包括标题、表格、推荐和总结均保留“预计”“待定”等限定；未知成本仅用变量或待定，不自行给数值区间；未知责任角色、负责人和期限写“待分配”，不补造具体人名、数字或时间。",
+      "label": "写作要求",
+      "condition": "editing"
+    },
+    {
+      "id": "general",
+      "scene": "general",
+      "target": "*",
+      "version": "0.2.0",
+      "evidence": [
+        "candidate, unpublished; parent: scene-v0.2.0.json; stage3 failures; three stage4 guards only",
+        "local: stage7-two-order-v1; .build/evaluation/stage7/release-evidence; docs/releases/0.2.0-evaluation.json"
+      ],
+      "text": "根据对话中已有材料完成任务，按指定格式交付。如缺少会改变结果的信息，说明具体缺口，先完成可确认的部分。\n\n硬前置不得自行豁免：安全、合规、发版及验收门槛均为阻塞项；尚未完成的发版验收不得自行归为体验项，改成可并行、后续补或不阻塞。只有材料明确允许降低或延期才可调整；否则未满足时不得发版、放量或宣称验收完成，交付中写明阻塞及其后果。\n固定输出形态优先：任务或材料要求JSON、固定字段或固定行数时，严格只交付该形态，不追加解释段落、前后围栏或额外小节；场景模板的结论、待审清单及建议仅在不与指定形态冲突时生效。\n限定词与未知项：全文包括标题、表格、推荐和总结均保留“预计”“待定”等限定；未知成本仅用变量或待定，不自行给数值区间；未知责任角色、负责人和期限写“待分配”，不补造具体人名、数字或时间。",
+      "label": "交付要求"
+    }
+  ],
+  "research_web": "对关键判断给出可核验的一手来源和日期。遇到冲突时说明依据，标注仍待核实的信息。",
+  "research_materials": "用所提供的材料支持关键判断，标明出处与证据缺口。",
+  "rules": [
+    {
+      "id": "deep-research-sources",
+      "kind": "harness",
+      "target": "deepResearch",
+      "scene": "research",
+      "version": "1.0.0",
+      "evidence": [],
+      "enabled": false,
+      "instruction": "优先用已上传或已授权读取的资料确认范围，再用可访问的公开网页核实。对每条主要结论附来源链接或材料位置。",
+      "condition": "web"
+    },
+    {
+      "id": "workbuddy-workspace",
+      "kind": "harness",
+      "target": "workBuddy",
+      "scene": "research",
+      "version": "1.0.0",
+      "evidence": [],
+      "enabled": false,
+      "instruction": "若当前工作区能读取指定知识库，先以其中的材料确定范围，再标明实际引用的文件和日期。",
+      "condition": "external",
+      "any": [
+        "知识库",
+        "工作区",
+        "项目资料",
+        "knowledge base",
+        "workspace"
+      ]
+    },
+    {
+      "id": "bitto-readonly",
+      "kind": "harness",
+      "target": "bitto",
+      "scene": "dataAnalysis",
+      "version": "1.0.0",
+      "evidence": [],
+      "enabled": false,
+      "instruction": "若当前工作区有已授权的只读查询工具，核对源字段、粒度和最新可用日期后再计算。若来源当前不可读，请列出需要提供的字段。",
+      "condition": "external"
+    },
+    {
+      "id": "chatgpt-tables",
+      "kind": "harness",
+      "target": "chatGPT",
+      "scene": "dataAnalysis",
+      "version": "1.0.0",
+      "evidence": [],
+      "enabled": false,
+      "instruction": "若本对话已有可读的数据表或附件，先核对表头和数据范围。缺少数据时给出所需字段与复算方法。",
+      "condition": "external"
+    },
+    {
+      "id": "deepseek-check",
+      "kind": "model",
+      "target": "bitto",
+      "scene": "dataAnalysis",
+      "version": "1.0.0",
+      "evidence": [],
+      "enabled": false,
+      "instruction": "交付前核对计算式中的单位与分母，使解释与公式一致。",
+      "model": "deepseek-v4.1-flash"
+    },
+    {
+      "id": "kimi-evidence",
+      "kind": "model",
+      "target": "workBuddy",
+      "scene": "research",
+      "version": "1.0.0",
+      "evidence": [],
+      "enabled": false,
+      "instruction": "为每个关键判断标明支持它的材料编号。",
+      "model": "kimi-k2.5"
+    },
+    {
+      "id": "deepseek-research",
+      "kind": "model",
+      "target": "bitto",
+      "model": "deepseek-v4.1-flash",
+      "scene": "research",
+      "version": "1.0.0",
+      "evidence": [],
+      "enabled": false,
+      "instruction": "交付前核对关键结论与材料或计算依据是否一致。"
+    },
+    {
+      "id": "bitto-research-context",
+      "kind": "harness",
+      "target": "bitto",
+      "scene": "research",
+      "version": "1.0.0",
+      "evidence": [],
+      "enabled": false,
+      "instruction": "先确认本次任务可读的工作区材料及工具；能力不可用时，用已有材料交付并标明缺口。"
+    },
+    {
+      "id": "deepseek-development",
+      "kind": "model",
+      "target": "bitto",
+      "model": "deepseek-v4.1-flash",
+      "scene": "development",
+      "version": "1.0.0",
+      "evidence": [],
+      "enabled": false,
+      "instruction": "交付前核对关键结论与材料或计算依据是否一致。"
+    },
+    {
+      "id": "bitto-development-context",
+      "kind": "harness",
+      "target": "bitto",
+      "scene": "development",
+      "version": "1.0.0",
+      "evidence": [],
+      "enabled": false,
+      "instruction": "先确认本次任务可读的工作区材料及工具；能力不可用时，用已有材料交付并标明缺口。"
+    },
+    {
+      "id": "deepseek-plan",
+      "kind": "model",
+      "target": "bitto",
+      "model": "deepseek-v4.1-flash",
+      "scene": "plan",
+      "version": "1.0.0",
+      "evidence": [],
+      "enabled": false,
+      "instruction": "交付前核对关键结论与材料或计算依据是否一致。"
+    },
+    {
+      "id": "bitto-plan-context",
+      "kind": "harness",
+      "target": "bitto",
+      "scene": "plan",
+      "version": "1.0.0",
+      "evidence": [],
+      "enabled": false,
+      "instruction": "先确认本次任务可读的工作区材料及工具；能力不可用时，用已有材料交付并标明缺口。"
+    },
+    {
+      "id": "deepseek-report",
+      "kind": "model",
+      "target": "bitto",
+      "model": "deepseek-v4.1-flash",
+      "scene": "report",
+      "version": "1.0.0",
+      "evidence": [],
+      "enabled": false,
+      "instruction": "交付前核对关键结论与材料或计算依据是否一致。"
+    },
+    {
+      "id": "bitto-report-context",
+      "kind": "harness",
+      "target": "bitto",
+      "scene": "report",
+      "version": "1.0.0",
+      "evidence": [],
+      "enabled": false,
+      "instruction": "先确认本次任务可读的工作区材料及工具；能力不可用时，用已有材料交付并标明缺口。"
+    },
+    {
+      "id": "kimi-dataAnalysis",
+      "kind": "model",
+      "target": "workBuddy",
+      "model": "kimi-k2.5",
+      "scene": "dataAnalysis",
+      "version": "1.0.0",
+      "evidence": [],
+      "enabled": false,
+      "instruction": "在关键判断旁标明支持它的材料位置。"
+    },
+    {
+      "id": "workBuddy-dataAnalysis-context",
+      "kind": "harness",
+      "target": "workBuddy",
+      "scene": "dataAnalysis",
+      "version": "1.0.0",
+      "evidence": [],
+      "enabled": false,
+      "instruction": "工作区来源仅在本次会话确实可读时使用；给出实际使用的材料位置，不把工具存在当成授权。"
+    },
+    {
+      "id": "kimi-development",
+      "kind": "model",
+      "target": "workBuddy",
+      "model": "kimi-k2.5",
+      "scene": "development",
+      "version": "1.0.0",
+      "evidence": [],
+      "enabled": false,
+      "instruction": "在关键判断旁标明支持它的材料位置。"
+    },
+    {
+      "id": "workBuddy-development-context",
+      "kind": "harness",
+      "target": "workBuddy",
+      "scene": "development",
+      "version": "1.0.0",
+      "evidence": [],
+      "enabled": false,
+      "instruction": "工作区来源仅在本次会话确实可读时使用；给出实际使用的材料位置，不把工具存在当成授权。"
+    },
+    {
+      "id": "kimi-plan",
+      "kind": "model",
+      "target": "workBuddy",
+      "model": "kimi-k2.5",
+      "scene": "plan",
+      "version": "1.0.0",
+      "evidence": [],
+      "enabled": false,
+      "instruction": "在关键判断旁标明支持它的材料位置。"
+    },
+    {
+      "id": "workBuddy-plan-context",
+      "kind": "harness",
+      "target": "workBuddy",
+      "scene": "plan",
+      "version": "1.0.0",
+      "evidence": [],
+      "enabled": false,
+      "instruction": "工作区来源仅在本次会话确实可读时使用；给出实际使用的材料位置，不把工具存在当成授权。"
+    },
+    {
+      "id": "kimi-report",
+      "kind": "model",
+      "target": "workBuddy",
+      "model": "kimi-k2.5",
+      "scene": "report",
+      "version": "1.0.0",
+      "evidence": [],
+      "enabled": false,
+      "instruction": "在关键判断旁标明支持它的材料位置。"
+    },
+    {
+      "id": "workBuddy-report-context",
+      "kind": "harness",
+      "target": "workBuddy",
+      "scene": "report",
+      "version": "1.0.0",
+      "evidence": [],
+      "enabled": false,
+      "instruction": "工作区来源仅在本次会话确实可读时使用；给出实际使用的材料位置，不把工具存在当成授权。"
+    },
+    {
+      "id": "gpt-research",
+      "kind": "model",
+      "target": "codex",
+      "model": "gpt-6.1-sol",
+      "scene": "research",
+      "version": "1.0.0",
+      "evidence": [],
+      "enabled": false,
+      "instruction": "用目标行为与可核验的交付作为完成条件，缺失事实明确标为未知。"
+    },
+    {
+      "id": "codex-research-context",
+      "kind": "harness",
+      "target": "codex",
+      "scene": "research",
+      "version": "1.0.0",
+      "evidence": [],
+      "enabled": false,
+      "instruction": "若当前项目可读，遵守项目规范并检查相关文件；仅在用户要求修改时写入，报告实际完成的检查及结果。"
+    },
+    {
+      "id": "gpt-dataAnalysis",
+      "kind": "model",
+      "target": "codex",
+      "model": "gpt-6.1-sol",
+      "scene": "dataAnalysis",
+      "version": "1.0.0",
+      "evidence": [],
+      "enabled": false,
+      "instruction": "用目标行为与可核验的交付作为完成条件，缺失事实明确标为未知。"
+    },
+    {
+      "id": "codex-dataAnalysis-context",
+      "kind": "harness",
+      "target": "codex",
+      "scene": "dataAnalysis",
+      "version": "1.0.0",
+      "evidence": [],
+      "enabled": false,
+      "instruction": "若当前项目可读，遵守项目规范并检查相关文件；仅在用户要求修改时写入，报告实际完成的检查及结果。"
+    },
+    {
+      "id": "gpt-development",
+      "kind": "model",
+      "target": "codex",
+      "model": "gpt-6.1-sol",
+      "scene": "development",
+      "version": "1.0.0",
+      "evidence": [],
+      "enabled": false,
+      "instruction": "用目标行为与可核验的交付作为完成条件，缺失事实明确标为未知。"
+    },
+    {
+      "id": "codex-development-context",
+      "kind": "harness",
+      "target": "codex",
+      "scene": "development",
+      "version": "1.0.0",
+      "evidence": [],
+      "enabled": false,
+      "instruction": "若当前项目可读，遵守项目规范并检查相关文件；仅在用户要求修改时写入，报告实际完成的检查及结果。"
+    },
+    {
+      "id": "gpt-plan",
+      "kind": "model",
+      "target": "codex",
+      "model": "gpt-6.1-sol",
+      "scene": "plan",
+      "version": "1.0.0",
+      "evidence": [],
+      "enabled": false,
+      "instruction": "用目标行为与可核验的交付作为完成条件，缺失事实明确标为未知。"
+    },
+    {
+      "id": "codex-plan-context",
+      "kind": "harness",
+      "target": "codex",
+      "scene": "plan",
+      "version": "1.0.0",
+      "evidence": [],
+      "enabled": false,
+      "instruction": "若当前项目可读，遵守项目规范并检查相关文件；仅在用户要求修改时写入，报告实际完成的检查及结果。"
+    },
+    {
+      "id": "gpt-report",
+      "kind": "model",
+      "target": "codex",
+      "model": "gpt-6.1-sol",
+      "scene": "report",
+      "version": "1.0.0",
+      "evidence": [],
+      "enabled": false,
+      "instruction": "用目标行为与可核验的交付作为完成条件，缺失事实明确标为未知。"
+    },
+    {
+      "id": "codex-report-context",
+      "kind": "harness",
+      "target": "codex",
+      "scene": "report",
+      "version": "1.0.0",
+      "evidence": [],
+      "enabled": false,
+      "instruction": "若当前项目可读，遵守项目规范并检查相关文件；仅在用户要求修改时写入，报告实际完成的检查及结果。"
+    },
+    {
+      "id": "kimi-plan-consistency",
+      "kind": "model",
+      "target": "workBuddy",
+      "scene": "plan",
+      "model": "kimi-k2.5",
+      "version": "0.2.0-candidate",
+      "enabled": false,
+      "evidence": [
+        "candidate: stage6, not release evidence"
+      ],
+      "observed_failure": "stage5: plan-02-build-buy--workbuddy--E--1 预计6周对象错置；plan-04-rollout--workbuddy--E--2 观察周期全待定、回滚条件遗漏; stage7: stage5 v0.1.0-candidate blind E/Cdoubleprime: Bitto 2胜1平5负、WorkBuddy 3胜2平3负；合计5胜3平8负，旧切点无效，人工初评4胜2平2负高估。当前stage6收窄版0.2.0-candidate尚未完成对照，不借用旧版盲评作为新证据。; stage7 blind audit of stage5 v0.1.0-candidate: Bitto E/base W-T-L 2-1-5; WorkBuddy 3-2-3; old cut has no reliable positive benefit, initial 4-2-2 overestimated it. Current stage6 narrowed v0.2.0-candidate incomplete, still disabled.",
+      "instruction": "Kimi一致性约束：限定词只作用于材料中它原本修饰的对象；同一回答内不得把某对象的“预计”移动到另一个对象。例如权限集成预计6周不等于部署6周。复述同一对象时保留其限定词，不把估计改成确定交付。材料已经给出的工期、成本和范围不改成未知；确实未知的事实仍标待定或变量。建议性周期、阈值和试点可以保留，但须明示为建议，不冒充既定承诺；不得把可执行方案整体替换成待定。"
+    },
+    {
+      "id": "kimi-format-discipline",
+      "kind": "model",
+      "target": "workBuddy",
+      "scene": "development",
+      "model": "kimi-k2.5",
+      "version": "0.2.0-candidate",
+      "enabled": false,
+      "evidence": [
+        "candidate: stage6, not release evidence"
+      ],
+      "observed_failure": "stage5: dev-03-api-contract--workbuddy--E--1 在仅新增status要求外增加started_at响应字段；格式组只测general未验证真实路由; stage7: stage5 general v0.1.0-candidate blind E/Cdoubleprime两评委各2胜5平1负，顺序一致各5/8；未通过。当前development收窄版未完成，disabled。; stage7 blind audit of stage5 general-scope v0.1.0-candidate: both judges E/base 2-5-1, consistency5/8; not release evidence for current development-scope candidate.",
+      "instruction": "Kimi形态约束：本条只约束用户或材料明确指定的整条回复形态，例如“只输出JSON”或“只给N行表”。此时只交付指定形态，不加Markdown围栏、标题或前后说明，字段、类型、行数和未知值严格按指定要求。若材料只是接口字段示例、JSON片段或对比样例，没有限制整条回复的形态，本条不施加任何输出格式；继续完成原任务的说明、兼容性与验证要求，不能把示例字段扩为响应字段，也不能自作主张增加字段。"
+    },
+    {
+      "id": "deepseek-numeric-consistency",
+      "kind": "model",
+      "target": "bitto",
+      "scene": "dataAnalysis",
+      "model": "deepseek-v4.1-flash",
+      "version": "0.2.0-candidate",
+      "enabled": false,
+      "evidence": [
+        "candidate: stage6, not release evidence"
+      ],
+      "observed_failure": "stage5 numeric 0-8-0，旧题核心与加分已满分；stage4 data-v0--bitto--Cdoubleprime--2 表文分母笔误; stage7: stage5 v0.1.0-candidate blind E/Cdoubleprime Bitto1胜6平1负、WorkBuddy1胜7平0负，未建立稳定两胜；当前stage6新题收窄版仅有初评、无完整双评委盲评，不启用。; stage7 blind audit of stage5 v0.1.0-candidate: Bitto1-6-1, WorkBuddy1-7-0; <2 wins per judge, no release. Current stage6 new-task variant incomplete.",
+      "instruction": "DeepSeek数字一致性约束：交付前只核对三件事。第一，不同分母的比率分别命名并写出分母；切换分母时明确说明，不能把不同口径拼成同一序列。第二，先统一单位再比较和加总，金额、数量、百分比与百分点不得混用，必要换算给等式。第三，表内合计、分项相加与正文引用的总数一致；发现旧稿冲突直接更正并说明被替换的数字。不得为凑合计补造数据。"
+    },
+    {
+      "id": "kimi-format-discipline-report",
+      "kind": "model",
+      "target": "workBuddy",
+      "scene": "report",
+      "model": "kimi-k2.5",
+      "version": "0.2.0-candidate",
+      "enabled": false,
+      "evidence": [
+        "candidate: stage6, not release evidence"
+      ],
+      "observed_failure": "stage5: dev-03-api-contract--workbuddy--E--1 在仅新增status要求外增加started_at响应字段；格式组只测general未验证真实路由; stage7: report作用域是stage6新候选，未完成对照；不能用stage5 general的盲评收益启用，disabled。; stage7: report-scope stage6 candidate has no completed blind evidence; do not reuse general-scope stage5 wins.",
+      "instruction": "Kimi形态约束：本条只约束用户或材料明确指定的整条回复形态，例如“只输出JSON”或“只给N行表”。此时只交付指定形态，不加Markdown围栏、标题或前后说明，字段、类型、行数和未知值严格按指定要求。若材料只是接口字段示例、JSON片段或对比样例，没有限制整条回复的形态，本条不施加任何输出格式；继续完成原任务的说明、兼容性与验证要求，不能把示例字段扩为响应字段，也不能自作主张增加字段。"
+    },
+    {
+      "id": "bitto-workspace-read",
+      "kind": "harness",
+      "target": "bitto",
+      "scene": "development",
+      "version": "0.1.0-tools-candidate",
+      "enabled": false,
+      "evidence": [
+        {
+          "type": "candidate",
+          "source": "user-reported real probe; stage10 pending"
+        }
+      ],
+      "expected_effect": "提高有真实文件读取证据的正确引用与结论，避免文档覆盖代码事实。",
+      "observed_failure": "local-agent probe: bitto beta/tool_call_count=1; workbuddy Read with.../tool_call_count=0",
+      "instruction": "Bitto工作区工具面：本会话可真实读取已授权工作区。先使用真实文件工具或只读命令读取文件核对现状，不把文档说明直接当作实现；引用实际相对路径、行号与原文，再给结论。权限拒绝或文件不存在时明确报告，不补造读取结果。仅在授权范围使用工具，不把建议命令写成已执行。"
+    },
+    {
+      "id": "workbuddy-no-tools",
+      "kind": "harness",
+      "target": "workBuddy",
+      "scene": "development",
+      "version": "0.1.0-tools-candidate",
+      "enabled": false,
+      "evidence": [
+        {
+          "type": "candidate",
+          "source": "user-reported real probe; stage10 pending"
+        }
+      ],
+      "expected_effect": "在当前无工具执行链路中减少伪造工具调用与虚构执行，保留可执行的人工核验步骤。",
+      "observed_failure": "local-agent probe: bitto beta/tool_call_count=1; workbuddy Read with.../tool_call_count=0",
+      "instruction": "当前WorkBuddy桥接按无工具执行通道处理：不要把Read with、Bash with、Edit with、Write with、tool_call或函数调用块当作回答，它们不会执行。无法读取工作区时明确说明未读取，不虚构原文、路径行号或运行结果。需要读取或检查时，以“可执行命令”形式给用户真实shell命令，标为未执行并说明预期输出类型；不知道的具体值保留unknown。"
+    }
+  ],
+  "signals": [
+    {
+      "scene": "development",
+      "any": [
+        "修好",
+        "代码补丁",
+        "数据库迁移",
+        "api contract"
+      ],
+      "target": "*",
+      "version": "1.0.0",
+      "evidence": [
+        "candidate lexical fallback; recognition is not efficacy evidence"
+      ]
+    },
+    {
+      "scene": "research",
+      "any": [
+        "只基于附件",
+        "只基于材料",
+        "只用第",
+        "文献核验"
+      ],
+      "target": "*",
+      "version": "1.0.0",
+      "evidence": [
+        "candidate lexical fallback; recognition is not efficacy evidence"
+      ]
+    },
+    {
+      "scene": "plan",
+      "any": [
+        "自建还是买",
+        "先试起来",
+        "应急预案",
+        "资源排期"
+      ],
+      "target": "*",
+      "version": "1.0.0",
+      "evidence": [
+        "candidate lexical fallback; recognition is not efficacy evidence"
+      ]
+    },
+    {
+      "scene": "report",
+      "any": [
+        "周会",
+        "整理会议",
+        "写个业务周报"
+      ],
+      "target": "*",
+      "version": "1.0.0",
+      "evidence": [
+        "candidate lexical fallback; recognition is not efficacy evidence"
+      ]
+    }
+  ],
+  "external_candidates": [
+    {
+      "id": "x01-uncertainty",
+      "kind": "scene",
+      "target": "*",
+      "scene": "report",
+      "version": "0.2.0-candidate",
+      "enabled": false,
+      "evidence": [
+        {
+          "type": "external",
+          "source": "x",
+          "url": "https://x.com/alexalbert__/status/2119884951550386671"
+        }
+      ],
+      "observed_failure": "report-01-meeting: 负责人虚构；report-03-incident: 未发现被扩写为保证",
+      "instruction": "确定项直接完成，不确定的事实、负责人和日期列清单待审。",
+      "source_note": 1,
+      "source_status": "全文"
+    },
+    {
+      "id": "x02-done-validation",
+      "kind": "scene",
+      "target": "*",
+      "scene": "plan",
+      "version": "0.2.0-candidate",
+      "enabled": false,
+      "evidence": [
+        {
+          "type": "external",
+          "source": "x",
+          "url": "https://x.com/alexalbert__/status/2064467657483829441"
+        }
+      ],
+      "observed_failure": "plan-04-rollout: 硬验收未满足就进入灰度",
+      "instruction": "写清完成定义和一种可执行的验证方法，路径交给执行者。",
+      "source_note": 2,
+      "source_status": "全文"
+    },
+    {
+      "id": "x03-controlled-language",
+      "kind": "scene",
+      "target": "*",
+      "scene": "report",
+      "version": "0.2.0-candidate",
+      "enabled": false,
+      "evidence": [
+        {
+          "type": "external",
+          "source": "x",
+          "url": "https://x.com/karpathy/status/2105819303471976479"
+        }
+      ],
+      "observed_failure": null,
+      "instruction": "面向中文读者一句一意，同一概念用同一个词，保留事实限定词。",
+      "source_note": 3,
+      "source_status": "全文"
+    },
+    {
+      "id": "x08-fixed-schema",
+      "kind": "scene",
+      "target": "*",
+      "scene": "general",
+      "version": "0.2.0-candidate",
+      "enabled": false,
+      "evidence": [
+        {
+          "type": "external",
+          "source": "x",
+          "url": "https://x.com/IamEmily2050/status/2031879748834771302"
+        }
+      ],
+      "observed_failure": null,
+      "instruction": "用户给出结构时按固定字段填可判定值，未知值用显式空值，不用形容词代替参数。",
+      "source_note": 8,
+      "source_status": "全文"
+    },
+    {
+      "id": "x09-fewer-rules",
+      "kind": "scene",
+      "target": "*",
+      "scene": "general",
+      "version": "0.2.0-candidate",
+      "enabled": false,
+      "evidence": [
+        {
+          "type": "external",
+          "source": "x",
+          "url": "https://explainx.ai/blog/claude-5-context-engineering-thariq-doctor-july-2026"
+        }
+      ],
+      "observed_failure": null,
+      "instruction": "合并重复要求，优先保留硬约束；按模型分别对照删减版，不预设通用条数阈值。",
+      "source_note": 9,
+      "source_status": "二手"
+    },
+    {
+      "id": "x11-versioned-instructions",
+      "kind": "scene",
+      "target": "*",
+      "scene": "general",
+      "version": "0.2.0-candidate",
+      "enabled": false,
+      "evidence": [
+        {
+          "type": "external",
+          "source": "x",
+          "url": "https://x.com/alexalbert__/status/2064467657483829441"
+        }
+      ],
+      "observed_failure": null,
+      "instruction": "模型或harness换代后复测旧约束，保留有收益的规则。",
+      "source_note": 11,
+      "source_status": "全文"
+    },
+    {
+      "id": "x13-surface-assumptions",
+      "kind": "scene",
+      "target": "*",
+      "scene": "research",
+      "version": "0.2.0-candidate",
+      "enabled": false,
+      "evidence": [
+        {
+          "type": "external",
+          "source": "x",
+          "url": "https://x.com/karpathy/status/2015883857489522876"
+        }
+      ],
+      "observed_failure": "r03-attachment-scope: 将已存在的网页能力误判为缺口；plan-02-build-buy: 预计工期保证化",
+      "instruction": "区分材料事实、条件意愿和假设；会改变决策的假设列出待审。",
+      "source_note": 13,
+      "source_status": "全文"
+    },
+    {
+      "id": "x17-bounded-verification",
+      "kind": "scene",
+      "target": "*",
+      "scene": "development",
+      "version": "0.2.0-candidate",
+      "enabled": false,
+      "evidence": [
+        {
+          "type": "external",
+          "source": "x",
+          "url": "https://github.com/maxritter/pilot-shell/blob/f3c5bee78489125d28c5c174c226ff0d59d83e69/docs/docusaurus/blog/2026-07-29-claude-5-context-engineering.md"
+        }
+      ],
+      "observed_failure": null,
+      "instruction": "只指定与改动相称的一次验收和失败后的定位，避免无条件重复确认。",
+      "source_note": 17,
+      "source_status": "二手"
+    },
+    {
+      "id": "x19-context-relevance",
+      "kind": "scene",
+      "target": "*",
+      "scene": "research",
+      "version": "0.2.0-candidate",
+      "enabled": false,
+      "evidence": [
+        {
+          "type": "external",
+          "source": "x",
+          "url": "https://x.com/karpathy/status/2036841069636370467"
+        }
+      ],
+      "observed_failure": "r07-negative-evidence--workbuddy--C--1: 8条工单除以10000次登录尝试",
+      "instruction": "先核对材料相关性与口径，禁止跨人群、粒度或分母拼接计算。",
+      "source_note": 19,
+      "source_status": "全文"
+    },
+    {
+      "id": "x25-reviewable-diff",
+      "kind": "scene",
+      "target": "*",
+      "scene": "report",
+      "version": "0.2.0-candidate",
+      "enabled": false,
+      "evidence": [
+        {
+          "type": "external",
+          "source": "x",
+          "url": "https://x.com/alexalbert__/status/2119884951550386671"
+        }
+      ],
+      "observed_failure": "report-03-incident: 虚构采样规则与系统信息",
+      "instruction": "交付区分改动、依据、未决项，不用已检查替代可审证据。",
+      "source_note": 25,
+      "source_status": "全文"
+    }
+  ],
+  "candidate_status": "unpublished"
+}

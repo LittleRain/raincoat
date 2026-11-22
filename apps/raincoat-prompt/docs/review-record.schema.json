@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "One completed anonymous pair review (one JSONL line)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["pair_id", "reviewer", "reviewed_at", "status", "scores"],
+  "properties": {
+    "pair_id": {"type": "string", "pattern": "^[a-f0-9]{16}$"},
+    "reviewer": {"type": "string", "minLength": 1},
+    "reviewed_at": {"type": "string", "format": "date-time"},
+    "status": {"const": "completed"},
+    "scores": {
+      "type": "object", "additionalProperties": false, "required": ["A", "B"],
+      "properties": {"A": {"$ref": "#/$defs/score"}, "B": {"$ref": "#/$defs/score"}}
+    }
+  },
+  "$defs": {
+    "score": {
+      "type": "object", "additionalProperties": false,
+      "required": ["core", "bonus", "critical_errors", "evidence"],
+      "properties": {
+        "core": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"type": "boolean"}},
+        "bonus": {"type": "boolean"},
+        "critical_errors": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "evidence": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

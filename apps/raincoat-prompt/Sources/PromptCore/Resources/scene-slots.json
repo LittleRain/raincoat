@@ -1,0 +1,211 @@
+{
+  "version": "0.3.0",
+  "slots": [
+    "role",
+    "goal",
+    "material",
+    "acceptance",
+    "boundary",
+    "format"
+  ],
+  "scenes": [
+    {
+      "id": "writing",
+      "label": "写作与改写",
+      "aliases": [
+        "改写",
+        "润色",
+        "写得",
+        "邮件",
+        "通知",
+        "文案",
+        "公告",
+        "措辞"
+      ],
+      "blocking": [
+        "goal",
+        "format"
+      ],
+      "optional": [
+        "role",
+        "acceptance"
+      ],
+      "defaults": {
+        "role": "",
+        "acceptance": "",
+        "format": "给出一版可直接发送的成稿，不要附加解释",
+        "material": ""
+      }
+    },
+    {
+      "id": "report",
+      "label": "汇报与周报",
+      "aliases": [
+        "周报",
+        "日报",
+        "月报",
+        "汇报",
+        "报告",
+        "述职",
+        "总结"
+      ],
+      "blocking": [
+        "goal",
+        "material",
+        "format"
+      ],
+      "optional": [
+        "role",
+        "acceptance"
+      ],
+      "defaults": {
+        "role": "你是业务负责人",
+        "acceptance": "",
+        "format": "先给结论，再给支撑数字",
+        "material": "用本周实际业务数据，口径与上周一致"
+      }
+    },
+    {
+      "id": "meeting",
+      "label": "会议纪要与待办",
+      "aliases": [
+        "会议",
+        "纪要",
+        "录音",
+        "会后",
+        "待办",
+        "行动项"
+      ],
+      "blocking": [
+        "goal",
+        "material",
+        "format"
+      ],
+      "optional": [
+        "role",
+        "acceptance"
+      ],
+      "defaults": {
+        "role": "你是会议记录人",
+        "acceptance": "",
+        "format": "待办按负责人、事项、期限列出，未知写待分配",
+        "material": "以会议记录或录音为准"
+      }
+    },
+    {
+      "id": "data",
+      "label": "数据分析与归因",
+      "aliases": [
+        "数据分析",
+        "归因",
+        "退货率",
+        "转化率",
+        "gmv",
+        "指标",
+        "下降",
+        "上涨",
+        "口径"
+      ],
+      "blocking": [
+        "goal",
+        "material",
+        "acceptance"
+      ],
+      "optional": [
+        "role",
+        "format"
+      ],
+      "defaults": {
+        "role": "你是数据分析师",
+        "acceptance": "给出可复算的数字，并区分结构变化与组内变化",
+        "format": "",
+        "material": "口径、期间和分母以现有数据为准"
+      }
+    },
+    {
+      "id": "research",
+      "label": "调研与竞品",
+      "aliases": [
+        "调研",
+        "竞品",
+        "对比",
+        "比较",
+        "查证",
+        "市场"
+      ],
+      "blocking": [
+        "goal",
+        "boundary",
+        "acceptance"
+      ],
+      "optional": [
+        "role",
+        "format"
+      ],
+      "defaults": {
+        "role": "你是研究员",
+        "acceptance": "关键结论附来源与日期，材料不足处标待验证",
+        "format": "",
+        "boundary": "只用已核对的一手来源并注明日期"
+      }
+    },
+    {
+      "id": "plan",
+      "label": "方案与策划",
+      "aliases": [
+        "方案",
+        "策划",
+        "规划",
+        "试点",
+        "路线图"
+      ],
+      "blocking": [
+        "goal",
+        "material",
+        "acceptance"
+      ],
+      "optional": [
+        "role",
+        "format"
+      ],
+      "defaults": {
+        "role": "你是方案负责人",
+        "acceptance": "给出可执行的试点与验收条件",
+        "format": "",
+        "material": "预算、时间、人手以现有约束为准"
+      }
+    },
+    {
+      "id": "code",
+      "label": "代码与调试",
+      "aliases": [
+        "代码",
+        "报错",
+        "重试",
+        "接口",
+        "函数",
+        "重构",
+        "bug",
+        "单元测试",
+        "超时",
+        "幂等"
+      ],
+      "blocking": [
+        "goal",
+        "material",
+        "acceptance"
+      ],
+      "optional": [
+        "role",
+        "boundary",
+        "format"
+      ],
+      "defaults": {
+        "role": "你是后端工程师",
+        "acceptance": "给出能验证修复的测试或检查步骤",
+        "format": "",
+        "material": "以当前代码与报错为准"
+      }
+    }
+  ]
+}
