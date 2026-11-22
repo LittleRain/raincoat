@@ -1,0 +1,349 @@
+"""Persistent jobs, process cleanup and bounded waits shared by all runtimes."""
+from __future__ import annotations
+import asyncio
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import signal
+import stat
+import subprocess
+import time
+import uuid
+
+if os.name != 'nt':
+    import fcntl
+
+IS_WINDOWS = os.name == 'nt'
+
+if IS_WINDOWS:
+    import psutil
+
+# New variable first; the older names stay supported so existing installs keep working.
+STATE = Path(os.environ.get('RAINCOAT_BUCK_STATE_DIR', os.environ.get('LOCAL_AGENT_MCP_STATE_DIR', os.environ.get('BITTO_BRIDGE_STATE_DIR', '~/.local/state/raincoat-buck')))).expanduser()
+TERMINAL = {'succeeded', 'failed', 'cancelled', 'interrupted'}
+ATTENTION = {'waiting_permission', 'waiting_desktop_tool'}
+
+
+def read_json(path):
+    return json.loads(Path(path).read_text(encoding='utf-8'))
+
+
+def atomic_json(path, value):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    temp = path.with_name(path.name + '.' + uuid.uuid4().hex + '.tmp')
+    with open(temp, 'x', encoding='utf-8', opener=lambda p, flags: os.open(p, flags, 0o600)) as f:
+        json.dump(value, f, ensure_ascii=False)
+    temp.replace(path)
+
+
+def job_dir(job_id):
+    if not re.fullmatch('[a-f0-9]{32}', job_id):
+        raise ValueError('Invalid job_id')
+    return STATE / 'jobs' / job_id
+
+
+def lock_path(backend, session_id):
+    root = STATE / 'locks'
+    root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    # Keep mutual exclusion with workers started by the original Bitto bridge.
+    if backend == 'bitto':
+        return root / str(uuid.UUID(session_id))
+    return root / (backend + '-' + hashlib.sha256(session_id.encode()).hexdigest())
+
+
+def socket_path(job_id):
+    if IS_WINDOWS:
+        return None
+    # macOS sockaddr_un is short; do not put sockets under arbitrarily long STATE paths.
+    root = Path('/private/tmp') / f'raincoat-buck-{os.getuid()}'
+    try:
+        root.mkdir(mode=0o700)
+    except FileExistsError:
+        pass
+    s = root.lstat()
+    if not stat.S_ISDIR(s.st_mode) or s.st_uid != os.getuid() or stat.S_IMODE(s.st_mode) != 0o700:
+        raise RuntimeError('Unsafe local completion socket directory')
+    digest = hashlib.sha256((str(STATE.resolve()) + ':' + job_id).encode()).hexdigest()[:32]
+    return root / (digest + '.sock')
+
+
+def get_task(job_id):
+    directory = job_dir(job_id)
+    state = read_json(directory / 'state.json')
+    state.setdefault('backend', 'bitto')  # v1 jobs did not have a backend tag.
+    pid = state.get('worker_pid')
+    if not pid and (directory / 'worker.json').exists():
+        pid = read_json(directory / 'worker.json')['pid']
+    if state['status'] not in TERMINAL and pid:
+        if not pid_alive(pid):
+            state.update(status='interrupted', error='桥接 worker 已退出；后端任务可能仍在执行，请先检查会话，勿自动重提交。')
+    return state
+
+
+def pid_alive(pid):
+    if IS_WINDOWS:
+        return psutil.pid_exists(pid)
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    # Legacy workers may be unreaped children of a still-running MCP.
+    probe = subprocess.run(['ps', '-p', str(pid), '-o', 'stat='], capture_output=True, text=True)
+    return probe.returncode == 0 and not probe.stdout.strip().startswith('Z')
+
+
+def ready(state):
+    return state['status'] in TERMINAL | ATTENTION
+
+
+def returned(state, transport):
+    result = dict(state)
+    result['returned_at'] = time.time()
+    result['wait_transport'] = transport
+    if result.get('backend_completed_at'):
+        result['completion_delivery_ms'] = round(1000 * max(0, result['returned_at'] - result['backend_completed_at']), 3)
+    if not ready(result):
+        result['next'] = '立即调用 agent_wait_task(job_id, timeout_seconds=25) 持续有界等待；不要 sleep 或稀疏轮询。'
+    return result
+
+
+async def wait_task(job_id, timeout_seconds=25):
+    if not 0 <= timeout_seconds <= 50:
+        raise ValueError('wait timeout must be between 0 and 50 seconds')
+    deadline = time.monotonic() + timeout_seconds
+    while True:
+        state = get_task(job_id)
+        if ready(state) or time.monotonic() >= deadline:
+            return returned(state, 'snapshot')
+        remaining = deadline - time.monotonic()
+        if IS_WINDOWS:
+            await asyncio.sleep(min(0.05, remaining))
+            continue
+        try:
+            reader, writer = await asyncio.open_unix_connection(str(socket_path(job_id)), limit=16 * 1024 * 1024)
+        except (FileNotFoundError, ConnectionRefusedError):
+            # Covers worker startup and existing v1 jobs with no notification socket.
+            await asyncio.sleep(min(0.05, remaining))
+            continue
+        try:
+            writer.write(json.dumps({'timeout_seconds': remaining}).encode() + b'\n')
+            await writer.drain()
+            async with asyncio.timeout(remaining + 0.2):
+                raw = await reader.readline()
+            if raw:
+                json.loads(raw)  # Only a notification crosses the socket, never the result body.
+                return returned(get_task(job_id), 'unix_socket')
+        except (TimeoutError, ConnectionResetError):
+            pass
+        finally:
+            writer.close()
+            await writer.wait_closed()
+
+
+async def group_alive(group_id):
+    # A CLI leader may exit before its tools; zombies cannot execute work.
+    result = await asyncio.to_thread(subprocess.run, ['ps', '-axo', 'pgid=,stat='], capture_output=True, text=True)
+    if result.returncode:
+        raise RuntimeError('Cannot verify agent process group termination')
+    return any(parts[0] == str(group_id) and not parts[1].startswith('Z')
+               for line in result.stdout.splitlines() if len(parts := line.split()) == 2)
+
+
+def spawn_options():
+    if IS_WINDOWS:
+        return {'creationflags': subprocess.CREATE_NEW_PROCESS_GROUP}
+    return {'start_new_session': True}
+
+
+async def stop_process(process):
+    if process.returncode is not None:
+        await process.wait()
+        return
+    try:
+        await asyncio.wait_for(process.wait(), timeout=0.05)
+        return
+    except TimeoutError:
+        pass
+    if IS_WINDOWS:
+        await asyncio.to_thread(stop_windows_process_tree, process.pid)
+        try:
+            await asyncio.wait_for(process.wait(), timeout=5)
+        except TimeoutError as error:
+            raise RuntimeError('Windows agent process did not stop') from error
+        return
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        await process.wait()
+        return
+    except PermissionError:
+        try:
+            await asyncio.wait_for(process.wait(), timeout=0.2)
+            return
+        except TimeoutError:
+            raise RuntimeError('Cannot terminate agent process group')
+    deadline = time.monotonic() + 3
+    while await group_alive(process.pid) and time.monotonic() < deadline:
+        await asyncio.sleep(0.05)
+    if await group_alive(process.pid):
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+    await process.wait()
+    deadline = time.monotonic() + 1
+    while await group_alive(process.pid):
+        if time.monotonic() >= deadline:
+            raise RuntimeError('Agent descendants are still alive; cancellation not confirmed')
+        await asyncio.sleep(0.05)
+
+
+def stop_windows_process_tree(pid):
+    try:
+        parent = psutil.Process(pid)
+        descendants = parent.children(recursive=True)
+    except psutil.NoSuchProcess:
+        return
+    for child in reversed(descendants):
+        try:
+            child.kill()
+        except psutil.NoSuchProcess:
+            pass
+    try:
+        parent.kill()
+    except psutil.NoSuchProcess:
+        pass
+    alive = psutil.wait_procs(descendants, timeout=5)[1]
+    if alive:
+        raise RuntimeError('Windows agent descendants are still alive; cancellation not confirmed')
+
+
+def try_lock_file(lock):
+    if IS_WINDOWS:
+        import msvcrt
+        lock.seek(0)
+        try:
+            msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
+        except OSError as error:
+            raise BlockingIOError('Session lock is held') from error
+    else:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+
+async def acquire_session_lock(ctx, backend, session_id):
+    lock = lock_path(backend, session_id).open('a+')
+    deadline = time.monotonic() + 5
+    try:
+        while True:
+            try:
+                try_lock_file(lock)
+                lock.seek(0)
+                lock.truncate()
+                lock.write(ctx.job_id)
+                lock.flush()
+                return lock
+            except BlockingIOError:
+                if IS_WINDOWS:
+                    if time.monotonic() >= deadline:
+                        raise RuntimeError(f'该 {backend} 会话已有任务在执行，或前序任务仍在清理。') from None
+                    if ctx.cancelled():
+                        raise RuntimeError('Cancelled while waiting for session cleanup')
+                    await asyncio.sleep(0.05)
+                    continue
+                lock.seek(0)
+                previous = lock.read().strip()
+                try:
+                    previous_state = get_task(previous)
+                except (ValueError, FileNotFoundError):
+                    previous_state = {}
+                if previous_state.get('status') not in TERMINAL:
+                    raise RuntimeError(f'该 {backend} 会话已有桥接任务在执行。') from None
+                if time.monotonic() >= deadline:
+                    raise RuntimeError(f'前序 {backend} 已完成但仍未释放会话，请稍后续接。') from None
+                if ctx.cancelled():
+                    raise RuntimeError('Cancelled while waiting for completed session cleanup')
+                await asyncio.sleep(0.05)
+    except BaseException:
+        lock.close()
+        raise
+
+
+class Worker:
+    def __init__(self, job_id):
+        self.job_id = job_id
+        self.directory = job_dir(job_id)
+        self.request = read_json(self.directory / 'request.json')
+        self.state = read_json(self.directory / 'state.json')
+        self.state.update(worker_pid=os.getpid(), status='starting')
+        self.waiters = set()
+        self.handlers = set()
+        self.last_save = 0.0
+        self.server = None
+        self.path = socket_path(job_id)
+
+    async def start(self):
+        if self.path:
+            self.path.unlink(missing_ok=True)
+            self.server = await asyncio.start_unix_server(self.handle_waiter, str(self.path), limit=1024)
+        self.save()
+
+    def save(self, *, streaming=False):
+        now = time.monotonic()
+        if streaming and now - self.last_save < 0.1:
+            return
+        self.last_save = now
+        self.state['updated_at'] = time.time()
+        if ready(self.state):
+            self.state['persisted_at'] = self.state['updated_at']
+        # Persist before signaling; waiting clients recheck after subscribing.
+        atomic_json(self.directory / 'state.json', self.state)
+        if ready(self.state):
+            for event in self.waiters:
+                event.set()
+
+    async def handle_waiter(self, reader, writer):
+        task = asyncio.current_task()
+        self.handlers.add(task)
+        event = asyncio.Event()
+        self.waiters.add(event)
+        try:
+            async with asyncio.timeout(2):
+                request = json.loads(await reader.readline())
+            duration = max(0, min(float(request.get('timeout_seconds', 25)), 50))
+            if not ready(self.state):
+                try:
+                    async with asyncio.timeout(duration):
+                        await event.wait()
+                except TimeoutError:
+                    pass
+            writer.write(b'{"state_available":true}\n')
+            await writer.drain()
+        except (ConnectionError, ValueError, TimeoutError):
+            pass
+        finally:
+            self.waiters.discard(event)
+            self.handlers.discard(task)
+            writer.close()
+            await writer.wait_closed()
+
+    async def close(self):
+        if self.server:
+            self.server.close()
+            await self.server.wait_closed()
+        for event in self.waiters:
+            event.set()
+        if self.handlers:
+            await asyncio.gather(*list(self.handlers), return_exceptions=True)
+        if self.path:
+            self.path.unlink(missing_ok=True)
+
+    def log_event(self, message):
+        message = {**message, 'bridge_received_at': time.time()}
+        with open(self.directory / 'events.jsonl', 'a', encoding='utf-8', opener=lambda p, flags: os.open(p, flags, 0o600)) as f:
+            f.write(json.dumps(message, ensure_ascii=False) + '\n')
+
+    def cancelled(self):
+        return (self.directory / 'cancel.json').exists()

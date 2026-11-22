@@ -1,0 +1,112 @@
+import io
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+import unittest
+from unittest.mock import patch
+from packaging.version import Version
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'src'))
+from raincoat_buck import bridge, management, dependencies, updates, cli, __version__
+
+class ManagementTests(unittest.TestCase):
+    def test_cli_json_works_with_legacy_windows_encoding(self):
+        output = io.BytesIO()
+        with patch.object(sys, 'argv', ['buck', 'setup']), patch.object(sys, 'stdout', io.TextIOWrapper(output, encoding='cp1252')), patch.object(management, 'setup', return_value={'message': '安装成功'}):
+            cli.main()
+            sys.stdout.flush()
+            encoded = output.getvalue()
+        self.assertEqual(json.loads(encoded), {'message': '安装成功'})
+    def test_setup_preview_does_not_create_config(self):
+        with tempfile.TemporaryDirectory() as tmp,patch('pathlib.Path.home',return_value=Path(tmp)):
+            result=management.setup(client='codex')
+            self.assertFalse(result['apply']);self.assertFalse((Path(tmp)/'.codex').exists())
+    def test_auto_setup_does_not_create_uninstalled_profiles(self):
+        with tempfile.TemporaryDirectory() as tmp,patch('pathlib.Path.home',return_value=Path(tmp)):
+            (Path(tmp)/'.codex').mkdir()
+            result=management.setup()
+            self.assertEqual(len(result['files']),1);self.assertIn('.codex',result['files'][0])
+            self.assertFalse((Path(tmp)/'.dsh').exists())
+    def test_generic_setup_is_standard_mcp_json(self):
+        result=management.setup(client='generic')
+        self.assertEqual(result['mcpServers']['buck']['args'],['-m','raincoat_buck','mcp'])
+    def test_unsupported_platform_is_explicit(self):
+        with patch.object(sys,'platform','linux'):
+            result=management.doctor()
+            self.assertFalse(result['healthy']);self.assertIn('macOS 和 Windows',result['error'])
+    def test_supported_node_range_matches_pinned_helper(self):
+        for version,expected in [('v22.18.0',False),('v22.19.0',True),('v23.1.0',False),('v24.0.0',True)]:
+            with self.subTest(version=version),patch.object(dependencies,'node_binary',return_value='/node'),patch('subprocess.run',return_value=subprocess.CompletedProcess([],0,version,'')):
+                self.assertEqual(dependencies.node_check()['available'],expected)
+    def test_removed_cached_node_falls_back_to_new_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            node = Path(tmp) / 'node'
+            node.write_text('')
+            with patch.dict(os.environ, {'LOCAL_AGENT_NODE': ''}), patch.object(dependencies, 'settings', return_value={'node': str(Path(tmp) / 'removed-node')}), patch('shutil.which', return_value=str(node)):
+                self.assertEqual(dependencies.node_binary(), str(node))
+    def test_missing_helper_does_not_fall_back_to_dsh(self):
+        with tempfile.TemporaryDirectory() as tmp,patch('pathlib.Path.home',return_value=Path(tmp)),patch.dict(os.environ,{'WORKBUDDY_CREDENTIAL_HELPER':''}):
+            root=Path(tmp)/'.dsh/profiles/desktop/node_modules/dsh-workbuddy-connect/lib'
+            root.mkdir(parents=True);(root/'host-heartbeat-example.js').write_text('')
+            self.assertIsNone(dependencies.helper_path())
+    def test_gpt_doctor_checks_saved_login_without_calling_a_model(self):
+        from raincoat_buck import gpt
+        with patch.object(gpt.dependencies,'codex_binary',return_value='/stable/codex'),patch.object(gpt,'authentication',return_value={'authenticated':True,'method':'ChatGPT'}),patch.object(dependencies,'save_settings') as save:
+            result=management.doctor(backend='gpt')
+            self.assertTrue(result['healthy'])
+            self.assertEqual(result['backends']['gpt']['method'],'ChatGPT')
+            save.assert_called_once_with(codex='/stable/codex')
+    def test_status_keeps_discovery_read_only_and_reports_limits(self):
+        from raincoat_buck import bitto, gpt, workbuddy
+        with patch.object(bitto, 'discover_ws', side_effect=RuntimeError('sidecar unavailable')), \
+             patch.object(workbuddy, 'status', return_value={'installed': True, 'note': 'helper missing'}), \
+             patch.object(dependencies, 'node_check', return_value={'available': True, 'path': '/node'}), \
+             patch.object(dependencies, 'helper_path', return_value=None), \
+             patch.object(gpt.dependencies, 'codex_binary', return_value='/stable/codex'), \
+             patch.object(gpt, 'authentication', return_value={'authenticated': True, 'method': 'ChatGPT'}), \
+             patch.object(dependencies, 'save_settings') as save:
+            backends = bridge.status()['backends']
+            self.assertFalse(backends['bitto']['available'])
+            self.assertEqual(backends['workbuddy']['availability'], 'missing_dependencies')
+            self.assertEqual(backends['workbuddy']['login_status'], 'unknown')
+            self.assertEqual(backends['gpt']['login_status'], 'verified')
+            self.assertTrue(backends['gpt']['supports_read_only'])
+            self.assertEqual(bridge.status('codex'), backends['gpt'])
+            save.assert_not_called()
+    def test_gpt_install_deps_does_not_install_workbuddy_helper(self):
+        with self.assertRaisesRegex(ValueError,'仅用于 WorkBuddy'):
+            management.doctor(backend='gpt',install_deps=True)
+    def test_update_check_compares_versions(self):
+        current=Version(__version__)
+        newer=f'{current.major}.{current.minor}.{current.micro+1}'
+        response=io.BytesIO(json.dumps({'info':{'version':newer}}).encode())
+        with patch('urllib.request.urlopen',return_value=response):
+            self.assertTrue(updates.check_update()['update_available'])
+    def test_offline_update_check_has_clear_error(self):
+        with patch('urllib.request.urlopen',side_effect=OSError('offline')):
+            with self.assertRaisesRegex(RuntimeError,'当前安装仍可使用'):updates.check_update()
+    def test_version_rollback_uses_explicit_spec(self):
+        with tempfile.TemporaryDirectory() as tmp,patch.object(sys,'prefix',tmp),patch.object(sys,'platform','darwin'),patch.object(updates,'ensure_idle'),patch('shutil.which',return_value='/uv'):
+            (Path(tmp)/'uv-receipt.toml').write_text('')
+            results=[subprocess.CompletedProcess([],0),subprocess.CompletedProcess([],0,'0.0.9\n','')]
+            with patch('subprocess.run',side_effect=results) as run:
+                result=updates.update(target_version='0.0.9')
+                self.assertEqual(result['installed_version'],'0.0.9')
+                self.assertEqual(run.call_args_list[0].args[0],['/uv','tool','install','--force','--python',getattr(sys,'_base_executable',sys.executable),'raincoat-buck==0.0.9'])
+    def test_failed_upgrade_does_not_report_success(self):
+        with tempfile.TemporaryDirectory() as tmp,patch.object(sys,'prefix',tmp),patch.object(sys,'platform','darwin'),patch.object(updates,'ensure_idle'),patch('shutil.which',return_value='/uv'):
+            (Path(tmp)/'uv-receipt.toml').write_text('')
+            with patch('subprocess.run',return_value=subprocess.CompletedProcess([],1)):
+                with self.assertRaisesRegex(RuntimeError,'升级未成功'):updates.update()
+    def test_windows_update_returns_external_command(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(sys, 'prefix', tmp), patch.object(sys, 'platform', 'win32'), patch.object(updates, 'ensure_idle'), patch('shutil.which', return_value='C:\\Program Files\\uv.exe'), patch('subprocess.run') as run:
+            (Path(tmp) / 'uv-receipt.toml').write_text('')
+            result = updates.update(target_version='0.0.9')
+            self.assertEqual(result['status'], 'external_install_required')
+            self.assertEqual(result['command'][-1], 'raincoat-buck==0.0.9')
+            self.assertTrue(result['powershell_command'].startswith("& 'C:\\Program Files\\uv.exe'"))
+            run.assert_not_called()
+
+if __name__=='__main__':unittest.main()

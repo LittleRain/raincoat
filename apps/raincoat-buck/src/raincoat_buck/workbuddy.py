@@ -1,0 +1,154 @@
+"""WorkBuddy CLI adapter; authoritative result frames wake the shared waiters."""
+from __future__ import annotations
+import asyncio
+import json
+import os
+from pathlib import Path
+import sys
+import time
+import uuid
+from . import shared, dependencies
+
+def app_root():
+    override = os.environ.get('WORKBUDDY_APP')
+    if override:
+        return Path(override).expanduser()
+    if sys.platform == 'win32':
+        local = Path(os.environ.get('LOCALAPPDATA', Path.home() / 'AppData/Local'))
+        candidates = [local / 'Programs/WorkBuddy']
+        candidates.extend(Path(value) / 'WorkBuddy' for value in
+                          (os.environ.get('ProgramFiles'), os.environ.get('ProgramFiles(x86)')) if value)
+        return next((path for path in candidates if (path / 'resources/app.asar').is_file()), candidates[0])
+    return Path('/Applications/WorkBuddy.app')
+
+
+def app_files():
+    root = app_root()
+    if sys.platform == 'win32':
+        return root, root / 'resources/app.asar', root / 'WorkBuddy.exe'
+    return root, root / 'Contents/Resources/app.asar', root / 'Contents/MacOS/Electron'
+
+
+def node_binary():
+    from .dependencies import node_binary as discover
+    return discover()
+
+
+def status():
+    app, archive, electron = app_files()
+    installed = archive.is_file() and electron.is_file()
+    node = node_binary()
+    from .dependencies import helper_path
+    helper = helper_path()
+    return {'installed':installed,'runtime':'WorkBuddy bundled Agent CLI','execution_ready':bool(installed and node and helper),
+            'app':str(app),
+            'node':node,'credential_helper':helper,'desktop_task_visible':False,'default_model':'deepseek-v4.1-flash',
+            'note':'本地安装检查；缺辅助模块时运行 buck doctor --backend workbuddy --install-deps。提交时只读获取现有登录凭证，过期则失败，不自动刷新。CLI 任务不进入桌面任务列表。'}
+
+
+def validate_model(model):
+    product = shared.read_json(Path.home()/'.workbuddy/cache/acc-product-config-v3.json')
+    if product.get('endpoint') != 'https://www.workbuddy.cn':
+        raise ValueError('Unexpected WorkBuddy endpoint')
+    if model not in {x['id'] for x in product.get('models',[])}:
+        raise ValueError('Use an official WorkBuddy model ID, e.g. deepseek-v4.1-flash')
+    custom_path = Path.home()/'.workbuddy/models.json'
+    if custom_path.exists():
+        custom = shared.read_json(custom_path)
+        entries = custom if isinstance(custom,list) else custom.get('models',[])
+        if any(x.get('id') == model for x in entries):
+            raise ValueError('Model is overridden by a custom route; choose an official WorkBuddy model')
+
+
+def consume_event(state,event):
+    kind = event.get('type')
+    if kind == 'system' and event.get('subtype') == 'init':
+        if event.get('apiKeySource') != 'www.workbuddy.cn':
+            raise RuntimeError('CLI did not authenticate through www.workbuddy.cn')
+        state.update(status='running',session_id=event['session_id'],provider='workbuddy',model=event.get('model',state['model']))
+    elif kind == 'assistant':
+        message=event.get('message',{})
+        for content in message.get('content',[]):
+            if content.get('type')=='text':state['text']=content.get('text','')
+            if content.get('type')=='tool_use' and not any(x['id']==content['id'] for x in state['tool_calls']):
+                state['tool_calls'].append({'id':content['id'],'name':content['name'],'status':'running'})
+        if message.get('usage') and any(message['usage'].values()):
+            state['message_usage'].append({'message_id':message.get('id'),**message['usage']})
+    elif kind == 'user':
+        for content in event.get('message',{}).get('content',[]):
+            if content.get('type')=='tool_result':
+                for call in state['tool_calls']:
+                    if call['id']==content.get('tool_use_id'):
+                        call.update(status='failed' if content.get('is_error') else 'succeeded',result=str(content.get('content',''))[:4000])
+    elif kind=='result':
+        denied=event.get('permission_denials',[])
+        success=event.get('subtype')=='success' and not event.get('is_error') and not denied
+        state.update(status='succeeded' if success else 'failed',text=event.get('result',state.get('text','')),
+                     run_usage=event.get('usage',{}),model_usage=event.get('modelUsage',{}),permission_denials=denied,
+                     backend_completed_at=time.time(),finished_at=time.time())
+        if not success:
+            state['error']='工具授权不足；按用户授权重新提交 allowed_tools。' if denied else str(event.get('errors') or event.get('result') or event.get('subtype'))
+    elif kind=='bridge_error':
+        raise RuntimeError(event.get('error','WorkBuddy runner failed'))
+    elif kind=='bridge_exit' and state['status'] not in shared.TERMINAL:
+        raise RuntimeError(f"CLI exited without a final result: {event.get('code')} {event.get('signal')}")
+
+
+async def group_alive(group_id):
+    return await shared.group_alive(group_id)
+
+
+async def stop_process(process):
+    return await shared.stop_process(process)
+
+
+async def acquire_session_lock(ctx,sid):
+    return await shared.acquire_session_lock(ctx,'workbuddy',sid)
+
+
+async def run(ctx):
+    request,state=ctx.request,ctx.state
+    validate_model(request['model'])
+    sid=request['session_id'] or str(uuid.uuid4())
+    state['session_id']=sid
+    lock=await acquire_session_lock(ctx,sid)
+    process=None
+    reader_task=None
+    try:
+        launch={**request,'session_id':sid,'resume':bool(request['session_id'])}
+        shared.atomic_json(ctx.directory/'launch.json',launch)
+        if ctx.cancelled():
+            state.update(status='cancelled',finished_at=time.time());ctx.save();return
+        with open(ctx.directory/'runtime.stderr.log','a',opener=lambda p,flags:os.open(p,flags,0o600)) as log:
+            process=await asyncio.create_subprocess_exec(node_binary() or 'node',str(Path(__file__).with_suffix('.mjs')),str(ctx.directory/'launch.json'),
+                stdout=asyncio.subprocess.PIPE,stderr=log,**shared.spawn_options(),limit=16*1024*1024,
+                env={**os.environ,'WORKBUDDY_CREDENTIAL_HELPER':dependencies.helper_path() or '',
+                     'WORKBUDDY_APP':str(app_root())})
+        state.update(status='submitted',runtime_pid=process.pid);ctx.save()
+        deadline=time.monotonic()+request['timeout_seconds']
+        reader_task=asyncio.create_task(process.stdout.readline())
+        while state['status'] not in shared.TERMINAL:
+            if ctx.cancelled() or time.monotonic()>=deadline:
+                expired=time.monotonic()>=deadline
+                state['status']='cancelling';ctx.save()
+                await stop_process(process)
+                state.update(status='cancelled',timeout_expired=expired,finished_at=time.time());ctx.save();return
+            done,_=await asyncio.wait({reader_task},timeout=0.05)
+            if not done:continue
+            line=reader_task.result()
+            if not line:raise RuntimeError('WorkBuddy CLI exited before final result; inspect runtime.stderr.log')
+            reader_task=asyncio.create_task(process.stdout.readline())
+            try:event=json.loads(line)
+            except json.JSONDecodeError:continue
+            ctx.log_event(event)
+            consume_event(state,event)
+            ctx.save()
+        # Publish final state before CLI housekeeping, which may take seconds.
+    finally:
+        if reader_task:
+            reader_task.cancel()
+            await asyncio.gather(reader_task,return_exceptions=True)
+        try:
+            if process:await stop_process(process)
+        finally:
+            lock.close()

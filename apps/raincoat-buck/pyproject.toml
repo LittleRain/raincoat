@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "raincoat-buck"
+dynamic = ["version"]
+description = "Buck delegates each task to the right local agent (Bitto, WorkBuddy, GPT/Codex), so you only talk to one"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["mcp>=1.20,<2", "websockets>=14,<17", "packaging>=23", "psutil>=5.9; sys_platform == 'win32'"]
+classifiers = ["Programming Language :: Python :: 3", "Operating System :: MacOS", "Operating System :: Microsoft :: Windows"]
+
+[project.scripts]
+buck = "raincoat_buck.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+raincoat_buck = ["workbuddy.mjs"]
+
+[tool.setuptools.dynamic]
+version = {attr = "raincoat_buck._version.__version__"}
