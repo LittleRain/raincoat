@@ -58,7 +58,7 @@ class Worker:
         if self.stop_event.is_set() or not row or row[0]['cancel_requested']:
             raise Cancelled()
 
-    def run(self, command, jid, output, progress=None, duration=1):
+    def run(self, command, jid, output, progress=None, duration=1, progress_start=10, progress_span=84):
         # Output is written to disk; large ffmpeg logs never accumulate in memory.
         with open(output, 'wb') as out, open(str(output) + '.err', 'wb') as err:
             read_fd, write_fd = os.pipe()
@@ -78,7 +78,7 @@ class Worker:
                         values = [x.split('=', 1)[1] for x in lines if x.startswith('out_time_us=')]
                         if values:
                             try:
-                                self.update(jid, progress=min(94, 10 + float(values[-1]) / 1e6 / duration * 84))
+                                self.update(jid, progress=min(progress_start + progress_span, progress_start + float(values[-1]) / 1e6 / duration * progress_span))
                             except ValueError:
                                 pass
                     self.stop_event.wait(0.25)
@@ -144,8 +144,11 @@ class Worker:
         proxy_tmp.replace(proxy)
         thumb_tmp.replace(thumb)
         with self.store.connect() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            if conn.execute('SELECT cancel_requested FROM jobs WHERE id=?', (jid,)).fetchone()['cancel_requested']:
+                raise Cancelled()
             conn.execute('UPDATE media SET proxy_path=?,thumbnail_path=? WHERE id=?', (str(proxy), str(thumb), mid))
-        self.update(jid, status='succeeded', stage='预处理完成', progress=100, error=None)
+            conn.execute("UPDATE jobs SET status='succeeded',stage='预处理完成',progress=100,error=NULL,updated_at=? WHERE id=?", (now(),jid))
 
     def loop(self):
         while not self.stop_event.is_set():
@@ -159,7 +162,19 @@ class Worker:
                 continue
             job = dict(row)
             try:
-                self.preprocess(job)
+                if job['type'] == 'preprocess':
+                    self.preprocess(job)
+                elif job['type'] == 'render':
+                    from .render import render
+                    render(self, job)
+                elif job['type'] == 'analysis':
+                    from .analysis import analyze
+                    analyze(self, job)
+                elif job['type'] == 'badminton_analysis':
+                    from .badminton import analyze
+                    analyze(self, job)
+                else:
+                    raise RuntimeError('不支持的任务类型')
             except Cancelled:
                 cancelled = self.store.rows('SELECT cancel_requested FROM jobs WHERE id=?', (job['id'],))
                 status = 'cancelled' if cancelled and cancelled[0]['cancel_requested'] else 'queued'

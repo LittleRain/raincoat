@@ -17,6 +17,7 @@ from .worker import Worker
 class SessionInput(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     date: date
+    sport: Literal['football', 'badminton'] = 'football'
 
 
 class RegisterInput(BaseModel):
@@ -36,7 +37,7 @@ def create_app(store=None, run_worker=True):
         if run_worker:
             worker.stop()
 
-    app = FastAPI(title='Football AI Studio — P0', lifespan=lifespan)
+    app = FastAPI(title='Sport Cut Studio — 本地运动片段工作台', lifespan=lifespan)
     app.state.store, app.state.worker = store, worker
 
     @app.middleware('http')
@@ -48,7 +49,10 @@ def create_app(store=None, run_worker=True):
         origin = request.headers.get('origin')
         if origin and origin not in {f'http://{request.headers.get("host")}', f'https://{request.headers.get("host")}'}:
             return JSONResponse({'detail': '拒绝跨站请求'}, status_code=403)
-        return await call_next(request)
+        response = await call_next(request)
+        if request.url.path in {'/', '/index.html'}:
+            response.headers['Cache-Control'] = 'no-store'
+        return response
 
     def require_session(sid):
         session = store.session(sid)
@@ -64,10 +68,11 @@ def create_app(store=None, run_worker=True):
 
     @app.get('/api/health')
     def health():
+        from .analysis import analysis_config
         binaries = {key: bool(shutil.which(os.getenv(env, key))) for key, env in [('ffmpeg', 'FFMPEG_BIN'), ('ffprobe', 'FFPROBE_BIN')]}
         alive = bool(worker.thread and worker.thread.is_alive())
-        return {'status': 'ok' if all(binaries.values()) and (alive or not run_worker) else 'degraded', 'phase': 'P0', 'analysis_available': False,
-                **binaries, 'worker_alive': bool(worker.thread and worker.thread.is_alive()), 'media_root': str(store.root), 'schema_version': 1}
+        return {'status': 'ok' if all(binaries.values()) and (alive or not run_worker) else 'degraded', 'phase': 'review-export', 'analysis_available': analysis_config()['available'],
+                **binaries, 'worker_alive': bool(worker.thread and worker.thread.is_alive()), 'media_root': str(store.root), 'schema_version': 2}
 
     @app.get('/api/sessions')
     def sessions():
@@ -79,22 +84,24 @@ def create_app(store=None, run_worker=True):
             raise HTTPException(422, '场次名称不能为空')
         sid = uuid4().hex
         with store.connect() as conn:
-            conn.execute('INSERT INTO sessions(id,name,date,created_at) VALUES(?,?,?,?)', (sid, body.name.strip(), str(body.date), now()))
+            conn.execute('INSERT INTO sessions(id,name,date,sport,created_at) VALUES(?,?,?,?,?)', (sid, body.name.strip(), str(body.date), body.sport, now()))
         return require_session(sid)
 
     @app.get('/api/sessions/{sid}')
     def detail(sid: str):
         session = require_session(sid)
-        session['media'] = store.rows('SELECT m.*,j.id AS job_id,j.status,j.stage,j.progress,j.error,j.attempts FROM media m JOIN jobs j ON j.media_id=m.id WHERE m.session_id=? ORDER BY m.created_at', (sid,))
+        session['media'] = store.rows("SELECT m.*,j.id AS job_id,j.status,j.stage,j.progress,j.error,j.attempts FROM media m JOIN jobs j ON j.media_id=m.id AND j.type='preprocess' WHERE m.session_id=? ORDER BY m.created_at", (sid,))
         return session
 
     @app.patch('/api/sessions/{sid}')
     def edit_session(sid: str, body: SessionInput):
-        require_session(sid)
+        current = require_session(sid)
         if not body.name.strip():
             raise HTTPException(422, '场次名称不能为空')
+        if body.sport != current['sport'] and store.rows('SELECT id FROM media WHERE session_id=? LIMIT 1',(sid,)):
+            raise HTTPException(422, '已导入视频的场次不能更改运动类型')
         with store.connect() as conn:
-            conn.execute('UPDATE sessions SET name=?,date=? WHERE id=?', (body.name.strip(), str(body.date), sid))
+            conn.execute('UPDATE sessions SET name=?,date=?,sport=? WHERE id=?', (body.name.strip(), str(body.date), body.sport, sid))
         return require_session(sid)
 
     @app.delete('/api/sessions/{sid}')
@@ -180,6 +187,19 @@ def create_app(store=None, run_worker=True):
         with store.connect() as conn:
             conn.execute("UPDATE jobs SET status='queued',stage='等待重试',cancel_requested=0,progress=0,error=NULL,updated_at=? WHERE id=? AND status IN ('failed','cancelled')", (now(), jid))
         return require_job(jid)
+
+    from .review import register_routes as register_review
+    from .render import register_routes as register_render
+    from .analysis import register_routes as register_analysis
+    from .badminton import register_routes as register_badminton
+    from .sync import register_routes as register_sync
+    from .storage import register_routes as register_storage
+    register_review(app, store)
+    register_render(app, store)
+    register_analysis(app, store)
+    register_badminton(app, store)
+    register_sync(app, store)
+    register_storage(app, store)
 
     @app.get('/api/media/{mid}/{kind}')
     def asset(mid: str, kind: Literal['proxy', 'thumbnail']):

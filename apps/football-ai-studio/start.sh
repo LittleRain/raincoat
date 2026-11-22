@@ -17,5 +17,5 @@ for name, key in [('ffmpeg','FFMPEG_BIN'),('ffprobe','FFPROBE_BIN')]:
 PY
 (cd frontend && npm ci --no-audit --no-fund --cache ../data/npm-cache && npm run build)
 PORT=$(.venv/bin/python -c 'import os; from dotenv import load_dotenv; load_dotenv(".env"); print(int(os.getenv("FAS_PORT","8765")))')
-echo "Football AI Studio P0: http://127.0.0.1:$PORT"
+echo "Sport Cut Studio: http://127.0.0.1:$PORT"
 exec .venv/bin/python -m uvicorn backend.app:create_app --factory --host 127.0.0.1 --port "$PORT" --env-file .env --no-access-log
