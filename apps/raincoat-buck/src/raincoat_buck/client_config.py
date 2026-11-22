@@ -26,7 +26,7 @@ def codex_config(text,command,entry):
 
 def dsh_config(text,command,entry):
     args=[entry,'mcp'] if isinstance(entry,str) else entry
-    block='    - id: raincoat-buck\n      name: "@deepseek-ai/dsh-mcp-client"\n      config:\n        serverName: '+SERVER_NAME+'\n        transport: stdio\n        command: '+json.dumps(command)+'\n        args: '+json.dumps(args)+'\n        failOnStartupError: true\n'
+    block='    - id: raincoat-buck\n      name: "@deepseek-ai/dsh-mcp-client"\n      config:\n        serverName: '+SERVER_NAME+'\n        transport: stdio\n        command: '+json.dumps(command)+'\n        args: '+json.dumps(args)+'\n        failOnStartupError: true\n        reconnect:\n          enabled: true\n          initialDelayMs: 1000\n          maxDelayMs: 30000\n          maxAttempts: 1000\n'
     ids='|'.join(LEGACY_ENTRY_IDS+('raincoat-buck',))
     pattern=r'^    - id: (?:'+ids+r')\n.*?(?=^    - id:|^\S|\Z)'
     if re.search(pattern,text,flags=re.M|re.S):
