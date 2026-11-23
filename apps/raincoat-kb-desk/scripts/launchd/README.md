@@ -17,7 +17,7 @@ launchd 拉起的 `/usr/bin/node`（或 nvm 里的 node）**读不了 `~/Documen
 exec env ELECTRON_RUN_AS_NODE=1 "/Applications/DeepSeek Harness.app/Contents/MacOS/DeepSeek Harness" dist/worker.js --loop 60
 ```
 
-同理，看门狗脚本要放在 `~/.dsh/kb-watchdog/watchdog.mjs`（本仓 `scripts/watchdog.mjs` 是源文件，改完同步过去），放在 `~/Documents/GitHub/...` 下 launchd 一样读不到。
+看门狗用同一个二进制直接跑仓库里的 `scripts/watchdog.mjs`（不复制副本，改完下个 10 分钟自然生效）；普通的 `node` 连 `~/Documents/GitHub/...` 下的脚本都打不开，所以它也用 Electron。
 
 ## 安装
 
