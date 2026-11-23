@@ -12,7 +12,7 @@
  *
  * 退出码：0 正常 / 1 有警告（launchd 不关心，供手工调用判断）
  */
-import { execFile } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import { existsSync, readFileSync, writeFileSync, mkdirSync, statfsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -23,6 +23,13 @@ const ALERT_FILE = join(STATE_DIR, 'alerts.json')
 const STATUS_FILE = join(STATE_DIR, 'ingest-status.md')
 const PRINT_ONLY = process.argv.includes('--print')
 const ALERT_COOLDOWN_MS = 30 * 60 * 1000
+
+// 兜底：任何一步卡住（网络、osascript、git）都 2 分钟后强退，绝不把 launchd 的
+// 单实例卡成「永远在跑、再也不跑下一轮」。
+setTimeout(() => {
+  console.error('[watchdog] 超时退出（有一步卡住了）')
+  process.exit(0)
+}, 120_000).unref()
 
 const readJson = (file, fallback = null) => {
   try {
@@ -154,25 +161,37 @@ if (failed.ok) {
   add('failed', 'warn', '查不到失败列表', failed.error || '')
 }
 
-// 5) git 是否领先/落后
-const ahead = await git(['rev-list', '--count', '@{u}..HEAD'])
-const behind = await git(['rev-list', '--count', 'HEAD..@{u}'])
-const status = await git(['status', '--porcelain'])
-const dirtyTracked = status.ok ? status.stdout.split('\n').filter((l) => l && !l.startsWith('??')).length : 0
-if (ahead.ok && Number(ahead.stdout) > 0) {
-  add('ahead', 'warn', `本地领先 origin ${ahead.stdout} 个提交`, '提交没推出去，远端可能连不上')
+// 4.5) 队列有没有被消费：worker 活着但读不动 vault 时，任务会一直挂在 queued
+const queued = await api('/jobs?status=queued')
+if (queued.ok) {
+  const rows = queued.data?.jobs || []
+  const oldest = rows.reduce((min, job) => Math.min(min, Number(job.created_at) || Date.now()), Date.now())
+  const waitMin = Math.round((Date.now() - oldest) / 60_000)
+  if (rows.length && waitMin > 10) {
+    add('stalled', 'warn', `队首任务已等 ${waitMin} 分钟`, `${rows.length} 个任务没被领走，检查抓取端能不能读写 vault`)
+  } else {
+    add('stalled', 'ok', '队列在正常消费', rows.length ? `${rows.length} 个排队中，最久 ${waitMin} 分钟` : '队列空')
+  }
 } else {
-  add('git', 'ok', '本地与 origin 同步', `落后 ${behind.ok ? behind.stdout : '?'}`)
+  add('stalled', 'warn', '查不到队列状态', queued.error || '')
 }
-if (dirtyTracked > 0) {
-  add('dirty', 'ok', `工作区有 ${dirtyTracked} 个已跟踪改动`, '下一轮自动提交会带上')
+
+// 5) git 检查留给了插件那一轮（它自己 push，失败会写进 lastError）：
+//    这个进程由 launchd 拉起，读不到 ob_vault/.git（每台机器上 .git 里的文件带
+//    com.apple.macl，open 会一直阻塞而不是报错），硬查会把整轮卡死。
+//    只在这里记录一下「上一轮有没有推送动作」，真正的 git 判断放在插件里。
+const lastReport = watcherState.lastReport || {}
+if (lastReport.pushed && typeof lastReport.pushed === 'number') {
+  add('git', 'ok', '上一轮已推送到 origin', `${lastReport.pushed} 处改动`)
+} else {
+  add('git', 'ok', '上一轮没有产生提交', '没有新内容就是正常的')
 }
 
 // 6) 磁盘
 try {
-  const stats = statfsSync(VAULT)
+  const stats = statfsSync(homedir())
   const freeGb = (stats.bavail * stats.bsize) / 1024 ** 3
-  if (freeGb < 10) add('disk', 'warn', `磁盘只剩 ${freeGb.toFixed(1)}GB`, VAULT)
+  if (freeGb < 10) add('disk', 'warn', `磁盘只剩 ${freeGb.toFixed(1)}GB`, homedir())
   else add('disk', 'ok', '磁盘充足', `${freeGb.toFixed(0)}GB 可用`)
 } catch {}
 
@@ -209,11 +228,20 @@ if (warns.length || alerts.vaultCopyDay !== today) {
 }
 
 // 通知：同样的问题 30 分钟内只喊一次
+// osascript 在 launchd 下没有前台会话时会一直挂着不返回（曾把看门狗卡死 10 小时），
+// 所以通知一律 fire-and-forget：不 await、不占事件循环、5 秒自己收尸。
 const notify = async (title, message) => {
   if (PRINT_ONLY) return
+  const esc = (s) => String(s).replace(/["\\]/g, '\\$&')
   try {
-    const esc = (s) => String(s).replace(/["\\]/g, '\\$&')
-    await run('osascript', ['-e', `display notification "${esc(message)}" with title "${esc(title)}" sound name "Ping"`])
+    const child = spawn('osascript', ['-e', `display notification "${esc(message)}" with title "${esc(title)}" sound name "Ping"`], {
+      stdio: 'ignore',
+      detached: true,
+    })
+    child.unref()
+    setTimeout(() => {
+      try { child.kill('SIGKILL') } catch {}
+    }, 5000).unref()
   } catch {}
   const hook = settings.alertWebhook
   if (hook) {

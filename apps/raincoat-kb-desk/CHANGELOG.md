@@ -8,6 +8,8 @@
 - **看门狗**：新增 `scripts/watchdog.mjs`（launchd `com.rain.kb.watchdog`，每 10 分钟）：闭环心跳、卡住超过 45 分钟的整理任务、抓取端心跳、24 小时内新增的失败摄取、本地领先/落后、磁盘余量。异常推系统通知（同一问题 30 分钟不重复，可配 `settings.alertWebhook`），状态写 `~/.dsh/raincoat-kb-desk/ingest-status.md`，异常或跨天才在 `02 outputs/health/ingest-status.md` 留一份，避免每 10 分钟制造提交。
 - **修掉每轮提交后抛错**：`gitCommitAndPush` 的返回里引用了未定义变量 `pulled`，每次成功提交推送后都会抛 `ReferenceError` 并把 tick 打断。
 
+补充（同日）：本机常驻任务踩到 macOS TCC —— launchd 拉起的 node 读 `~/Documents/ob_vault` 会**阻塞**而不是报错，worker 领了任务就卡死、心跳却照常（看起来一切正常）。现在 worker 用 `ELECTRON_RUN_AS_NODE=1` + DSH 的 Electron 二进制跑（沿用应用已有的文档授权，升级 node 也不会失效），看门狗改放 `~/.dsh/kb-watchdog/`，并新增「队首任务等超过 10 分钟」检查——worker 活着但读不动 vault 时，这是唯一能暴露出来的信号。
+
 ## 0.9.7
 
 两件事：不再为「重投」多长一篇，以及队列空的时候也能回答「抓取端还活着吗」。

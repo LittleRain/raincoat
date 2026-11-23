@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.rain.kb.watchdog</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Users/raincai/.nvm/versions/node/v24.22.1/bin/node</string>
+		<string>/Users/raincai/.dsh/kb-watchdog/watchdog.mjs</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>StandardErrorPath</key>
+	<string>/tmp/kb-watchdog.err</string>
+	<key>StandardOutPath</key>
+	<string>/tmp/kb-watchdog.log</string>
+	<key>StartInterval</key>
+	<integer>600</integer>
+	<key>WorkingDirectory</key>
+	<string>/tmp</string>
+</dict>
+</plist>
