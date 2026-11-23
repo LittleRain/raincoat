@@ -194,14 +194,19 @@ async function buildSummaryIndex(root) {
 export async function buildLocalIngestIndex(root) {
   const summaryBySource = await buildSummaryIndex(root)
   const map = new Map()
-  for (const full of await walk(root, join(root, '00 raw'))) {
-    const rel = relPath(root, full)
-    const text = await readFile(full, 'utf8').catch(() => '')
-    const { data } = parseFrontmatter(text)
-    const summary = summaryBySource.get(rel) || null
-    for (const value of urlFieldsOf(text, data)) {
-      for (const key of urlKeys(value)) {
-        if (!map.has(key)) map.set(key, { raw: rel, summary })
+  // 灵感类不进 00 raw，但同样是「已经收过」的来源：不把它们算进来，
+  // worker 重投或手工补录同一条链接时会再走一遍模型，长出第二份摘要。
+  for (const base of [join(root, '00 raw'), join(root, '02 outputs/builder/ideas')]) {
+    for (const full of await walk(root, base)) {
+      const rel = relPath(root, full)
+      const text = await readFile(full, 'utf8').catch(() => '')
+      if (!text) continue
+      const { data } = parseFrontmatter(text)
+      const summary = summaryBySource.get(rel) || null
+      for (const value of urlFieldsOf(text, data)) {
+        for (const key of urlKeys(value)) {
+          if (!map.has(key)) map.set(key, { raw: rel, summary })
+        }
       }
     }
   }

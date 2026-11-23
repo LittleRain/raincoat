@@ -25,6 +25,22 @@ import {
   writeInboxDoc,
 } from './vault.js'
 
+
+/** 归一化链接，用来判断「同一个来源」：去掉 hash、尾斜杠与常见分享参数。 */
+function urlKeyOf(url) {
+  if (!url) return ''
+  try {
+    const u = new URL(String(url))
+    u.hash = ''
+    for (const k of [...u.searchParams.keys()]) {
+      if (/^(s|spm|from|share|scene|srcid|sharer|ref|source)$/i.test(k)) u.searchParams.delete(k)
+    }
+    return `${u.origin}${u.pathname.replace(/\/+$/, '')}${u.search}`
+  } catch {
+    return String(url).trim()
+  }
+}
+
 const PREFIX = '/kb-desk/api'
 
 function json(res, status, body) {
@@ -166,14 +182,30 @@ export function registerHttp(ctx) {
       } catch {
         // 实时队列读不到就只报归档
       }
-      const mergeCount = (status, liveList) => {
+      // 失败要与「已解决」对账：同一个 id 或同一个链接已经有 done 记录时，
+      // 这条失败只是历史上同步阶段的假失败（内容其实已进库），不该继续报警。
+      const resolvedIds = new Set()
+      const resolvedUrls = new Set()
+      for (const job of [...liveDone, ...history.filter((item) => item.status === 'done')]) {
+        resolvedIds.add(job.id)
+        const key = urlKeyOf(job.url)
+        if (key) resolvedUrls.add(key)
+      }
+      const isResolved = (job) =>
+        resolvedIds.has(job.id) || Boolean(job.url && resolvedUrls.has(urlKeyOf(job.url)))
+      // 没有链接的历史失败既不能重试也不能回填，留在原始归档里，不作为面板待办
+      const historyFailed = history.filter(
+        (item) => item.status === 'failed' && Boolean(item.url) && !isResolved(item),
+      )
+      const mergeCount = (status, liveList, archivedList) => {
         const map = new Map()
-        for (const job of history.filter((item) => item.status === status)) map.set(job.id, job)
+        const source = archivedList || history.filter((item) => item.status === status)
+        for (const job of source) map.set(job.id, job)
         for (const job of liveList) map.set(job.id, job)
         return { total: map.size, archivedOnly: [...map.values()].filter((job) => job.archived).length }
       }
       const done = mergeCount('done', liveDone)
-      const failed = mergeCount('failed', liveFailed)
+      const failed = mergeCount('failed', liveFailed, historyFailed)
       // 心跳还没上线的旧 worker 没有 /workers 记录，用「最近一次抓取完成」兜底判断活性
       const lastDoneAt = Math.max(
         0,
@@ -203,11 +235,32 @@ export function registerHttp(ctx) {
       const status = query(url, 'status', 'queued')
       const limit = Math.min(Number(query(url, 'limit', 20)) || 20, 120)
       const live = await services.ingest.jobs(status, limit)
-      let archived = []
+      let archivedAll = []
       try {
-        archived = (await services.ingest.history()).filter((job) => job.status === status)
+        archivedAll = await services.ingest.history()
       } catch {
-        archived = []
+        archivedAll = []
+      }
+      let archived = archivedAll.filter((job) => job.status === status)
+      if (status === 'failed') {
+        // 失败列表同样按「同一 id / 同一链接已有 done」对账，避免展示假失败
+        let liveDone = []
+        try {
+          liveDone = (await services.ingest.jobs('done', 120)).jobs || []
+        } catch {}
+        const resolvedIds = new Set(liveDone.map((job) => job.id))
+        const resolvedUrls = new Set()
+        for (const job of [...liveDone, ...archivedAll.filter((item) => item.status === 'done')]) {
+          resolvedIds.add(job.id)
+          const key = urlKeyOf(job.url)
+          if (key) resolvedUrls.add(key)
+        }
+        archived = archived.filter(
+          (job) =>
+            Boolean(job.url) &&
+            !resolvedIds.has(job.id) &&
+            !resolvedUrls.has(urlKeyOf(job.url)),
+        )
       }
       const seen = new Set(live.jobs.map((job) => job.id))
       // 重新提交过的历史失败记录带一个本地标记，界面据此说明「已经换成新任务」，
