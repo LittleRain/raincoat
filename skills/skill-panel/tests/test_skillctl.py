@@ -26,6 +26,7 @@ import sys
 import tempfile
 import threading
 import unittest
+from unittest import mock
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -896,6 +897,130 @@ class ServeOriginTests(unittest.TestCase):
 
 
 # ---------------------------------------------------------- 配置表的自说明
+
+class ResolveTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name).resolve()
+        previous = skillctl.artifact_root()
+        skillctl.set_artifact_root(str(self.root / "out"))
+        self.addCleanup(skillctl.set_artifact_root, previous)
+        self.canon = self.root / "pool" / "use-aka"
+        self.old = self.root / "agent" / "use-aka"
+        for path in (self.canon, self.old):
+            path.mkdir(parents=True)
+            (path / "SKILL.md").write_text("---\nname: use-aka\n---\nBody\n")
+            (path / "run.py").write_text("print('a')\n")
+        self.doc = {"entities": [], "conflicts": [{
+            "name": "use-aka", "nature": "duplicate", "liveness": "live", "kind": "identical",
+            "entities": [{"real_path": str(p), "type": "local"} for p in (self.canon, self.old)],
+            "prescription": {"grade": "auto", "canonical": str(self.canon),
+                             "rewrite": [{"path": str(self.old), "agents": ["fake"]}]}}]}
+        self.cfg = {"agents": [{"id": "fake", "supports_symlink": True}]}
+
+    def resolve(self, **kw):
+        return skillctl.resolve_conflicts(self.doc, self.cfg, ["use-aka"], **kw)
+
+    def test_preview_does_not_touch_files_or_create_artifacts(self):
+        r = self.resolve()
+        self.assertTrue(r["dry_run"])
+        self.assertEqual(r["groups"], 1)
+        self.assertFalse(self.old.is_symlink())
+        self.assertFalse((self.root / "out").exists())
+
+    def test_apply_links_to_canonical_and_records_recoverable_backup(self):
+        r = self.resolve(dry_run=False, preview=self.resolve()["preview"])
+        self.assertFalse(r["dry_run"])
+        self.assertTrue(self.old.is_symlink())
+        self.assertEqual(self.old.resolve(), self.canon)
+        backup = Path(r["ops"][0]["dst"])
+        self.assertEqual((backup / "run.py").read_text(), "print('a')\n")
+        action = skillctl.load_ledger()["actions"][-1]
+        self.assertEqual(action["action"], "resolve")
+        self.assertEqual(action["ops"][0]["src"], str(self.old))
+
+    def test_apply_requires_preview(self):
+        with self.assertRaisesRegex(ValueError, "预览"):
+            self.resolve(dry_run=False)
+        self.assertFalse(self.old.is_symlink())
+
+    def test_same_size_script_difference_is_rejected(self):
+        (self.old / "run.py").write_text("print('b')\n")
+        with self.assertRaisesRegex(ValueError, "文件内容或权限"):
+            self.resolve()
+
+    def test_both_copies_changing_after_preview_requires_new_confirmation(self):
+        preview = self.resolve()["preview"]
+        for p in (self.canon, self.old):
+            (p / "run.py").write_text("print('b')\n")
+        with self.assertRaisesRegex(ValueError, "预览已变化"):
+            self.resolve(dry_run=False, preview=preview)
+        self.assertFalse(self.old.is_symlink())
+
+    def test_meta_only_keeps_canonical_frontmatter(self):
+        self.doc["conflicts"][0]["kind"] = "meta-only"
+        (self.old / "SKILL.md").write_text("---\nname: other\n---\nBody\n")
+        self.resolve(dry_run=False, preview=self.resolve()["preview"])
+        self.assertIn("name: use-aka", (self.old / "SKILL.md").read_text())
+
+    def test_manual_builtin_and_unsupported_targets_are_rejected(self):
+        for key in ("manual", "builtin", "unsupported"):
+            with self.subTest(key=key):
+                with mock.patch.dict(self.doc["conflicts"][0]["prescription"],
+                                     grade="manual" if key == "manual" else "auto"), \
+                     mock.patch.dict(self.doc["conflicts"][0]["entities"][1],
+                                     type="builtin" if key == "builtin" else "local"), \
+                     mock.patch.dict(self.cfg["agents"][0], supports_symlink=key != "unsupported"):
+                    with self.assertRaises(ValueError):
+                        self.resolve()
+
+    def test_missing_selection_cannot_default_to_all(self):
+        for names in (None, [], "use-aka"):
+            with self.subTest(names=names), self.assertRaises(ValueError):
+                skillctl.resolve_conflicts(self.doc, self.cfg, names)
+
+    def test_link_failure_restores_original_directory(self):
+        preview = self.resolve()["preview"]
+        with mock.patch.object(skillctl.os, "symlink", side_effect=OSError("test failure")):
+            with self.assertRaisesRegex(OSError, "test failure"):
+                self.resolve(dry_run=False, preview=preview)
+        self.assertFalse(self.old.is_symlink())
+        self.assertEqual((self.old / "run.py").read_text(), "print('a')\n")
+        self.assertFalse(Path(skillctl.ledger_path()).exists())
+
+    def test_multiple_backups_with_same_name_do_not_collide(self):
+        third = self.root / "other-agent" / "use-aka"
+        shutil.copytree(self.old, third)
+        c = self.doc["conflicts"][0]
+        c["entities"].append({"real_path": str(third), "type": "local"})
+        c["prescription"]["rewrite"].append({"path": str(third), "agents": ["fake"]})
+        r = self.resolve(dry_run=False, preview=self.resolve()["preview"])
+        self.assertEqual(len({op["dst"] for op in r["ops"]}), 2)
+        self.assertTrue(all(Path(op["dst"]).is_dir() for op in r["ops"]))
+
+    def test_http_preview_then_apply(self):
+        page = self.root / "page.html"
+        page.write_text("<html></html>")
+        handler = skillctl.make_handler({"doc": self.doc, "mtime": 0}, self.cfg, "TEST", str(page))
+        handler = type("QuietHandler", (handler,), {"log_message": lambda *a: None})
+        srv = socketserver.ThreadingTCPServer(("127.0.0.1", 0), handler)
+        self.addCleanup(srv.server_close)
+        self.addCleanup(srv.shutdown)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        def post(payload):
+            req = urllib.request.Request(
+                f"http://127.0.0.1:{srv.server_address[1]}/api/action",
+                data=json.dumps(payload).encode(),
+                headers={"X-Skillctl-Token": "TEST", "Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                return json.load(resp)
+        payload = {"action": "resolve", "names": ["use-aka"]}
+        preview = post(payload)
+        self.assertTrue(preview["dry_run"])
+        result = post(dict(payload, apply=True, preview=preview["preview"]))
+        self.assertTrue(result["ok"])
+        self.assertTrue(self.old.is_symlink())
 
 def _documented_keys(spec):
     return {k for k in (spec or {}) if not k.startswith("_")}

@@ -53,6 +53,8 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
+import threading
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 from typing import Optional
@@ -2125,6 +2127,104 @@ def do_install(args):
 
 # ---------------------------------------------------------------- 处理方案包
 
+_RESOLVE_LOCK = threading.RLock()
+
+
+def _tree_fingerprint(root, body_only=False):
+    """执行合并时逐文件核对内容、权限和链接，不依赖扫描时的体积指纹。"""
+    rows = []
+    def visit(path, rel):
+        st = os.lstat(path)
+        mode = st.st_mode & 0o777
+        if os.path.islink(path):
+            rows.append((rel, "link", os.readlink(path)))
+        elif os.path.isdir(path):
+            rows.append((rel, "dir", mode))
+            for name in sorted(os.listdir(path)):
+                visit(os.path.join(path, name), os.path.join(rel, name))
+        elif os.path.isfile(path):
+            h = hashlib.sha256()
+            with open(path, "rb") as f:
+                if body_only and rel == "SKILL.md":
+                    h.update(re.sub(br"\A---\r?\n.*?\r?\n---(?:\r?\n|\Z)",
+                                    b"", f.read(), count=1, flags=re.S))
+                else:
+                    for chunk in iter(lambda: f.read(1024 * 1024), b""):
+                        h.update(chunk)
+            rows.append((rel, "file", mode, h.hexdigest()))
+        else:
+            raise ValueError(f"不能自动合并特殊文件：{path}")
+    visit(root, "")
+    return hashlib.sha256(json.dumps(rows, ensure_ascii=False).encode("utf-8")).hexdigest()
+
+
+def resolve_conflicts(doc, agents_cfg, names, dry_run=True, preview=None):
+    """仅合并明确选中的可自动组；预览后发生任何内容变化都要求重新确认。"""
+    with _RESOLVE_LOCK:
+        if not isinstance(names, list) or not names or not all(isinstance(n, str) for n in names):
+            raise ValueError("请先选择要自动处理的冲突组")
+        conflicts = {c["name"]: c for c in doc.get("conflicts", [])}
+        agents = {a["id"]: a for a in agents_cfg.get("agents", [])}
+        ops, fingerprints, log = [], [], []
+        for name in sorted(set(names)):
+            c = conflicts.get(name)
+            if (not c or c["nature"] != "duplicate" or c["liveness"] == "dormant"
+                    or c["prescription"]["grade"] != "auto"):
+                raise ValueError(f"「{name}」不是可自动处理的待处理组，请重新扫描")
+            p = c["prescription"]
+            canon = p["canonical"]
+            paths = [canon] + [r["path"] for r in p.get("rewrite", [])]
+            if len(paths) < 2 or len(set(paths)) != len(paths):
+                raise ValueError(f"「{name}」没有有效的替换路径")
+            for path in paths:
+                entity = next((e for e in c["entities"] if e["real_path"] == path), None)
+                if not entity or entity["type"] == "builtin":
+                    raise ValueError(f"拒绝自动合并内置或未知副本：{path}")
+                if not os.path.isdir(path) or os.path.realpath(path) != path:
+                    raise ValueError(f"副本路径已变化，请重新扫描：{path}")
+                if any(other != path and os.path.commonpath([path, other]) in (path, other)
+                       for other in paths):
+                    raise ValueError("副本路径互相包含，不能自动合并")
+                fingerprints.append((path, _tree_fingerprint(path)))
+            canonical_hash = _tree_fingerprint(canon, body_only=c["kind"] == "meta-only")
+            log.append(f"{name}：保留 {pretty_path(canon)}")
+            for r in p["rewrite"]:
+                path = r["path"]
+                if any(agents.get(a, {}).get("supports_symlink") is not True for a in r["agents"]):
+                    raise ValueError(f"目标 agent 未确认支持快捷方式：{path}")
+                if _tree_fingerprint(path, body_only=c["kind"] == "meta-only") != canonical_hash:
+                    raise ValueError(f"文件内容或权限已有差异，不能自动处理，请重新扫描并人工对比：{path}")
+                ops.append({"name": name, "src": path, "canonical": canon})
+                log.append(f"  {pretty_path(path)} → 快捷方式指向 {pretty_path(canon)}")
+        identity = hashlib.sha256(json.dumps([ops, fingerprints], sort_keys=True).encode("utf-8")).hexdigest()
+        if not dry_run and preview != identity:
+            raise ValueError("预览已变化或缺失，请重新预览后确认执行")
+        if not dry_run:
+            os.makedirs(trash_root(), exist_ok=True)
+            backup = tempfile.mkdtemp(prefix="resolve-", dir=trash_root())
+            moved = []
+            try:
+                for i, op in enumerate(ops):
+                    dst = os.path.join(backup, str(i))
+                    os.rename(op["src"], dst)
+                    moved.append((op["src"], dst))
+                    os.symlink(op["canonical"], op["src"])
+                    op["dst"] = dst
+                led = load_ledger()
+                led["actions"].append({"at": datetime.now().isoformat(timespec="seconds"),
+                                       "action": "resolve", "names": sorted(set(names)), "ops": ops})
+                save_ledger(led)
+            except Exception:
+                for src, dst in reversed(moved):
+                    if os.path.islink(src):
+                        os.unlink(src)
+                    os.rename(dst, src)
+                os.rmdir(backup)
+                raise
+            log.append(f"原副本已备份到 {pretty_path(backup)}；原路径和备份位置已记入台账。")
+        return {"ok": True, "ops": ops, "log": log, "preview": identity,
+                "groups": len(set(names)), "dry_run": dry_run}
+
 def build_plan(doc, agents_cfg, names=None, include_grades=("auto",)):
     """把选中的冲突编译成一份可复核、可干跑、可回滚的处理方案。
 
@@ -2532,6 +2632,10 @@ def make_handler(docbox, agents_cfg, token, html_path):
                                         f"清单  {r['md']}",
                                         f"脚本  {r['sh']}  —— 默认干跑，改 DRY_RUN=0 才真跑"],
                                 "md": r["md"], "sh": r["sh"]})
+                elif action == "resolve":
+                    self._json(resolve_conflicts(doc, agents_cfg, req.get("names"),
+                                                 dry_run=not apply_now,
+                                                 preview=req.get("preview")))
                 elif action == "rescan":
                     do_scan(argparse.Namespace(no_html=False))
                     self._json({"ok": True, "log": ["已重新扫描，刷新页面查看最新结果"]})

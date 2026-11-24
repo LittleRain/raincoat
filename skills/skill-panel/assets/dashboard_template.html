@@ -291,7 +291,7 @@ tr.sel td{background:var(--accent-bg)}
         <button class="pill" id="cfCoexist">只看同名异物</button>
         <button class="pill" id="cfDormant">只看已停用</button>
         <span class="spacer"></span>
-        <button class="btn" id="btnPlan">生成处理方案包</button>
+        <button class="btn" id="btnPlan">导出方案包（不执行）</button>
       </div>
     </div>
     <div id="groupStrip"></div>
@@ -355,7 +355,8 @@ tr.sel td{background:var(--accent-bg)}
 <div id="bulkbar">
   <span id="bulkText"></span>
   <button class="btn" id="bulkClear">清空</button>
-  <button class="btn pri" id="bulkPlan">生成方案包</button>
+  <button class="btn" id="bulkPlan">导出方案包（不执行）</button>
+  <button class="btn pri" id="bulkResolve">预览自动处理</button>
 </div>
 
 <script>
@@ -823,6 +824,7 @@ function renderConf(){
             <div style="color:var(--tx3);margin-top:2px">理由：${esc(p.canonical_why||'')}</div>
             ${p.rewrite&&p.rewrite.length?`<div style="color:var(--tx3);margin-top:3px">其余 ${p.rewrite.length} 份改为指向它的快捷方式：${p.rewrite.map(r=>`<span class="mono">${esc(sh(r.path))}</span>`).join('、')}</div>`:''}
           </div>`:''}
+          ${p.grade==='auto'?`<button class="btn pri" data-resolve="${esc(c.name)}" style="margin-top:10px">预览自动处理</button>`:''}
           ${p.grade==='semi'?`<div class="note">脚本已备好，但默认不执行。先跑方案包里的对比命令看清差在哪，确认没有你要保留的独有文件，再加 <span class="mono">CONFIRM_SEMI=1</span> 重跑。</div>`:''}
           ${p.grade==='manual'?`<div class="note">正文已真实分叉，留哪份是你自己的取舍。方案包只给对比命令，不会动手。</div>`:''}
         </div>
@@ -834,6 +836,7 @@ function renderConf(){
     h.parentElement.classList.toggle('open');
   });
   $('#confList').querySelectorAll('.ent-h').forEach(el=>el.onclick=()=>openDrawer(NAME2E[el.dataset.n]));
+  $('#confList').querySelectorAll('[data-resolve]').forEach(el=>el.onclick=()=>resolveNow([el.dataset.resolve]));
   $('#confList').querySelectorAll('input[data-pick]').forEach(cb=>{
     cb.onclick = ev => {
       ev.stopPropagation();
@@ -853,6 +856,8 @@ function renderBulk(){
   const semi = picked.filter(c=>c.prescription.grade==='semi').length;
   const man  = picked.filter(c=>c.prescription.grade==='manual').length;
   $('#bulkText').innerHTML = `已选 <b>${state.sel.size}</b> 组　可自动 ${auto}　半自动 ${semi}　需人工 ${man}`;
+  $('#bulkResolve').disabled = auto===0;
+  $('#bulkResolve').textContent = `预览自动处理（${auto} 组）`;
 }
 
 /* ---------- view 5 ---------- */
@@ -1122,10 +1127,13 @@ function closeAct(){
 }
 async function doApply(){
   if(!ACT || !SRV) return;
+  const act = ACT;
   $('#aGo').disabled = true;
   $('#aMsg').textContent = '执行中…';
-  const r = await callServer({action:ACT.kind, name:ACT.name, agent:ACT.agentId, apply:true});
+  const r = await callServer({action:act.kind, name:act.name, agent:act.agentId,
+                             names:act.names, preview:act.previewId, apply:true});
   $('#aGo').disabled = false;
+  if(ACT!==act) return;
   if(!r.ok){ $('#aMsg').textContent = ''; $('#aBody').innerHTML += `<div class="note danger">执行失败：${esc(r.error||'')}</div>`; return; }
   $('#aMsg').innerHTML = '<span style="color:var(--ok)">已执行</span>';
   $('#aBody').innerHTML += `<div class="note ok">已执行：<br><span class="mono">${esc((r.log||[]).join('\n'))}</span></div>`;
@@ -1138,6 +1146,34 @@ async function rescan(){
   const r = await callServer({action:'rescan'});
   t.disabled = false; t.textContent = '重扫';
   if(r.ok) location.reload(); else alert(r.error||'重扫失败');
+}
+async function resolveNow(names){
+  const act = {kind:'resolve', names};
+  ACT = act;
+  $('#aTitle').textContent = '自动处理重复副本';
+  $('#aSub').textContent = `已选择 ${names.length} 组：${names.join('、')}`;
+  $('#aMsg').textContent = '';
+  $('#aGo').style.display = 'none';
+  $('#aGo').disabled = false;
+  $('#aGo').textContent = '确认执行';
+  $('#aGo').className = 'btn pri';
+  $('#aCopy').textContent = '复制预览';
+  $('#act').classList.add('open'); $('#mask').classList.add('on');
+  if(!SRV){
+    act.cmd = `cd ${TOOL} && ${PY} skillctl.py serve --open`;
+    $('#aCopy').textContent = '复制启动命令';
+    $('#aBody').innerHTML = `<div class="note">当前是只读模式。启动本地服务后重新打开页面，即可预览并确认自动处理。</div><div class="cmd">${esc(act.cmd)}</div>`;
+    return;
+  }
+  $('#aBody').innerHTML = '<div class="empty">正在核对文件并生成预览…</div>';
+  const r = await callServer({action:'resolve', names, apply:false});
+  if(ACT!==act) return;
+  if(!r.ok){ $('#aBody').innerHTML = `<div class="note danger">${esc(r.error||'预览失败')}</div>`; return; }
+  act.previewId = r.preview;
+  act.preview = (r.log||[]).join('\n');
+  $('#aBody').innerHTML = `<div class="note">预览，尚未改动文件。确认后保留一份正本，其余副本先移入回收站，再在原位置建立快捷方式。完成后自动重扫。</div><div class="cmd">${esc(act.preview)}</div>`;
+  $('#aGo').style.display = '';
+  $('#aMsg').textContent = '确认后才会真正执行';
 }
 function planNow(){
   const names = [...state.sel];
@@ -1154,9 +1190,9 @@ function planNow(){
   }
   const t = $('#btnPlan'); t.disabled = true; t.textContent = '生成中…';
   callServer({action:'plan', names, grades:useGrades}).then(r=>{
-    t.disabled = false; t.textContent = '生成处理方案包';
+    t.disabled = false; t.textContent = '导出方案包（不执行）';
     if(!r.ok){ alert(r.error||'生成失败'); return; }
-    alert('已生成：\n' + (r.log||[]).join('\n'));
+    alert('已导出方案包，尚未改动任何副本。\n可自动项可通过「预览自动处理」确认执行。\n\n' + (r.log||[]).join('\n'));
   });
 }
 
@@ -1212,6 +1248,7 @@ $('#iAgent').onchange = () => { if($('#iOut').querySelector('.cmd')) doGen(); };
 $('#btnPlan').onclick = planNow;
 $('#bulkClear').onclick = () => { state.sel.clear(); renderConf(); };
 $('#bulkPlan').onclick = planNow;
+$('#bulkResolve').onclick = ()=>resolveNow(DOC.conflicts.filter(c=>state.sel.has(c.name) && c.prescription.grade==='auto').map(c=>c.name));
 $('#btnRescan').onclick = rescan;
 $('#dClose').onclick = closeDrawer;
 $a = $('#aClose'); $a.onclick = closeAct;

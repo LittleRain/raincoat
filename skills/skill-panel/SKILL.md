@@ -31,8 +31,9 @@ de-duplication and the evidence, not the directory walk.
    ask for a specific skill with `check` / `state`.
 3. **Decide.** `install` produces a migration command; `plan` produces a
    conflict-resolution package.
-4. **Act, if asked.** `disable` / `enable` / `uninstall` are the only operations
-   that touch skill content, and they require `--yes` to write.
+4. **Act, if asked.** `disable` / `enable` / `uninstall` require `--yes` to write.
+   In the served dashboard, auto-grade conflicts also offer a preview followed
+   by an explicit confirmation to consolidate copies into symlinks.
 
 ```bash
 python3 scripts/skillctl.py scan                 # inventory + validate + generate the page
@@ -60,6 +61,17 @@ The write commands are `disable`, `enable`, `uninstall` — and each of them:
 - moves whatever it replaces or deletes into `~/.skill-panel/trash/` first, so
   nothing is destroyed;
 - appends to `~/.skill-panel/ledger.json`.
+
+For duplicates, use the dashboard's **预览自动处理** button on an auto-grade
+group, or select several groups and use the bulk button. Only selected auto-grade
+groups are included. The `resolve` API action defaults to preview; applying it
+requires `apply: true` and the returned `preview` fingerprint. It rechecks file
+contents, permissions and symlinks, backs up replaced copies to unique trash
+paths, records the original/backup paths in the ledger, and rolls back on failure.
+Changes since preview require another preview. The page rescans after success.
+Built-ins and agents without confirmed symlink support are rejected.
+**导出方案包（不执行）** only exports instructions and a dry-run script; it does
+not apply changes. Offline pages explain how to start `serve --open`.
 
 Prefer the agent's own native toggle over touching files. `agents.json` declares,
 per agent, where that toggle lives and which values mean what; `agents` prints it.
