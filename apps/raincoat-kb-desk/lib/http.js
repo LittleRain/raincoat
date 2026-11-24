@@ -77,6 +77,21 @@ function query(url, key, fallback = null) {
   return value === null ? fallback : value
 }
 
+/**
+ * 旧宿主上的同源/会话校验补充；新宿主由 carrier 负责，缺 API 时不再自锁。
+ */
+function legacyRejection(ctx, headers) {
+  const connection = typeof ctx?.get === 'function' ? ctx.get('connection') : ctx?.connection
+  if (typeof connection?.requestRejection === 'function') {
+    try {
+      return connection.requestRejection({ headers })
+    } catch {
+      return 503
+    }
+  }
+  return undefined
+}
+
 export function registerHttp(ctx) {
   const ingest = createIngest()
 
@@ -84,13 +99,15 @@ export function registerHttp(ctx) {
     kind: 'prefix',
     path: PREFIX,
     handler: async (req, res) => {
-      const connection = ctx.get('connection') ?? ctx.connection
-      if (typeof connection?.requestRejection !== 'function') {
-        return json(res, 503, { error: 'DSH 请求保护不可用，知识库接口已关闭' })
-      }
-      const rejection = connection.requestRejection({ headers: req.headers })
+      // DSH 0.2.2 起 webServer 路由由 carrier 统一鉴权（未登录请求到不了这里），
+      // 旧的 requestRejection 也被 connection.admit() 取代；admit 需要注入
+      // connection.authentication 才能调用，所以这里只在旧宿主上补一层校验。
+      const rejection = legacyRejection(ctx, req.headers)
       if (rejection === 401 || rejection === 403) {
         return json(res, rejection, { error: '未授权：请在 DSH 里打开这个页面' })
+      }
+      if (rejection !== undefined) {
+        return json(res, 503, { error: '来源校验暂不可用' })
       }
       try {
         await route(ctx, { ingest }, req, res)
