@@ -1,0 +1,247 @@
+{
+ "version": 2,
+ "updatedAt": "2026-11-20T13:30:00+08:00",
+ "note": "品牌→渠道→抓取方式。只有 status=confirmed 且带可打开 URL 的渠道进抓取；非 static 渠道必须写明具体账号页（微博 m.weibo.cn/u/<uid>、小红书主页、公众号 profile），找不到精确账号的一律删除而不是留个名字。品牌本身不在这里维护，见企微「品牌」tab q979lj。",
+ "brands": [
+  {
+   "id": "ichiban-cn-weibo",
+   "brand": "一番赏",
+   "channel": "微博 万代南梦宫潮玩",
+   "type": "weibo",
+   "url": "https://m.weibo.cn/u/7324393029",
+   "scope": "cn",
+   "canAnswer": [
+    "structure"
+   ],
+   "status": "confirmed",
+   "lastVerified": "2026-11-20",
+   "note": "大陆一番赏官号；万花赏/田野赏不再借用这一条"
+  },
+  {
+   "id": "wanhua-weibo",
+   "brand": "万花赏",
+   "channel": "微博 万代南梦宫潮玩",
+   "type": "weibo",
+   "url": "https://m.weibo.cn/u/7324393029",
+   "scope": "cn",
+   "canAnswer": [
+    "structure"
+   ],
+   "status": "confirmed",
+   "lastVerified": "2026-11-20",
+   "note": "与一番赏共号，抓取层按 URL 去重只抓一次"
+  },
+  {
+   "id": "tianye-weibo",
+   "brand": "田野赏",
+   "channel": "微博 分子谷子FenzGoods",
+   "type": "weibo",
+   "url": "https://m.weibo.cn/u/3042598817",
+   "scope": "cn",
+   "canAnswer": [
+    "structure"
+   ],
+   "status": "confirmed",
+   "lastVerified": "2026-11-20",
+   "note": "田野赏属分子互动，原指向万代官号是错的，2026-11-20 纠正"
+  },
+  {
+   "id": "ichiban-online",
+   "brand": "一番赏（渠道到货）",
+   "channel": "微博 一番赏ONLINE",
+   "type": "weibo",
+   "url": "https://m.weibo.cn/u/7536577222",
+   "scope": "cn",
+   "canAnswer": [
+    "structure"
+   ],
+   "status": "confirmed",
+   "lastVerified": "2026-11-20",
+   "note": ""
+  },
+  {
+   "id": "haowushang-weibo",
+   "brand": "好物赏",
+   "channel": "微博 阅文好物",
+   "type": "weibo",
+   "url": "https://m.weibo.cn/u/6610662664",
+   "scope": "cn",
+   "canAnswer": [
+    "structure"
+   ],
+   "status": "confirmed",
+   "lastVerified": "2026-11-20",
+   "note": ""
+  },
+  {
+   "id": "letaoshang-weibo",
+   "brand": "乐淘赏",
+   "channel": "微博 乐淘谷",
+   "type": "weibo",
+   "url": "https://m.weibo.cn/u/7824180533",
+   "scope": "cn",
+   "canAnswer": [
+    "structure"
+   ],
+   "status": "confirmed",
+   "lastVerified": "2026-11-20",
+   "note": ""
+  },
+  {
+   "id": "yingxiong-weibo",
+   "brand": "英雄赏",
+   "channel": "微博 卡游潮玩",
+   "type": "weibo",
+   "url": "https://m.weibo.cn/u/7787545973",
+   "scope": "cn",
+   "canAnswer": [
+    "structure"
+   ],
+   "status": "confirmed",
+   "lastVerified": "2026-11-20",
+   "note": ""
+  },
+  {
+   "id": "kayou-store-weibo",
+   "brand": "KAYOU赏",
+   "channel": "微博 卡游STORE / 卡游",
+   "type": "weibo",
+   "url": "https://m.weibo.cn/u/7801772899",
+   "scope": "cn",
+   "canAnswer": [
+    "structure"
+   ],
+   "status": "confirmed",
+   "lastVerified": "2026-11-20",
+   "note": ""
+  },
+  {
+   "id": "kayou-xhs",
+   "brand": "KAYOU赏",
+   "channel": "小红书 卡游情报",
+   "type": "xhs",
+   "url": "https://www.xiaohongshu.com/user/profile/60d15b25000000000101c4f7",
+   "scope": "cn",
+   "canAnswer": [
+    "structure"
+   ],
+   "status": "confirmed",
+   "lastVerified": "2026-11-20",
+   "note": "主页卡片无日期，验收时靠卡片文案；判不了就跳过"
+  },
+  {
+   "id": "lingwushang-weibo",
+   "brand": "另物赏",
+   "channel": "微博 另物赏",
+   "type": "weibo",
+   "url": "https://m.weibo.cn/u/7982858775",
+   "scope": "cn",
+   "canAnswer": [
+    "structure"
+   ],
+   "status": "confirmed",
+   "lastVerified": "2026-11-20",
+   "note": ""
+  },
+  {
+   "id": "youshang-weibo",
+   "brand": "有赏",
+   "channel": "微博 YOUCARD游卡文创",
+   "type": "weibo",
+   "url": "https://m.weibo.cn/u/2881427013",
+   "scope": "cn",
+   "canAnswer": [
+    "structure"
+   ],
+   "status": "confirmed",
+   "lastVerified": "2026-11-20",
+   "note": ""
+  },
+  {
+   "id": "tianjiang-weibo",
+   "brand": "天降鸿运",
+   "channel": "微博 西山居百货",
+   "type": "weibo",
+   "url": "https://m.weibo.cn/u/7741426256",
+   "scope": "cn",
+   "canAnswer": [
+    "structure"
+   ],
+   "status": "confirmed",
+   "lastVerified": "2026-11-20",
+   "note": ""
+  },
+  {
+   "id": "tianmeng-weibo",
+   "brand": "甜梦赏",
+   "channel": "微博 分子谷子FenzGoods",
+   "type": "weibo",
+   "url": "https://m.weibo.cn/u/3042598817",
+   "scope": "cn",
+   "canAnswer": [
+    "structure"
+   ],
+   "status": "confirmed",
+   "lastVerified": "2026-11-20",
+   "note": ""
+  },
+  {
+   "id": "cili-weibo",
+   "brand": "磁力赏",
+   "channel": "微博 bilibiliGoods",
+   "type": "weibo",
+   "url": "https://m.weibo.cn/u/5893862109",
+   "scope": "cn",
+   "canAnswer": [
+    "structure"
+   ],
+   "status": "confirmed",
+   "lastVerified": "2026-11-20",
+   "note": ""
+  },
+  {
+   "id": "wanhua-yunyou-weibo",
+   "brand": "万画赏",
+   "channel": "微博 万画云游",
+   "type": "weibo",
+   "url": "https://m.weibo.cn/u/7800563069",
+   "scope": "cn",
+   "canAnswer": [
+    "structure"
+   ],
+   "status": "confirmed",
+   "lastVerified": "2026-11-20",
+   "note": ""
+  },
+  {
+   "id": "ichiban-cn-ruhun",
+   "brand": "一番赏",
+   "channel": "公众号 入魂一番服务号",
+   "type": "wechat",
+   "url": "https://mp.weixin.qq.com/mp/profile_ext?action=home&__biz=Mzg4MTQzNTg4Nw==#wechat_redirect",
+   "scope": "cn",
+   "canAnswer": [
+    "price",
+    "structure"
+   ],
+   "status": "confirmed",
+   "lastVerified": "2026-11-20",
+   "note": "2026-11-20 纠正 __biz：原记录 Mzg4MTQzNjA2Mw== 不是这个号，正文实际是 Mzg4MTQzNTg4Nw=="
+  },
+  {
+   "id": "ichiban-jp-static",
+   "brand": "一番赏（日版）",
+   "channel": "1Kuji 官网",
+   "type": "static",
+   "url": "https://1kuji.com/",
+   "scope": "jp",
+   "canAnswer": [
+    "price",
+    "structure"
+   ],
+   "status": "confirmed",
+   "lastVerified": "2026-11-20",
+   "note": ""
+  }
+ ]
+}

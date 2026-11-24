@@ -1,0 +1,34 @@
+{
+  "name": "@local/acg-capture",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "description": "ACG 信息抓取：官方赏（抓新品 / 补齐信息 / 抓取渠道）、官方福袋（抓取任务 / 线索）、游戏虚拟商品（抓取任务 / 游戏汇总）；引擎在 engines/，运行时数据在 ~/.dsh/acg-capture",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "lib/*.js",
+    "scripts/*.mjs",
+    "engines/**",
+    "icon.svg",
+    "README.md"
+  ],
+  "engines": {
+    "dsh": ">=0.2.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true
+    }
+  }
+}
