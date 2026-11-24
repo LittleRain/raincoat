@@ -1,0 +1,18 @@
+# dsh-notify —— 任务完成通知（本包的 bundle 补丁层）
+#
+# 这一行由 `dsh plugin --profile desktop add <本目录>` 之后自动生效：
+# 包声明的 `dsh.bundle.patch` 让 dsh 把它当作 bundle 层插入 profile。
+#
+# 想改默认行为，请在 profile 的 `cordis.patch.yml` 里按 id 覆盖 `config`
+# （注意 patch 的 `config` 是整段替换，不是深合并）：
+#
+#   - id: dsh-notify
+#     name: '@local/dsh-notify'
+#     config:
+#       onlyWhenBackground: false
+#       minDurationMs: 0
+#
+# 可配置项见 README.md。
+- insert:
+    - id: dsh-notify
+      name: '@local/dsh-notify'

@@ -1,0 +1,50 @@
+{
+  "name": "@local/dsh-notify",
+  "version": "0.1.1",
+  "private": true,
+  "type": "module",
+  "description": "DeepSeek Harness 任务完成通知：macOS 原生通知 + 可选 Webhook 推送（任务完成/出错/受阻/目标完成/后台任务结束）",
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "lib/*.js",
+    "cordis.patch.yml",
+    "scripts/demo.js",
+    "scripts/check.js",
+    "scripts/open-session.js",
+    "bin/terminal-notifier.app",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "demo": "node scripts/demo.js",
+    "check": "node scripts/check.js",
+    "open-session": "node scripts/open-session.js"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true
+    }
+  },
+  "keywords": [
+    "dsh",
+    "plugin",
+    "deepseek-harness",
+    "notification"
+  ],
+  "license": "MIT"
+}

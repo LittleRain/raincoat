@@ -37,7 +37,7 @@ python -m unittest discover -s tooling/tests -p 'test_*.py'
 ## 仓库结构
 
 - `skills/`：Skill 与最小模板。
-- `apps/`：独立应用与插件，包含 [Buck](apps/raincoat-buck/README.md)（本机 agent 派发 MCP）、[Sport Cut Studio](apps/football-ai-studio/README.md)、[raincoat-kb-desk](apps/raincoat-kb-desk/README.md)、[raincoat-prompt](apps/raincoat-prompt/README.md)、[raincoat-watch-recorder](apps/raincoat-watch-recorder/README.md) 和 [raincoat-wecom-clipper](apps/raincoat-wecom-clipper/README.md)。
+- `apps/`：独立应用与插件，包含 [Buck](apps/raincoat-buck/README.md)（本机 agent 派发 MCP）、[Sport Cut Studio](apps/football-ai-studio/README.md)、[raincoat-dsh-notify](apps/raincoat-dsh-notify/README.md)（DSH 任务完成通知）、[raincoat-kb-desk](apps/raincoat-kb-desk/README.md)、[raincoat-prompt](apps/raincoat-prompt/README.md)、[raincoat-watch-recorder](apps/raincoat-watch-recorder/README.md) 和 [raincoat-wecom-clipper](apps/raincoat-wecom-clipper/README.md)。
 - `tooling/`：脚手架、校验、导出与测试。
 - `docs/skills/`：约定、发布流程与迁移记录。
 
