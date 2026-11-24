@@ -1,0 +1,326 @@
+{
+  "version": 1,
+  "updatedAt": "2026-11-20T18:13:26+08:00",
+  "note": "游戏虚拟道具：新游戏发现源 + 发行商官方渠道。tier 表达「这个来源能不能当官方事实」：A 官方商城/官网/充值中心，B 官方社媒/社区公告，C 应用商店内购页（双源一致才采信），D 游戏内/需登录/线下（只能人工录入）。只有 status=confirmed 且 tier<=C 参与抓取。",
+  "discovery": {
+    "license": {
+      "name": "国家新闻出版署 游戏审批结果（版号公示）",
+      "url": "https://www.nppa.gov.cn/bsfw/jggs/yxspjg/"
+    },
+    "rankings": [
+      {
+        "id": "taptap-new",
+        "name": "TapTap 新品榜",
+        "url": "https://www.taptap.cn/top"
+      },
+      {
+        "id": "appstore-cn",
+        "name": "App Store 中国区畅销榜",
+        "url": "https://apps.apple.com/cn/charts/iphone"
+      },
+      {
+        "id": "bili-game",
+        "name": "B 站游戏中心",
+        "url": "https://game.bilibili.com/"
+      }
+    ],
+    "publishers": [
+      "米哈游",
+      "网易",
+      "库洛",
+      "鹰角",
+      "叠纸",
+      "腾讯",
+      "完美世界",
+      "莉莉丝",
+      "悠星",
+      "心动"
+    ]
+  },
+  "thresholds": {
+    "maxNewPerRun": 10,
+    "minReservation": 100000,
+    "chartTop": 50,
+    "windowDays": 60,
+    "note": "热度门槛（至少命中一条）：发行商在 discovery.publishers（关键词包含匹配，兼容法定全名）/ 预约量≥minReservation / 畅销榜≤chartTop。有 App Store 内购页只说明抓得到商品，不算热度。windowDays 是每轮只看最近多少天的『新游戏』；maxNewPerRun 是单轮最多抓几个新游戏。"
+  },
+  "channels": [
+    {
+      "id": "mihoyo-site",
+      "publisher": "米哈游",
+      "channel": "米哈游官网",
+      "type": "official-site",
+      "tier": "A",
+      "url": "https://www.mihoyo.com/",
+      "gameScope": [
+        "原神",
+        "崩坏：星穹铁道"
+      ],
+      "canAnswer": [
+        "name",
+        "price",
+        "denom",
+        "duration",
+        "limit"
+      ],
+      "status": "confirmed",
+      "lastVerified": "2026-11-17",
+      "note": "官网与公告页；充值比例与档位常在「充值中心/公告」正文里"
+    },
+    {
+      "id": "mihoyo-miyoushe",
+      "publisher": "米哈游",
+      "channel": "米游社（官方社区）",
+      "type": "official-social",
+      "tier": "B",
+      "url": "https://www.miyoushe.com/",
+      "gameScope": [
+        "原神",
+        "崩坏：星穹铁道"
+      ],
+      "canAnswer": [
+        "name",
+        "price",
+        "denom",
+        "duration"
+      ],
+      "status": "confirmed",
+      "lastVerified": "2026-11-17",
+      "note": "官方公告与商城说明；正文需同时含商品名与价格才采信"
+    },
+    {
+      "id": "mihoyo-ys-site",
+      "publisher": "米哈游",
+      "channel": "原神官网",
+      "type": "official-site",
+      "tier": "A",
+      "url": "https://ys.mihoyo.com/",
+      "gameScope": [
+        "原神"
+      ],
+      "canAnswer": [
+        "name",
+        "price",
+        "denom"
+      ],
+      "status": "confirmed",
+      "lastVerified": "2026-11-17",
+      "note": ""
+    },
+    {
+      "id": "mihoyo-sr-site",
+      "publisher": "米哈游",
+      "channel": "崩坏：星穹铁道官网",
+      "type": "official-site",
+      "tier": "A",
+      "url": "https://sr.mihoyo.com/",
+      "gameScope": [
+        "崩坏：星穹铁道"
+      ],
+      "canAnswer": [
+        "name",
+        "price",
+        "denom"
+      ],
+      "status": "confirmed",
+      "lastVerified": "2026-11-17",
+      "note": ""
+    },
+    {
+      "id": "netease-id5-site",
+      "publisher": "网易",
+      "channel": "第五人格官网",
+      "type": "official-site",
+      "tier": "A",
+      "url": "https://id5.163.com/",
+      "gameScope": [
+        "第五人格"
+      ],
+      "canAnswer": [
+        "name",
+        "price",
+        "denom",
+        "duration",
+        "limit"
+      ],
+      "status": "confirmed",
+      "lastVerified": "2026-11-17",
+      "note": ""
+    },
+    {
+      "id": "netease-dashen",
+      "publisher": "网易",
+      "channel": "网易大神（官方社区）",
+      "type": "official-social",
+      "tier": "B",
+      "url": "https://ds.163.com/",
+      "gameScope": [
+        "第五人格"
+      ],
+      "canAnswer": [
+        "name",
+        "price",
+        "denom",
+        "duration"
+      ],
+      "status": "pending",
+      "lastVerified": "",
+      "note": "需在插件外先试抓确认能取到正文"
+    },
+    {
+      "id": "netease-pay",
+      "publisher": "网易",
+      "channel": "网易充值中心",
+      "type": "official-site",
+      "tier": "A",
+      "url": "https://pay.163.com/",
+      "gameScope": [
+        "第五人格"
+      ],
+      "canAnswer": [
+        "name",
+        "price",
+        "denom"
+      ],
+      "status": "pending",
+      "lastVerified": "",
+      "note": "需登录的页面按 D 级处理，不进自动采信"
+    },
+    {
+      "id": "kuro-mc-site",
+      "publisher": "库洛游戏",
+      "channel": "鸣潮官网",
+      "type": "official-site",
+      "tier": "A",
+      "url": "https://mc.kurogames.com/",
+      "gameScope": [
+        "鸣潮"
+      ],
+      "canAnswer": [
+        "name",
+        "price",
+        "denom"
+      ],
+      "status": "confirmed",
+      "lastVerified": "2026-11-17",
+      "note": ""
+    },
+    {
+      "id": "hypergryph-ak",
+      "publisher": "鹰角网络",
+      "channel": "明日方舟官网",
+      "type": "official-site",
+      "tier": "A",
+      "url": "https://ak.hypergryph.com/",
+      "gameScope": [
+        "明日方舟"
+      ],
+      "canAnswer": [
+        "name",
+        "price",
+        "denom"
+      ],
+      "status": "confirmed",
+      "lastVerified": "2026-11-17",
+      "note": ""
+    },
+    {
+      "id": "appstore-cn",
+      "publisher": "应用商店",
+      "channel": "App Store 中国区应用页（内购项目）",
+      "type": "appstore",
+      "tier": "C",
+      "url": "https://apps.apple.com/cn/",
+      "gameScope": [],
+      "canAnswer": [
+        "name",
+        "price",
+        "denom"
+      ],
+      "status": "confirmed",
+      "lastVerified": "2026-11-17",
+      "note": "页面「App 内购买项目」列出档位与价格；C 级，需双源一致或人工确认才采信"
+    },
+    {
+      "id": "hypergryph-site",
+      "publisher": "鹰角网络",
+      "channel": "鹰角网络官网",
+      "type": "official-site",
+      "tier": "A",
+      "url": "https://www.hypergryph.com/",
+      "gameScope": [
+        "明日方舟",
+        "明日方舟：终末地"
+      ],
+      "canAnswer": [
+        "name",
+        "price",
+        "denom",
+        "duration"
+      ],
+      "status": "confirmed",
+      "lastVerified": "2026-11-18",
+      "note": "覆盖 ak/endfield 等子域；新游戏沿用同一发行商域名"
+    },
+    {
+      "id": "ow-bnet-site",
+      "publisher": "网易",
+      "channel": "守望先锋国服官网（ow.blizzard.cn）",
+      "type": "official-site",
+      "tier": "A",
+      "url": "https://ow.blizzard.cn/",
+      "gameScope": [
+        "守望先锋"
+      ],
+      "canAnswer": [
+        "name",
+        "price",
+        "denom",
+        "duration",
+        "limit"
+      ],
+      "status": "confirmed",
+      "lastVerified": "2026-11-20",
+      "note": "国服官网由上海网之易运营；H5 直购页（/h5/<日期>/buy/）与新闻公告会写商品名+人民币价，例：/h5/20250219/buy/ 自选传奇礼包 388 元任选 20 件"
+    },
+    {
+      "id": "ow-bnet-shop",
+      "publisher": "暴雪",
+      "channel": "暴雪商城·守望先锋（shop.battlenet.com.cn）",
+      "type": "official-mall",
+      "tier": "A",
+      "url": "https://shop.battlenet.com.cn/zh-cn/family/overwatch",
+      "gameScope": [
+        "守望先锋"
+      ],
+      "canAnswer": [
+        "name",
+        "price",
+        "denom",
+        "duration"
+      ],
+      "status": "confirmed",
+      "lastVerified": "2026-11-20",
+      "note": "纯 HTTP 客户端会 307 跳到 /zh-cn?error=Configuration（无限重定向），真人浏览器/无头浏览器可正常渲染并在未登录状态下显示人民币价；价格与档位另可从 /api/user-product-localized-content?slug=<product>&lang=zh-cn 的结构化 JSON（products[].name + priceInfo.price.fullAmount）确定性命中。验收层直接抓 HTML 仍读不到价格，模型来源会落到待确认，属预期。"
+    },
+    {
+      "id": "ow-netease-dashen",
+      "publisher": "网易",
+      "channel": "网易大神·守望先锋圈子",
+      "type": "official-social",
+      "tier": "B",
+      "url": "https://ds.163.com/",
+      "gameScope": [
+        "守望先锋"
+      ],
+      "canAnswer": [
+        "name",
+        "price",
+        "limit"
+      ],
+      "status": "pending",
+      "lastVerified": "",
+      "note": "商城更新/礼包上架常在官方大神号发；需要精确到圈子或官方号的页面 URL 才能标 confirmed，当前只有圈子首页"
+    }
+  ]
+}
