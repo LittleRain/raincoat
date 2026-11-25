@@ -1,0 +1,36 @@
+{
+  "name": "@local/dsh-peer-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "description": "dsh 双端会话：桌面端与 web 端谁持有写锁可见、另一端只读查看同一会话、有新增时提示刷新，并把两端 workspace 列表对账成同一份",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./lib/*.js": "./lib/*.js"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "icon.svg",
+    "lib/*.js",
+    "scripts/*.sh",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true
+    }
+  }
+}

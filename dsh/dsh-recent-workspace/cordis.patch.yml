@@ -1,0 +1,12 @@
+# dsh-recent-workspace takes over the sidebar workspaces slot.
+#
+# The official browser is disabled rather than removed: its package keeps
+# resolving from the Harness installation, and our client bundle carries the
+# patched copy. Removing this bundle (or flipping `disabled: false`) restores
+# the stock sidebar.
+- id: ui-workspace
+  name: '@deepseek-ai/dsh-client-ui-workspace'
+  disabled: true
+- insert:
+    - id: recent-workspace
+      name: dsh-recent-workspace

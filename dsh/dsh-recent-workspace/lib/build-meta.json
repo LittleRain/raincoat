@@ -1,0 +1,17 @@
+{
+  "upstream": "@deepseek-ai/dsh-client-ui-workspace",
+  "upstreamVersion": "0.2.3-alpha.2",
+  "upstreamClientBytes": 258372,
+  "clientBytes": 261031,
+  "anchors": [
+    "wrapper-id",
+    "prelude",
+    "session-tree-props",
+    "groups",
+    "watermark",
+    "collapse",
+    "label",
+    "session-tree-call"
+  ],
+  "builtAt": "2026-11-25T03:33:22.951Z"
+}

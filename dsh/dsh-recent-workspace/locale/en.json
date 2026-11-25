@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Recent sessions",
+    "description": "Adds a Recent section at the top of the sidebar workspaces list with the eight most recently active sessions, ordered by last user prompt."
+  }
+}

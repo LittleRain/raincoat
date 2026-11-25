@@ -19,7 +19,7 @@ DSH Web 插件：把「摄入 → 体检 → 学习 → 创作」四件事收进
 ## 安装
 
 ```bash
-plugin_manager install_bundle target=link:/Users/raincai/Documents/GitHub/raincoat/apps/raincoat-kb-desk
+plugin_manager install_bundle target=link:/Users/raincai/Documents/GitHub/raincoat/dsh/raincoat-kb-desk
 ```
 
 `package.json` 里 `dsh.bundle.patch` 指向 `cordis.patch.yml`，插入的 entry id 是 `raincoat-kb-desk`。
